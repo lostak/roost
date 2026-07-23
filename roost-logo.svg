@@ -1,0 +1,25 @@
+<svg width="440" height="132" viewBox="0 0 440 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Roost">
+  <defs>
+    <linearGradient id="teal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00838a"/>
+      <stop offset="1" stop-color="#00696e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6b054"/>
+      <stop offset="1" stop-color="#c0872f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- mark: growth bars + a golden "nest egg" (residual income) roosting on top -->
+  <g transform="translate(20,22)">
+    <rect x="0"  y="52" width="18" height="36" rx="9" fill="url(#teal)"/>
+    <rect x="26" y="34" width="18" height="54" rx="9" fill="url(#teal)"/>
+    <rect x="52" y="16" width="18" height="72" rx="9" fill="url(#gold)"/>
+    <ellipse cx="61" cy="12" rx="13" ry="15" fill="url(#gold)"/>
+    <ellipse cx="56.5" cy="7" rx="3.6" ry="4.4" fill="#fff" opacity="0.55"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="140" y="70" font-family="'Trebuchet MS','Segoe UI',Roboto,sans-serif" font-size="52" font-weight="700" letter-spacing="-1" fill="#00434a">Roost</text>
+  <text x="142" y="96" font-family="Roboto,'Segoe UI',sans-serif" font-size="15.5" letter-spacing="0.5" fill="#4a6364">Your book of business, compounding.</text>
+</svg>

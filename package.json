@@ -1,0 +1,10 @@
+{
+  "name": "roost",
+  "version": "2.0.0",
+  "description": "Roost - local commission & residual dashboard for insurance statement PDFs (zero dependencies)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

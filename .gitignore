@@ -1,0 +1,10 @@
+# Local parse cache (regenerated automatically from the statement PDFs)
+.parse_cache.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+node_modules/
+
+# Local files
+Statements/

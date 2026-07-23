@@ -1,0 +1,15 @@
+{
+  "_comment": "Roost configuration. Edit this file (not the .js source) to tune behavior. Restart the server after changing.",
+
+  "statements_dir": "../Statements",
+  "_statements_dir": "Folder holding the year subfolders (2024/, 2025/, ...), relative to this roost/ folder. Defaults to ../Statements; falls back to the Commissions root if that folder has no year folders.",
+
+  "downline_roster": ["Michael Schwab"],
+  "_downline_roster": "Writing-agent names you earn an override on. First/last-name matching is fuzzy; add each downline agent's name here.",
+
+  "ma_reclass": {
+    "mult": 3.5,
+    "floor_min": 80
+  },
+  "_ma_reclass": "Medicare Advantage new-business detection. A residual-section line is reclassified as new business when its payable is >= mult x the policy's typical recurring payment AND >= max(floor_min, 3 x global median). Raise mult/floor_min to reclassify fewer lines."
+}

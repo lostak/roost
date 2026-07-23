@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roost — commission &amp; residual intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --primary:#00696e; --primary-c:#ffffff; --primary-container:#9df0f4; --on-primary-container:#00201f;
+  --gold:#c0872f; --gold-2:#e0a94a; --gold-container:#ffe3ab; --on-gold-container:#3a2900;
+  --secondary:#4a6364; --tertiary:#4b607c; --surface:#f4faf9; --surface-1:#eef5f4;
+  --surface-2:#e6f0ef; --surface-3:#dde9e8; --on-surface:#171d1d; --on-surface-var:#3f4948;
+  --outline:#6f7979; --outline-var:#bec8c8; --error:#ba1a1a; --pos:#2e7d32; --neg:#c62828; --amber:#c98a00;
+  --shadow:0 1px 3px rgba(0,0,0,.14),0 1px 2px rgba(0,0,0,.10);
+  --shadow-2:0 4px 12px rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);color:var(--on-surface)}
+.appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
+  padding:12px 24px;background:linear-gradient(90deg,var(--surface-2),var(--surface-1));box-shadow:var(--shadow)}
+.brand{font-size:22px;font-weight:700;margin:0;flex:0 0 auto;display:flex;align-items:center;gap:9px;color:#00434a;letter-spacing:-.5px}
+.brand .mark{display:block}
+.appbar .meta{margin-left:auto;font-size:12px;color:var(--on-surface-var);text-align:right;line-height:1.4}
+.btn{font-family:inherit;border:none;cursor:pointer;border-radius:20px;padding:9px 18px;font-size:14px;
+  font-weight:500;background:var(--primary);color:var(--primary-c);display:inline-flex;align-items:center;gap:8px;
+  text-decoration:none;transition:filter .15s,transform .05s}
+.btn.tonal{background:var(--primary-container);color:var(--on-primary-container)}
+.btn.ghost{background:transparent;color:var(--primary);border:1px solid var(--outline-var)}
+.btn:hover{filter:brightness(1.06)} .btn:active{transform:scale(.98)}
+.layout{display:flex;min-height:calc(100vh - 61px)}
+.nav{flex:0 0 218px;padding:20px 12px;position:sticky;top:61px;height:calc(100vh - 61px)}
+.nav a{display:flex;align-items:center;gap:14px;padding:11px 16px;border-radius:24px;text-decoration:none;
+  color:var(--on-surface-var);font-size:14px;font-weight:500;margin-bottom:4px;cursor:pointer;transition:background .15s}
+.nav a .ic{width:22px;text-align:center;font-size:16px}
+.nav a.active{background:var(--primary-container);color:var(--on-primary-container)}
+.nav a:hover:not(.active){background:var(--surface-3)}
+.main{flex:1;padding:24px 28px;max-width:1240px}
+.view{display:none;animation:fade .25s ease} .view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px 0 16px;
+  text-transform:uppercase;letter-spacing:.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-bottom:24px}
+.card{background:var(--surface-1);border-radius:16px;padding:20px;box-shadow:var(--shadow);transition:box-shadow .18s,transform .18s}
+.card:hover{box-shadow:var(--shadow-2)}
+.kpi .label{font-size:13px;color:var(--on-surface-var);font-weight:500}
+.kpi .val{font-size:30px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:12px;color:var(--on-surface-var);margin-top:6px}
+.kpi .delta{font-size:12px;font-weight:600;margin-top:4px;display:inline-flex;align-items:center;gap:4px}
+.kpi.accent{background:var(--primary-container);color:var(--on-primary-container)}
+.kpi.gold{background:var(--gold-container);color:var(--on-gold-container)}
+.chart-card{margin-bottom:24px}
+.chart-card h3{font-size:15px;font-weight:500;margin:0 0 4px}
+.chart-card p.hint{font-size:12px;color:var(--on-surface-var);margin:0 0 14px}
+.chart-wrap{position:relative;height:340px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:right;padding:10px 12px;border-bottom:1px solid var(--outline-var);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+thead th{color:var(--on-surface-var);font-weight:500;cursor:pointer;user-select:none;white-space:nowrap}
+thead th:hover{color:var(--primary)}
+tbody tr:hover{background:var(--surface-2)}
+tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:none}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.chip{display:inline-block;padding:2px 10px;border-radius:8px;background:var(--surface-3);font-size:12px}
+.mono{font-family:'Roboto Mono',monospace;font-size:12px}
+.loading{padding:60px;text-align:center;color:var(--on-surface-var)}
+.spinner{width:36px;height:36px;border:4px solid var(--outline-var);border-top-color:var(--primary);
+  border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tablecard{overflow-x:auto}
+.searchbox{font-family:inherit;font-size:14px;padding:10px 16px;border:1px solid var(--outline-var);
+  border-radius:24px;background:var(--surface);width:280px;margin-bottom:16px;color:var(--on-surface)}
+.banner{background:var(--primary-container);color:var(--on-primary-container);padding:12px 18px;
+  border-radius:12px;font-size:13px;margin-bottom:20px}
+.caveat{background:#fff4e0;color:#5a4300;border:1px solid #f0d089;padding:12px 18px;border-radius:12px;font-size:13px;margin-bottom:20px}
+.note{font-size:12px;color:var(--on-surface-var);margin:0 0 14px;font-style:italic}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.seg{display:inline-flex;border:1px solid var(--outline-var);border-radius:20px;overflow:hidden}
+.seg button{font-family:inherit;font-size:13px;font-weight:500;padding:8px 15px;border:none;cursor:pointer;
+  background:var(--surface-1);color:var(--on-surface-var);transition:background .12s}
+.seg button.on{background:var(--primary);color:var(--primary-c)}
+.seg button:not(:last-child){border-right:1px solid var(--outline-var)}
+.lbl-inline{font-size:13px;color:var(--on-surface-var);font-weight:500}
+.ctl-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ctl-row .lbl-inline{min-width:104px;flex:0 0 auto}
+.ctl-row:last-child{margin-bottom:0}
+.chipset{display:flex;flex-wrap:wrap;gap:8px}
+.mtog{font-family:inherit;font-size:13px;font-weight:500;padding:7px 14px;border-radius:20px;
+  border:1px solid var(--outline-var);background:var(--surface-1);color:var(--on-surface-var);cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;transition:background .12s,border-color .12s}
+.mtog .sw{width:10px;height:10px;border-radius:3px}
+.mtog.on{background:var(--primary);color:var(--primary-c);border-color:var(--primary)}
+.mtog:disabled{opacity:.32;cursor:not-allowed}
+.sliders{display:grid;grid-template-columns:1fr 1fr;gap:16px 30px}
+@media(max-width:700px){.sliders{grid-template-columns:1fr}}
+.sl label{display:flex;justify-content:space-between;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--on-surface-var)}
+.sl label b{color:var(--primary);font-variant-numeric:tabular-nums}
+.sl input[type=range]{width:100%;accent-color:var(--primary);cursor:pointer}
+.sl .sub{font-size:11px;color:var(--on-surface-var);margin-top:3px}
+.ins-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+@media(max-width:900px){.ins-grid{grid-template-columns:1fr}}
+.ins-col h3{font-size:13px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.6px;color:var(--on-surface-var)}
+.ins{border-radius:14px;padding:13px 16px;margin-bottom:12px;background:var(--surface-1);border-left:4px solid var(--outline);box-shadow:var(--shadow)}
+.ins.good{border-left-color:var(--pos)} .ins.warn{border-left-color:var(--amber)} .ins.focus{border-left-color:var(--primary)}
+.ins-t{font-weight:600;font-size:13.5px;margin-bottom:4px}
+.ins-b{font-size:12.5px;color:var(--on-surface-var);line-height:1.5}
+/* ---- upload modal ---- */
+.modal-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:flex-start;justify-content:center;
+  background:rgba(0,0,0,.42);padding:8vh 16px 16px}
+.modal-overlay.open{display:flex;animation:fade .18s ease}
+.modal{background:var(--surface);border-radius:20px;box-shadow:var(--shadow-2);width:100%;max-width:520px;
+  padding:22px 24px 18px;max-height:84vh;overflow:auto}
+.modal-head{display:flex;align-items:center;margin-bottom:16px}
+.modal-head h3{margin:0;font-size:18px;font-weight:600}
+.modal-x{margin-left:auto;border:none;background:transparent;font-size:26px;line-height:1;cursor:pointer;
+  color:var(--on-surface-var);padding:0 4px}
+.modal-x:hover{color:var(--on-surface)}
+.dropzone{border:2px dashed var(--outline-var);border-radius:16px;padding:30px 20px;text-align:center;
+  background:var(--surface-1);transition:border-color .15s,background .15s;cursor:default}
+.dropzone.drag{border-color:var(--primary);background:var(--primary-container)}
+.dz-icon{font-size:34px;color:var(--primary);line-height:1}
+.dz-main{font-size:15px;font-weight:600;margin-top:8px}
+.dz-sub{font-size:12.5px;color:var(--on-surface-var);margin-top:6px}
+.dz-link{color:var(--primary);font-weight:600;cursor:pointer;text-decoration:underline}
+.upload-results{list-style:none;margin:16px 0 0;padding:0}
+.ur{display:flex;gap:10px;align-items:baseline;padding:9px 12px;border-radius:10px;margin-bottom:7px;font-size:13px;background:var(--surface-1)}
+.ur-name{font-weight:600;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:48%}
+.ur-msg{color:var(--on-surface-var);margin-left:auto;text-align:right}
+.ur.ok{background:#e7f4e8} .ur.ok .ur-msg{color:var(--pos)}
+.ur.dup{background:var(--gold-container)} .ur.dup .ur-msg{color:var(--on-gold-container)}
+.ur.err{background:#fdecea} .ur.err .ur-msg{color:var(--neg)}
+.ur.pending .ur-msg{color:var(--on-surface-var)}
+.modal-foot{display:flex;justify-content:flex-end;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="appbar">
+  <h1 class="brand">
+    <svg class="mark" viewBox="-5 -8 86 102" width="26" height="31" aria-hidden="true">
+      <rect x="0"  y="52" width="16" height="36" rx="8" fill="#00838a"/>
+      <rect x="24" y="34" width="16" height="54" rx="8" fill="#00696e"/>
+      <rect x="50" y="16" width="16" height="72" rx="8" fill="#c0872f"/>
+      <ellipse cx="58" cy="12" rx="12" ry="14" fill="#e0a94a"/>
+    </svg>
+    Roost
+  </h1>
+  <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
+  <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
+  <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
+  <div class="meta" id="meta"></div>
+</div>
+
+<!-- upload statements modal -->
+<div class="modal-overlay" id="uploadModal" onclick="if(event.target===this)closeUpload()">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Upload statements</h3>
+      <button class="modal-x" onclick="closeUpload()" aria-label="Close">&times;</button>
+    </div>
+    <div class="dropzone" id="dropzone">
+      <div class="dz-icon">&#8613;</div>
+      <div class="dz-main">Drop statement PDFs here</div>
+      <div class="dz-sub">or <label class="dz-link">browse your files<input type="file" id="fileInput" accept="application/pdf,.pdf" multiple hidden></label><br>
+        each PDF is read and filed into the right year automatically</div>
+    </div>
+    <ul class="upload-results" id="uploadResults"></ul>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeUpload()">Close</button>
+    </div>
+  </div>
+</div>
+<div class="layout">
+  <nav class="nav" id="nav">
+    <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
+    <a data-view="newbusiness"><span class="ic">&#10022;</span><span class="lbl">New Business</span></a>
+    <a data-view="residuals"><span class="ic">&#8734;</span><span class="lbl">Residual Income</span></a>
+    <a data-view="compare"><span class="ic">&#8646;</span><span class="lbl">Comparison</span></a>
+    <a data-view="cumulative"><span class="ic">&#8599;</span><span class="lbl">Cumulative</span></a>
+    <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
+    <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
+    <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
+    <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
+  </nav>
+  <main class="main">
+    <div id="loading" class="loading"><div class="spinner"></div>Parsing statements&hellip;</div>
+    <div id="content" style="display:none">
+
+      <!-- OVERVIEW -->
+      <section class="view active" id="view-overview">
+        <div class="kpis" id="kpis"></div>
+        <div class="card chart-card">
+          <div class="controls" style="margin-bottom:10px">
+            <h3 style="margin:0;flex:1 1 100%">Income over time</h3>
+            <span class="lbl-inline">Timeframe</span>
+            <div class="seg grainSeg">
+              <button data-g="week">Week</button>
+              <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+              <button data-g="year">Year</button>
+            </div>
+            <span class="lbl-inline" style="margin-left:6px">Type</span>
+            <div class="seg" id="overviewType">
+              <button data-t="bar" class="on">Bar</button><button data-t="line">Line</button><button data-t="area">Area</button>
+            </div>
+          </div>
+          <p class="hint">New business and residual per period (bars). Net paid is a year-to-date running total on the right axis that resets each January. Vertical gridlines mark quarter boundaries.</p>
+          <div class="chart-wrap"><canvas id="overviewChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Yearly statistics</h3>
+          <table id="yearTable"></table>
+        </div>
+      </section>
+
+      <!-- NEW BUSINESS -->
+      <section class="view" id="view-newbusiness">
+        <h2 class="section">New business (advances &amp; initial commissions)</h2>
+        <div class="banner">New business = up-front commissions on new enrollments &amp; annuities. Residual (recurring) income is excluded here — see the Residual Income tab.</div>
+        <p class="note reclassNote"></p>
+        <div class="controls">
+          <span class="lbl-inline">Timeframe</span>
+          <div class="seg grainSeg">
+            <button data-g="week">Week</button>
+            <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+            <button data-g="year">Year</button>
+          </div>
+          <span class="lbl-inline" style="margin-left:6px">Type</span>
+          <div class="seg" id="nbType">
+            <button data-t="bar" class="on">Bar</button><button data-t="line">Line</button><button data-t="area">Area</button>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>New business over time</h3>
+          <p class="hint">Advances &amp; initial commissions per period. Quarter boundaries gridlined.</p>
+          <div class="chart-wrap"><canvas id="nbChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>New business by carrier</h3>
+          <p class="hint">Where your enrollments are landing, stacked by year.</p>
+          <div class="chart-wrap"><canvas id="nbCarrierChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>New business detail</h3>
+          <table id="nbTable"></table>
+        </div>
+      </section>
+
+      <!-- RESIDUALS -->
+      <section class="view" id="view-residuals">
+        <div class="banner">Residual income = recurring renewal commissions that keep paying after the initial sale. Stay on plan into a new year and the residual continues; switch plans and it stops (but a new initial is earned).</div>
+        <p class="note reclassNote"></p>
+        <div class="kpis" id="residKpis"></div>
+        <div class="controls">
+          <span class="lbl-inline">Timeframe</span>
+          <div class="seg grainSeg">
+            <button data-g="week">Week</button>
+            <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+            <button data-g="year">Year</button>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Residual income over time</h3>
+          <p class="hint">Recurring residual per period (bars) with a cumulative running total (line). Quarter boundaries gridlined.</p>
+          <div class="chart-wrap"><canvas id="residChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Residual vs. new business by year</h3>
+          <p class="hint">How much of each year's earnings is recurring vs. one-time new sales.</p>
+          <div class="chart-wrap"><canvas id="mixChart"></canvas></div>
+        </div>
+      </section>
+
+      <!-- COMPARISON -->
+      <section class="view" id="view-compare">
+        <h2 class="section">Comparison builder</h2>
+        <div class="card" style="margin-bottom:24px">
+          <div class="ctl-row">
+            <span class="lbl-inline">Break down by</span>
+            <div class="seg" id="cmpDim">
+              <button data-d="year" class="on">Year</button>
+              <button data-d="quarter">Quarter</button>
+              <button data-d="month">Month</button>
+              <button data-d="week">Week</button>
+              <button data-d="carrier">Carrier</button>
+            </div>
+          </div>
+          <div class="ctl-row">
+            <span class="lbl-inline">Chart type</span>
+            <div class="seg" id="cmpType">
+              <button data-t="bar" class="on">Grouped bar</button>
+              <button data-t="stacked">Stacked</button>
+              <button data-t="line">Line</button>
+              <button data-t="area">Area</button>
+              <button data-t="hbar">Horizontal</button>
+              <button data-t="doughnut">Doughnut</button>
+            </div>
+          </div>
+          <div class="ctl-row" style="align-items:flex-start">
+            <span class="lbl-inline" style="padding-top:6px">Metrics</span>
+            <div class="chipset" id="cmpMetrics"></div>
+            <button class="btn ghost" style="margin-left:auto" onclick="downloadCmp()"><span>&#8681;</span> PNG</button>
+          </div>
+        </div>
+        <div class="kpis" id="cmpStats"></div>
+        <div class="card chart-card">
+          <h3 id="cmpTitle">Comparison</h3>
+          <p class="hint" id="cmpHint"></p>
+          <div class="chart-wrap" style="height:400px"><canvas id="cmpChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Underlying data</h3>
+          <table id="cmpTable"></table>
+        </div>
+      </section>
+
+      <!-- CUMULATIVE -->
+      <section class="view" id="view-cumulative">
+        <h2 class="section">Cumulative income &mdash; year overlay</h2>
+        <div class="controls">
+          <span class="lbl-inline">Metric:</span>
+          <div class="seg" id="cumMetric">
+            <button data-m="net" class="on">Net paid</button>
+            <button data-m="residual">Residual</button>
+            <button data-m="advances">New business</button>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Running total through the year</h3>
+          <p class="hint">Each line is one year, plotted by day-of-year so pace is directly comparable. Vertical gridlines mark quarter boundaries.</p>
+          <div class="chart-wrap"><canvas id="cumChart"></canvas></div>
+        </div>
+      </section>
+
+      <!-- CARRIERS -->
+      <section class="view" id="view-carriers">
+        <div class="controls">
+          <span class="lbl-inline">Timeframe</span>
+          <div class="seg grainSeg">
+            <button data-g="week">Week</button>
+            <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+            <button data-g="year">Year</button>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Total income by carrier</h3>
+          <p class="hint">New business + residual earned. At Year, carriers sit on the x-axis; at smaller timeframes the x-axis becomes time (like the overview) stacked by carrier.</p>
+          <div class="chart-wrap"><canvas id="incomeCarrierChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Residual income by carrier</h3>
+          <p class="hint">Recurring residual only. At Year, carriers sit on the x-axis; at smaller timeframes the x-axis becomes time stacked by carrier.</p>
+          <div class="chart-wrap"><canvas id="carrierChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Carrier detail (residual)</h3>
+          <table id="carrierTable"></table>
+        </div>
+      </section>
+
+      <!-- DOWNLINE -->
+      <section class="view" id="view-downline">
+        <h2 class="section">Downline &amp; override income</h2>
+        <div class="banner">Downline production = business written by agents you manage. You earn an override (a portion) of everything they produce. Downline roster: <b id="dlRoster"></b>. Every writing agent you earn an override on is listed below; add names to <span class="mono">DOWNLINE_ROSTER</span> in aggregate.js to track more as your own downline.</div>
+        <div class="kpis" id="dlKpis"></div>
+        <div class="controls">
+          <span class="lbl-inline">Timeframe</span>
+          <div class="seg grainSeg">
+            <button data-g="week">Week</button>
+            <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+            <button data-g="year">Year</button>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Downline override income over time</h3>
+          <p class="hint">Override income earned from your downline roster's production per period. Quarter boundaries gridlined.</p>
+          <div class="chart-wrap"><canvas id="dlTimeChart"></canvas></div>
+        </div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>Downline income by carrier</h3>
+            <p class="hint">Which carriers your downline's production pays you on.</p>
+            <div class="chart-wrap"><canvas id="dlCarrierChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3>Override income by writing agent</h3>
+            <p class="hint">Every agent whose production pays you an override. Gold = your downline roster.</p>
+            <div class="chart-wrap"><canvas id="dlAgentChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Override income by writing agent</h3>
+          <table id="dlAgentTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Downline production detail (roster)</h3>
+          <table id="dlPolTable"></table>
+        </div>
+      </section>
+
+      <!-- PROJECTIONS -->
+      <section class="view" id="view-projections">
+        <h2 class="section">Projections &amp; insights</h2>
+        <div class="caveat"><b>Estimates, not guarantees.</b> These forward numbers compound your current book using the assumptions below — retained members renew as residual, new enrollments convert into next year's residual, and switches drop the old residual but earn a new initial. Starting points come from your own history; drag the sliders to test scenarios. Not financial advice.</div>
+        <div class="kpis" id="projKpis"></div>
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="margin:0 0 16px;font-size:15px;font-weight:500">Assumptions</h3>
+          <div class="sliders">
+            <div class="sl"><label>Residual retention <b id="vRet"></b></label>
+              <input type="range" id="projRet" min="40" max="98" step="1">
+              <div class="sub">Share of this year's residual that renews next year.</div></div>
+            <div class="sl"><label>New-business growth <b id="vGrowth"></b></label>
+              <input type="range" id="projGrowth" min="-25" max="50" step="1">
+              <div class="sub">Year-over-year change in new enrollments/advances.</div></div>
+            <div class="sl"><label>New &rarr; residual conversion <b id="vConv"></b></label>
+              <input type="range" id="projConv" min="40" max="95" step="1">
+              <div class="sub">Share of new enrollments that persist into a recurring residual.</div></div>
+            <div class="sl"><label>Renewal-to-initial ratio <b id="vRenew"></b></label>
+              <input type="range" id="projRenew" min="10" max="100" step="1">
+              <div class="sub">A year of residual as a fraction of the up-front initial it came from.</div></div>
+            <div class="sl"><label>Chargeback drag <b id="vCB"></b></label>
+              <input type="range" id="projCB" min="0" max="50" step="1">
+              <div class="sub">Clawbacks as a share of new business (reduces net).</div></div>
+            <div class="sl"><label>Horizon <b id="vYears"></b></label>
+              <input type="range" id="projYears" min="1" max="7" step="1">
+              <div class="sub">How many years forward to project.</div></div>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Residual trajectory</h3>
+          <p class="hint">Solid = history, dashed = projection. Shaded band spans a conservative-to-optimistic range around your assumptions.</p>
+          <div class="chart-wrap"><canvas id="projChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Projected income composition</h3>
+          <p class="hint">Recurring residual vs. new business each projected year.</p>
+          <div class="chart-wrap"><canvas id="projCompChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Projection detail</h3>
+          <table id="projTable"></table>
+        </div>
+        <h2 class="section" style="margin-top:28px">What's working &amp; where to focus</h2>
+        <div class="ins-grid">
+          <div class="ins-col"><h3>&#9989; Working</h3><div id="insWorking"></div></div>
+          <div class="ins-col"><h3>&#9888; Watch</h3><div id="insWatch"></div></div>
+          <div class="ins-col"><h3>&#127919; Focus</h3><div id="insFocus"></div></div>
+        </div>
+      </section>
+
+      <!-- POLICIES -->
+      <section class="view" id="view-policies">
+        <h2 class="section">Recurring residual policies</h2>
+        <input class="searchbox" id="polSearch" placeholder="Search client, carrier, policy&hellip;">
+        <div class="card tablecard">
+          <table id="polTable"></table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0 = n => (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{maximumFractionDigits:0});
+const cls = n => n<0?'neg':'pos';
+const hexA=(h,a)=>{const n=parseInt(h.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;};
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const COLORS={nb:'#00696e',resid:'#c0872f',cbk:'#b3261e',net:'#2f6b46'};
+const PALETTE=['#00696e','#c0872f','#4b607c','#7a5195','#2f6b46','#b3261e','#bc5090','#00838f','#a1887f','#546e7a','#8a5a00','#5c6bc0'];
+const METRICS={
+  net:{label:'Net paid',color:'#2f6b46',money:true},
+  advances:{label:'New business',color:'#00696e',money:true},
+  residual:{label:'Residual',color:'#c0872f',money:true},
+  chargebacks:{label:'Chargebacks',color:'#b3261e',money:true},
+  gross:{label:'Gross earnings',color:'#8a5a00',money:true},
+  statements:{label:'Statements',color:'#7a5195',money:false},
+  avg_per_statement:{label:'Avg / statement',color:'#bc5090',money:true},
+};
+const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
+let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null;
+let cmp={dim:'year',metrics:['net','residual','advances'],type:'bar'};
+try{const s=JSON.parse(localStorage.getItem('cmpState'));if(s&&s.dim)cmp=s;}catch(e){}
+try{const g=localStorage.getItem('grain');if(g&&g!=='day')GRAIN=g;}catch(e){}
+
+// nav
+document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('#nav a').forEach(x=>x.classList.remove('active'));
+  a.classList.add('active');
+  const v=a.dataset.view;
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  $('#view-'+v).classList.add('active');
+});
+
+function destroyCharts(){Object.values(charts).forEach(c=>c&&c.destroy());charts={};}
+function thead(cols){return '<thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead>';}
+
+// ================= TIME BUCKETING =================
+function isoWeek(y,m,d){
+  const t=new Date(Date.UTC(y,m-1,d));
+  const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
+  const firstThu=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  const week=1+Math.round(((t-firstThu)/86400000-3+((firstThu.getUTCDay()+6)%7))/7);
+  return {year:t.getUTCFullYear(),week};
+}
+function bucketInfo(dateStr,grain){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const q=Math.floor((m-1)/3), yy=String(y).slice(2);
+  if(grain==='day') return {key:dateStr,label:MONTHS[m-1]+' '+d+" '"+yy,q,year:y,sort:dateStr};
+  if(grain==='week'){const w=isoWeek(y,m,d);const key=w.year+'-W'+String(w.week).padStart(2,'0');
+    return {key,label:'W'+w.week+" '"+String(w.year).slice(2),q,year:y,sort:key};}
+  if(grain==='month'){const key=y+'-'+String(m).padStart(2,'0');
+    return {key,label:MONTHS[m-1]+" '"+yy,q,year:y,sort:key};}
+  if(grain==='year') return {key:String(y),label:String(y),q:0,year:y,sort:String(y)};
+  const key=y+'-Q'+(q+1);
+  return {key,label:'Q'+(q+1)+" '"+yy,q,year:y,sort:key};
+}
+function markQuarterStarts(buckets){
+  let pq=null,py=null;
+  buckets.forEach((b,i)=>{b.qStart=(i===0)||b.q!==pq||b.year!==py;pq=b.q;py=b.year;});
+}
+function bucketSeries(grain,src){
+  src=src||DATA.series;
+  const map=new Map();
+  for(const p of src){
+    const info=bucketInfo(p.date,grain);
+    let b=map.get(info.key);
+    if(!b){b={key:info.key,label:info.label,year:info.year,q:info.q,sort:info.sort,
+      advances:0,residual:0,net:0,chargebacks:0,statements:0};map.set(info.key,b);}
+    b.advances+=p.advances;b.residual+=p.residual;b.net+=p.net;b.chargebacks+=p.chargebacks;b.statements++;
+  }
+  const arr=[...map.values()].sort((a,b)=>a.sort<b.sort?-1:1);
+  arr.forEach(b=>{b.gross=Math.round((b.advances+b.residual)*100)/100;
+    b.avg_per_statement=b.statements?b.net/b.statements:0;});
+  markQuarterStarts(arr);
+  return arr;
+}
+function timeAxis(buckets,opt){
+  opt=opt||{}; const money=opt.money!==false, stacked=!!opt.stacked;
+  const qc='rgba(0,0,0,.20)', faint='rgba(0,0,0,0)';
+  return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{
+      x:{stacked,grid:{color:c=>{const b=buckets[c.index];return b&&b.qStart?qc:faint;},drawTicks:true,tickLength:6},
+        ticks:{autoSkip:true,maxRotation:0,autoSkipPadding:12}},
+      y:{stacked,grid:{color:'#e0e8e8'},ticks:{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}}},
+    plugins:{legend:{position:'bottom'},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.dataset.money===false?Number(c.parsed.y).toLocaleString():fmt(c.parsed.y))}}}};
+}
+function baropts(stacked,horizontal){
+  // The value axis gets the $ formatter; the category axis keeps its labels
+  // (e.g. carrier names). For horizontal bars the value axis is x, not y.
+  const valAxis={stacked:!!stacked,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:'#e0e8e8'}};
+  const catAxis={stacked:!!stacked,grid:{display:false},ticks:{autoSkip:false}};
+  return{responsive:true,maintainAspectRatio:false,
+    indexAxis:horizontal?'y':'x',interaction:{mode:'index',intersect:false},
+    scales:horizontal?{x:valAxis,y:catAxis}:{x:catAxis,y:valAxis},
+    plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>{const v=c.parsed[horizontal?'x':'y'];
+      return c.dataset.label+': '+(c.dataset.money===false?Number(v).toLocaleString():fmt(v));}}}}};}
+
+async function loadData(force){
+  if(force){$('#loading').style.display='block';$('#content').style.display='none';}
+  try{
+    const r=await fetch('/api/data'+(force?'?t='+Date.now():''));
+    DATA=await r.json();
+    render();
+    $('#loading').style.display='none';$('#content').style.display='block';
+  }catch(e){$('#loading').innerHTML='Could not load data: '+e;}
+}
+
+function render(){
+  destroyCharts();
+  const d=DATA, years=d.years, yl=d.all_years;
+  $('#meta').innerHTML=`${d.statement_count} statements &middot; ${yl[0]}&ndash;${yl[yl.length-1]}<br>updated ${d.generated.replace('T',' ')}`;
+  syncGrainSegs();
+  renderKpis();
+  renderOverviewTrend();
+  renderYearTable();
+  renderNewBusiness();
+  renderResidual();
+  renderCumulative();
+  renderCarriers();
+  renderDownline();
+  buildMetricChips();
+  renderComparison();
+  renderProjections();
+  renderPolicies(yl);
+  renderReclassNotes();
+}
+
+function renderReclassNotes(){
+  const rc=DATA.reclass||{};
+  const txt = rc.moved>0
+    ? `Parser adjustment: ${rc.moved} large Medicare Advantage initial payment${rc.moved===1?'':'s'} (${fmt0(rc.dollars)}) were reclassified out of residual into new business, so recurring figures reflect true renewals.`
+    : '';
+  document.querySelectorAll('.reclassNote').forEach(e=>{e.textContent=txt;e.style.display=txt?'block':'none';});
+}
+
+function renderKpis(){
+  const d=DATA, years=d.years;
+  const cur=years[years.length-1]||{}, prev=years[years.length-2];
+  const totalResid=years.reduce((s,y)=>s+y.residual,0);
+  const deltaHtml=(c,p)=>{if(p==null||!p)return'';const g=(c-p)/Math.abs(p)*100;const up=g>=0;
+    return `<div class="delta ${up?'pos':'neg'}">${up?'&#9650;':'&#9660;'} ${Math.abs(g).toFixed(0)}% vs ${prev.year}</div>`;};
+  const kpis=[
+    {l:'Latest YTD total',v:fmt0(cur.ytd_total||cur.net),s:`through ${cur.last_statement||''}`,d:''},
+    {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring renewals',d:'',gold:true},
+    {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
+    {l:'Pending pipeline',v:fmt0(d.pending.latest_total),s:d.pending.latest_date?('as of '+d.pending.latest_date):'none',d:''}
+  ];
+  $('#kpis').innerHTML=kpis.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div>${k.d}<div class="sub">${k.s}</div></div>`).join('');
+}
+
+function renderYearTable(){
+  const years=DATA.years;
+  $('#yearTable').innerHTML=thead(['Year','Statements','New business','Residual','Chargebacks','Net paid','Avg / stmt'])
+    + '<tbody>'+years.map(y=>`<tr><td>${y.year}</td><td>${y.statements}</td>
+      <td>${fmt(y.advances)}</td><td>${fmt(y.residual)}</td>
+      <td class="neg">${fmt(y.chargebacks)}</td><td class="${cls(y.net)}">${fmt(y.net)}</td>
+      <td>${fmt(y.avg_per_statement)}</td></tr>`).join('')+'</tbody>';
+}
+
+function renderOverviewTrend(){
+  if(charts.year)charts.year.destroy();
+  const buckets=bucketSeries(GRAIN), t=overviewType, ytdMode=GRAIN!=='year';
+  const labels=buckets.map(b=>b.label);
+  const barDefs=[{k:'advances',label:'New business',color:COLORS.nb},
+    {k:'residual',label:'Residual',color:COLORS.resid}];
+  const datasets=barDefs.map(dfn=>{
+    const ds={label:dfn.label,data:buckets.map(b=>b[dfn.k]),money:true};
+    if(t==='bar'){ds.backgroundColor=dfn.color;}
+    else{ds.type='line';ds.borderColor=dfn.color;ds.backgroundColor=t==='area'?hexA(dfn.color,.16):dfn.color;
+      ds.tension=.3;ds.fill=t==='area';ds.pointRadius=2;ds.spanGaps=true;}
+    return ds;});
+  if(ytdMode){
+    // net paid as a year-to-date running total that resets to zero each calendar year;
+    // the segment across a year boundary is drawn transparent so the line breaks cleanly
+    // instead of sloping back down.
+    let run=0,py=null;
+    const netYtd=buckets.map(b=>{if(b.year!==py){run=0;py=b.year;}run+=b.net;return run;});
+    datasets.push({label:'Net paid (YTD)',data:netYtd,type:'line',borderColor:COLORS.net,
+      backgroundColor:COLORS.net,tension:.15,pointRadius:2,fill:false,yAxisID:'yNet',money:true,
+      segment:{borderColor:ctx=>{const a=buckets[ctx.p0DataIndex],b=buckets[ctx.p1DataIndex];
+        return (a&&b&&a.year!==b.year)?'transparent':COLORS.net;}}});
+  }else{
+    datasets.push({label:'Net paid',data:buckets.map(b=>b.net),type:'line',borderColor:COLORS.net,
+      backgroundColor:COLORS.net,tension:.3,fill:false,pointRadius:3,money:true});
+  }
+  const opts=timeAxis(buckets,{money:true});
+  if(ytdMode){opts.scales.yNet={position:'right',grid:{display:false},
+    ticks:{callback:v=>'$'+Number(v).toLocaleString()},title:{display:true,text:'Net paid (YTD)'}};}
+  charts.year=new Chart($('#overviewChart'),{type:t==='bar'?'bar':'line',data:{labels,datasets},options:opts});
+}
+
+function renderNewBusiness(){
+  if(charts.nb)charts.nb.destroy();
+  if(charts.nbCarrier)charts.nbCarrier.destroy();
+  const buckets=bucketSeries(GRAIN), t=nbType, yl=DATA.all_years;
+  const ds={label:'New business',data:buckets.map(b=>b.advances),money:true};
+  if(t==='bar'){ds.backgroundColor=COLORS.nb;}
+  else{ds.type='line';ds.borderColor=COLORS.nb;ds.backgroundColor=t==='area'?hexA(COLORS.nb,.18):COLORS.nb;
+    ds.tension=.3;ds.fill=t==='area';ds.pointRadius=2;ds.spanGaps=true;}
+  charts.nb=new Chart($('#nbChart'),{type:t==='bar'?'bar':'line',data:{labels:buckets.map(b=>b.label),datasets:[ds]},
+    options:timeAxis(buckets,{money:true})});
+  const rc=DATA.new_by_carrier.slice(0,10);
+  charts.nbCarrier=new Chart($('#nbCarrierChart'),{type:'bar',data:{labels:rc.map(c=>c.carrier),
+    datasets:yl.map((y,i)=>({label:String(y),data:rc.map(c=>c[String(y)]||0),backgroundColor:PALETTE[i%PALETTE.length]}))},
+    options:baropts(true,true)});
+  $('#nbTable').innerHTML=thead(['Period','Statements','New business'])
+    +'<tbody>'+buckets.slice().reverse().map(b=>`<tr><td>${b.label}</td><td>${b.statements}</td><td>${fmt(b.advances)}</td></tr>`).join('')+'</tbody>';
+}
+
+function renderResidual(){
+  if(charts.resid)charts.resid.destroy();
+  if(charts.mix)charts.mix.destroy();
+  const d=DATA, yl=d.all_years, years=d.years, rr=d.runrate||{};
+  const rk=[
+    {label:'Projected annual residual',val:fmt0(rr.annual||0),sub:`run-rate, last ${rr.window_days||0} days`,gold:true},
+    {label:'Projected monthly residual',val:fmt0(rr.monthly||0),sub:'recent recurring pace'},
+    ...years.map(y=>({label:`${y.year} residual`,val:fmt0(y.residual),
+      sub:`${(100*y.residual/((y.advances+y.residual)||1)).toFixed(0)}% of earnings`}))
+  ];
+  $('#residKpis').innerHTML=rk.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.label}</div>
+    <div class="val">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+  const buckets=bucketSeries(GRAIN);
+  let cum=0; const cumArr=buckets.map(b=>cum+=b.residual);
+  const opt=timeAxis(buckets,{money:true});
+  opt.scales.y1={position:'right',grid:{display:false},ticks:{callback:v=>'$'+Number(v).toLocaleString()}};
+  charts.resid=new Chart($('#residChart'),{data:{labels:buckets.map(b=>b.label),datasets:[
+    {type:'bar',label:'Residual / period',data:buckets.map(b=>b.residual),backgroundColor:COLORS.resid,yAxisID:'y',money:true},
+    {type:'line',label:'Cumulative residual',data:cumArr,borderColor:COLORS.nb,backgroundColor:'transparent',
+      tension:.25,pointRadius:0,yAxisID:'y1',money:true}
+  ]},options:opt});
+  charts.mix=new Chart($('#mixChart'),{type:'bar',data:{labels:yl.map(String),datasets:[
+    {label:'Residual',data:years.map(y=>y.residual),backgroundColor:COLORS.resid},
+    {label:'New business',data:years.map(y=>y.advances),backgroundColor:COLORS.nb}
+  ]},options:baropts(true)});
+}
+
+function renderCumulative(){
+  if(charts.cum)charts.cum.destroy();
+  const d=DATA, yl=d.all_years, metric=cumMetric, qDays=[0,91,182,273,365];
+  const datasets=yl.map((y,i)=>({label:String(y),
+    data:(d.cumulative_by_year[y]||[]).map(p=>({x:p.doy,y:p[metric]})),
+    borderColor:PALETTE[i%PALETTE.length],backgroundColor:PALETTE[i%PALETTE.length],tension:.2,pointRadius:2,fill:false}));
+  charts.cum=new Chart($('#cumChart'),{type:'line',data:{datasets},
+    options:{responsive:true,maintainAspectRatio:false,parsing:false,
+      scales:{x:{type:'linear',min:0,max:366,title:{display:true,text:'Day of year (quarter gridlines)'},
+        grid:{color:ctx=>qDays.some(q=>Math.abs(ctx.tick.value-q)<6)?'rgba(0,0,0,.20)':'rgba(0,0,0,0)'},
+        ticks:{stepSize:30.4,callback:v=>MONTHS[Math.min(11,Math.floor(v/30.4))]}},
+        y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:'#e0e8e8'}}},
+      plugins:{legend:{position:'bottom'},
+        tooltip:{callbacks:{title:items=>'Day '+items[0].parsed.x,label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
+}
+
+function renderCarriers(){
+  ['carrier','incomeCarrier'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const d=DATA, yl=d.all_years, cs=d.carrier_series||[];
+  $('#carrierTable').innerHTML=thead(['Carrier',...yl.map(String),'Total'])
+    +'<tbody>'+d.residual_by_carrier.map(c=>`<tr><td>${c.carrier}</td>
+      ${yl.map(y=>`<td>${fmt(c[String(y)]||0)}</td>`).join('')}<td><b>${fmt(c.total)}</b></td></tr>`).join('')+'</tbody>';
+
+  // roll per-(date,carrier) income into carrier x time-bucket for the selected grain
+  function build(field){
+    const map={}, bmap={}, ctot={};
+    for(const row of cs){
+      const val=field==='res'?row.res:(row.nb+row.res);
+      if(!val)continue;
+      const info=bucketInfo(row.date,GRAIN);
+      (map[row.carrier] ||= {});
+      map[row.carrier][info.key]=(map[row.carrier][info.key]||0)+val;
+      ctot[row.carrier]=(ctot[row.carrier]||0)+val;
+      bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};
+    }
+    const carriers=Object.entries(ctot).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+    const buckets=Object.values(bmap).sort((a,b)=>a.sort<b.sort?-1:1);
+    markQuarterStarts(buckets);
+    return {map,carriers,buckets,ctot};
+  }
+
+  function draw(id,field,color){
+    // Fallback (server not restarted with carrier_series): carriers on x, all-time totals.
+    if(!cs.length){
+      let rows;
+      if(field==='res') rows=d.residual_by_carrier.slice(0,12).map(c=>({carrier:c.carrier,val:c.total}));
+      else { const inc={}; d.new_by_carrier.forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
+        d.residual_by_carrier.forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
+        rows=Object.entries(inc).map(([carrier,o])=>({carrier,val:o.v})).sort((a,b)=>b.val-a.val).slice(0,12); }
+      return new Chart($(id),{type:'bar',data:{labels:rows.map(r=>r.carrier),
+        datasets:[{label:field==='res'?'Residual':'Total income',data:rows.map(r=>r.val),
+          backgroundColor:rows.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
+    }
+    const g=build(field);
+    if(GRAIN==='year'){
+      // carriers on x-axis, earned income on y-axis (one bar per carrier)
+      const carriers=g.carriers.slice(0,14);
+      return new Chart($(id),{type:'bar',data:{labels:carriers,
+        datasets:[{label:field==='res'?'Residual':'Total income',data:carriers.map(c=>g.ctot[c]),
+          backgroundColor:carriers.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
+    }
+    // sub-year: timeframes on the x-axis (like the overview graphs), stacked by carrier
+    const carriers=g.carriers.slice(0,8);
+    return new Chart($(id),{type:'bar',data:{labels:g.buckets.map(b=>b.label),
+      datasets:carriers.map((c,i)=>({label:c,data:g.buckets.map(b=>(g.map[c]||{})[b.key]||0),
+        backgroundColor:PALETTE[i%PALETTE.length]}))},
+      options:timeAxis(g.buckets,{money:true,stacked:true})});
+  }
+  charts.incomeCarrier=draw('#incomeCarrierChart','total');
+  charts.carrier=draw('#carrierChart','res');
+}
+
+function renderDownline(){
+  ['dlTime','dlCarrier','dlAgents'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const d=DATA, yl=d.all_years;
+  const dl=d.downline||{agents:[],series:[],policies:[],by_carrier:[],totals:{net:0,count:0},roster:[],agent_count:0};
+  $('#dlRoster').textContent=(dl.roster||[]).join(', ')||'(none configured)';
+  const totalNet=d.years.reduce((s,y)=>s+y.net,0)||1;
+  const share=(dl.totals.net||0)/totalNet*100;
+  const cur=d.years[d.years.length-1]||{};
+  const curDl=(dl.series||[]).filter(p=>p.year===cur.year).reduce((s,p)=>s+p.net,0);
+  const kp=[
+    {l:'Downline income (all-time)',v:fmt0(dl.totals.net||0),s:`${dl.totals.count||0} override line items`,gold:true},
+    {l:`${cur.year||''} downline income`,v:fmt0(curDl),s:'override earned this year'},
+    {l:'Share of your net',v:share.toFixed(1)+'%',s:'downline vs. total income'},
+    {l:'Agents you override',v:String(dl.agent_count||0),s:'writing agents in your book'}
+  ];
+  $('#dlKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+
+  if((dl.series||[]).length){
+    const buckets=bucketSeries(GRAIN, dl.series);
+    charts.dlTime=new Chart($('#dlTimeChart'),{type:'bar',
+      data:{labels:buckets.map(b=>b.label),datasets:[{label:'Downline income',data:buckets.map(b=>b.net),money:true,backgroundColor:COLORS.resid}]},
+      options:timeAxis(buckets,{money:true})});
+  }
+
+  const bc=(dl.by_carrier||[]).slice(0,10);
+  charts.dlCarrier=new Chart($('#dlCarrierChart'),{type:'bar',data:{labels:bc.map(c=>c.carrier),
+    datasets:[{label:'Downline income',data:bc.map(c=>c.total),money:true,backgroundColor:COLORS.nb}]},
+    options:baropts(false,true)});
+
+  const ag=(dl.agents||[]).slice(0,12);
+  charts.dlAgents=new Chart($('#dlAgentChart'),{type:'bar',data:{labels:ag.map(a=>a.name),
+    datasets:[{label:'Override income',data:ag.map(a=>a.total),money:true,
+      backgroundColor:ag.map(a=>a.downline?COLORS.resid:COLORS.nb)}]},
+    options:baropts(false,true)});
+
+  const dlChip='<span class="chip" style="background:var(--gold-container);color:var(--on-gold-container)">downline</span>';
+  $('#dlAgentTable').innerHTML=thead(['Writing agent','',...yl.map(String),'Advances','Residual','Chargebacks','Total','Lines'])
+    +'<tbody>'+(dl.agents||[]).map(a=>`<tr>
+      <td>${a.name}</td><td>${a.downline?dlChip:''}</td>
+      ${yl.map(y=>`<td>${fmt(a[String(y)]||0)}</td>`).join('')}
+      <td>${fmt(a.advances)}</td><td>${fmt(a.residual)}</td><td class="neg">${fmt(a.chargebacks)}</td>
+      <td><b>${fmt(a.total)}</b></td><td>${a.count}</td></tr>`).join('')+'</tbody>';
+
+  $('#dlPolTable').innerHTML=thead(['Date','Client','Carrier','Product','Type','Amount','Writing agents'])
+    +'<tbody>'+(dl.policies||[]).slice(0,300).map(p=>`<tr>
+      <td>${p.date}</td><td>${p.client||'&mdash;'}</td><td><span class="chip">${p.carrier}</span></td>
+      <td>${(p.product||'').slice(0,30)}</td><td>${p.section}</td>
+      <td class="${cls(p.amount)}">${fmt(p.amount)}</td><td>${p.agents}</td></tr>`).join('')+'</tbody>';
+}
+
+// ================= COMPARISON BUILDER =================
+function applicableMetrics(dim){
+  if(dim==='carrier')return ['advances','residual'];
+  return ['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
+}
+function buildMetricChips(){
+  const avail=applicableMetrics(cmp.dim);
+  cmp.metrics=cmp.metrics.filter(m=>avail.includes(m));
+  if(!cmp.metrics.length)cmp.metrics=[avail[0]];
+  $('#cmpMetrics').innerHTML=METRIC_ORDER.map(k=>{
+    const m=METRICS[k],ok=avail.includes(k),on=cmp.metrics.includes(k);
+    return `<button class="mtog${on?' on':''}" data-k="${k}" ${ok?'':'disabled'}>
+      <span class="sw" style="background:${m.color}"></span>${m.label}</button>`;}).join('');
+  $('#cmpDim').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.d===cmp.dim));
+  $('#cmpType').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===cmp.type));
+}
+function comparisonSeries(){
+  const d=DATA, dim=cmp.dim;
+  let labels=[], get, buckets=null;
+  if(dim==='carrier'){
+    const tables={residual:d.residual_by_carrier,advances:d.new_by_carrier};
+    const totals={};
+    cmp.metrics.forEach(k=>{(tables[k]||[]).forEach(r=>{totals[r.carrier]=(totals[r.carrier]||0)+Math.abs(r.total);});});
+    labels=Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,12).map(e=>e[0]);
+    get=k=>labels.map(c=>{const r=(tables[k]||[]).find(x=>x.carrier===c);return r?r.total:0;});
+  }else{
+    buckets=bucketSeries(dim);
+    labels=buckets.map(b=>b.label);
+    get=k=>buckets.map(b=>b[k]??0);
+  }
+  const datasets=cmp.metrics.map(k=>({key:k,label:METRICS[k].label,color:METRICS[k].color,money:METRICS[k].money,values:get(k)}));
+  return {labels,datasets,buckets};
+}
+function renderComparison(){
+  if(charts.cmp)charts.cmp.destroy();
+  const {labels,datasets,buckets}=comparisonSeries();
+  const t=cmp.type, allMoney=datasets.every(ds=>ds.money);
+  let chart;
+  if(t==='doughnut'){
+    const ds=datasets[0], absSum=ds.values.map(Math.abs).reduce((a,b)=>a+b,0)||1;
+    chart={type:'doughnut',data:{labels,datasets:[{data:ds.values.map(Math.abs),
+      backgroundColor:labels.map((_,i)=>PALETTE[i%PALETTE.length]),borderWidth:2,borderColor:'#fff'}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+        plugins:{legend:{position:'right'},
+          tooltip:{callbacks:{label:c=>c.label+': '+(ds.money?fmt(c.parsed):c.parsed.toLocaleString())+
+            ' ('+(c.parsed/absSum*100).toFixed(1)+'%)'}}}}};
+  }else{
+    const stacked=(t==='stacked'), horizontal=(t==='hbar'), line=(t==='line'||t==='area');
+    const cds=datasets.map(ds=>{
+      const o={label:ds.label,data:ds.values,money:ds.money};
+      if(line){o.type='line';o.borderColor=ds.color;o.backgroundColor=t==='area'?hexA(ds.color,.18):ds.color;
+        o.tension=.3;o.fill=t==='area';o.pointRadius=3;o.spanGaps=true;}
+      else{o.backgroundColor=ds.color;}
+      return o;});
+    chart={type:line?'line':'bar',data:{labels,datasets:cds},options:cmpOptions(stacked,horizontal,allMoney,buckets)};
+  }
+  charts.cmp=new Chart($('#cmpChart'),chart);
+  const dimName={year:'year',quarter:'quarter',month:'month',week:'week',carrier:'carrier'}[cmp.dim];
+  const typeName={bar:'grouped bars',stacked:'stacked bars',line:'lines',area:'area',hbar:'horizontal bars',doughnut:'doughnut'}[t];
+  $('#cmpTitle').textContent=datasets.map(d=>d.label).join(' vs ')+' by '+dimName;
+  $('#cmpHint').textContent='Shown as '+typeName+(t==='doughnut'&&datasets.length>1?' (doughnut uses the first metric only).':'.');
+  renderCmpStats(labels,datasets);
+  renderCmpTable(labels,datasets);
+  try{localStorage.setItem('cmpState',JSON.stringify(cmp));}catch(e){}
+}
+function renderCmpStats(labels,datasets){
+  const ds=datasets[0], vals=ds.values, money=ds.money;
+  const nn=vals.filter(v=>v!=null);
+  const total=nn.reduce((a,b)=>a+b,0), avg=nn.length?total/nn.length:0;
+  let peakI=0;nn.forEach((v,i)=>{if(Math.abs(v)>Math.abs(nn[peakI]))peakI=i;});
+  const peakLabel=labels[vals.indexOf(nn[peakI])]||'';
+  const f=v=>money?fmt0(v):Math.round(v).toLocaleString();
+  const unit=cmp.dim==='carrier'?'carrier':cmp.dim;
+  const cards=[
+    {l:`Total ${ds.label.toLowerCase()}`,v:f(total),s:`across ${nn.length} ${unit}s`,accent:true},
+    {l:'Average',v:f(avg),s:`per ${unit}`},
+    {l:'Peak',v:f(nn[peakI]||0),s:peakLabel},
+  ];
+  if(cmp.dim!=='carrier'&&nn.length>1){
+    const first=nn[0],last=nn[nn.length-1],g=first?((last-first)/Math.abs(first)*100):0;
+    cards.push({l:'Change (first&rarr;last)',v:(g>=0?'+':'')+g.toFixed(0)+'%',s:`${f(first)} &rarr; ${f(last)}`});
+  }
+  $('#cmpStats').innerHTML=cards.map(c=>`<div class="card kpi${c.accent?' accent':''}">
+    <div class="label">${c.l}</div><div class="val" style="font-size:26px">${c.v}</div><div class="sub">${c.s}</div></div>`).join('');
+}
+function renderCmpTable(labels,datasets){
+  const head=[cmp.dim==='carrier'?'Carrier':cmp.dim.charAt(0).toUpperCase()+cmp.dim.slice(1),...datasets.map(d=>d.label)];
+  const rows=labels.map((lb,i)=>`<tr><td>${lb}</td>${datasets.map(d=>{
+    const v=d.values[i];return `<td>${v==null?'&mdash;':(d.money?fmt(v):Math.round(v).toLocaleString())}</td>`;}).join('')}</tr>`).join('');
+  const totals=datasets.map(d=>{const t=d.values.filter(v=>v!=null).reduce((a,b)=>a+b,0);
+    return `<td>${d.money?fmt(t):Math.round(t).toLocaleString()}</td>`;}).join('');
+  $('#cmpTable').innerHTML=thead(head)+'<tbody>'+rows+'</tbody>'+`<tfoot><tr><td>Total</td>${totals}</tr></tfoot>`;
+}
+function cmpOptions(stacked,horizontal,money,buckets){
+  const qc='rgba(0,0,0,.20)',faint='rgba(0,0,0,0)';
+  const xgrid=(buckets&&!horizontal)?{color:c=>{const b=buckets[c.index];return b&&b.qStart?qc:faint;}}:{display:false};
+  return{responsive:true,maintainAspectRatio:false,indexAxis:horizontal?'y':'x',interaction:{mode:'index',intersect:false},
+    scales:{x:{stacked:!!stacked,grid:xgrid,
+        ticks:horizontal?{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}:{autoSkip:true,maxRotation:0,autoSkipPadding:12}},
+      y:{stacked:!!stacked,grid:{color:'#e0e8e8'},
+        ticks:horizontal?{}:{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}}},
+    plugins:{legend:{position:'bottom'},
+      tooltip:{callbacks:{label:c=>{const v=c.parsed[horizontal?'x':'y'];
+        return c.dataset.label+': '+(c.dataset.money?fmt(v):Number(v).toLocaleString());}}}}};
+}
+function downloadCmp(){
+  if(!charts.cmp)return;
+  const a=document.createElement('a');
+  a.href=charts.cmp.toBase64Image('image/png',1);
+  a.download='comparison-'+cmp.dim+'-'+cmp.type+'.png';a.click();
+}
+
+// ================= PROJECTIONS =================
+function initProj(){
+  if(proj)return;
+  const df=DATA.projections.defaults;
+  proj={retention:df.retention,growth:df.growth,conversion:df.conversion,renewal:df.renewal_ratio,chargeback:df.chargeback_rate,years:5};
+}
+function projectFwd(P,s,years){
+  let residual=P.residual_annual, newbiz=P.newbiz_annual;
+  const rows=[];
+  for(let i=1;i<=years;i++){
+    const addResid=newbiz*s.conversion*s.renewal;
+    residual=residual*s.retention+addResid;
+    newbiz=newbiz*(1+s.growth);
+    rows.push({year:P.current_year+i,residual,newbiz,total:residual+newbiz,net:residual+newbiz*(1-s.chargeback)});
+  }
+  return rows;
+}
+function renderProjections(){
+  initProj();
+  $('#projRet').value=Math.round(proj.retention*100);
+  $('#projGrowth').value=Math.round(proj.growth*100);
+  $('#projConv').value=Math.round(proj.conversion*100);
+  $('#projRenew').value=Math.round(proj.renewal*100);
+  $('#projCB').value=Math.round(proj.chargeback*100);
+  $('#projYears').value=proj.years;
+  const ins=DATA.insights;
+  const card=(c,cl)=>`<div class="ins ${cl}"><div class="ins-t">${c.title}</div><div class="ins-b">${c.body}</div></div>`;
+  $('#insWorking').innerHTML=(ins.working||[]).map(c=>card(c,'good')).join('')||'<div class="ins-b">Not enough history yet.</div>';
+  $('#insWatch').innerHTML=(ins.watch||[]).map(c=>card(c,'warn')).join('')||'<div class="ins-b">Nothing flagged.</div>';
+  $('#insFocus').innerHTML=(ins.focus||[]).map(c=>card(c,'focus')).join('')||'';
+  projDraw();
+}
+function projDraw(){
+  const P=DATA.projections, y=proj.years;
+  $('#vRet').textContent=Math.round(proj.retention*100)+'%';
+  $('#vGrowth').textContent=(proj.growth>=0?'+':'')+Math.round(proj.growth*100)+'%';
+  $('#vConv').textContent=Math.round(proj.conversion*100)+'%';
+  $('#vRenew').textContent=Math.round(proj.renewal*100)+'%';
+  $('#vCB').textContent=Math.round(proj.chargeback*100)+'%';
+  $('#vYears').textContent=y+(y===1?' year':' years');
+  const base=projectFwd(P,proj,y);
+  const cons=projectFwd(P,{...proj,retention:Math.max(0.3,proj.retention-0.1),growth:proj.growth-0.1,conversion:Math.max(0.3,proj.conversion-0.1)},y);
+  const optm=projectFwd(P,{...proj,retention:Math.min(0.99,proj.retention+0.07),growth:proj.growth+0.1,conversion:Math.min(0.98,proj.conversion+0.1)},y);
+  const last=base[base.length-1];
+  const cagr=P.residual_annual>0?(Math.pow(last.residual/P.residual_annual,1/y)-1):0;
+  const kp=[
+    {l:'Residual now (annualized)',v:fmt0(P.residual_annual),s:'recurring run-rate',gold:true},
+    {l:`Residual in ${y} yr${y===1?'':'s'}`,v:fmt0(last.residual),s:`${(cagr>=0?'+':'')+(cagr*100).toFixed(0)}% / yr`},
+    {l:`Total book in ${y} yr${y===1?'':'s'}`,v:fmt0(last.total),s:'residual + new business'},
+    {l:`Projected net, yr ${y}`,v:fmt0(last.net),s:'after chargeback drag'}
+  ];
+  $('#projKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+
+  const hist=P.hist||[], nH=hist.length;
+  const labels=[...hist.map(h=>String(h.year)),...base.map(r=>String(r.year))];
+  const pad=n=>Array(n).fill(null);
+  const baseLine=[...hist.map(h=>h.residual),...base.map(r=>r.residual)];
+  const optLine=[...pad(nH),...optm.map(r=>r.residual)];
+  const consLine=[...pad(nH),...cons.map(r=>r.residual)];
+  if(nH>0){optLine[nH-1]=hist[nH-1].residual;consLine[nH-1]=hist[nH-1].residual;}
+  if(charts.proj)charts.proj.destroy();
+  charts.proj=new Chart($('#projChart'),{type:'line',data:{labels,datasets:[
+    {label:'Optimistic',data:optLine,borderColor:'transparent',backgroundColor:'transparent',pointRadius:0,fill:false,spanGaps:true},
+    {label:'Range',data:consLine,borderColor:'transparent',backgroundColor:hexA(COLORS.resid,.15),fill:'-1',pointRadius:0,spanGaps:true},
+    {label:'Residual',data:baseLine,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.25,pointRadius:3,fill:false,
+      segment:{borderDash:ctx=>ctx.p0DataIndex>=nH-1?[6,4]:undefined}}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{x:{grid:{color:c=>c.index===nH-1?'rgba(0,0,0,.30)':'#eef3f3'}},
+      y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:'#e0e8e8'}}},
+    plugins:{legend:{position:'bottom',labels:{filter:i=>i.text!=='Optimistic'}},
+      tooltip:{filter:i=>i.dataset.label!=='Optimistic',callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
+
+  if(charts.projComp)charts.projComp.destroy();
+  charts.projComp=new Chart($('#projCompChart'),{type:'bar',data:{labels:base.map(r=>String(r.year)),datasets:[
+    {label:'Residual',data:base.map(r=>r.residual),backgroundColor:COLORS.resid},
+    {label:'New business',data:base.map(r=>r.newbiz),backgroundColor:COLORS.nb}
+  ]},options:baropts(true)});
+
+  $('#projTable').innerHTML=thead(['Year','New business','Residual','Total book','Net (after CB)'])
+    +'<tbody>'+base.map(r=>`<tr><td>${r.year}</td><td>${fmt0(r.newbiz)}</td><td>${fmt0(r.residual)}</td>
+      <td><b>${fmt0(r.total)}</b></td><td class="${cls(r.net)}">${fmt0(r.net)}</td></tr>`).join('')+'</tbody>';
+}
+
+function renderPolicies(yl){
+  const q=($('#polSearch').value||'').toLowerCase();
+  const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
+  $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Product',...yl.map(String),'Total','Pmts'])
+    +'<tbody>'+rows.slice(0,400).map(p=>`<tr>
+      <td>${p.client||'&mdash;'}</td><td><span class="chip">${p.carrier}</span></td>
+      <td class="mono">${p.policy}</td><td>${(p.product||'').slice(0,34)}</td>
+      ${yl.map(y=>`<td>${fmt(p[String(y)]||0)}</td>`).join('')}
+      <td><b>${fmt(p.total)}</b></td><td>${p.payments}</td></tr>`).join('')+'</tbody>';
+}
+
+// ---- selectors / wiring ----
+function syncGrainSegs(){document.querySelectorAll('.grainSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===GRAIN));}
+function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderNewBusiness();renderResidual();renderCarriers();renderDownline();
+  try{localStorage.setItem('grain',g);}catch(e){}}
+function segPick(container,attr,cb){$(container).addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  $(container).querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  cb(b.dataset[attr]);});}
+
+document.addEventListener('click',e=>{const b=e.target.closest('.grainSeg button');if(b)setGrain(b.dataset.g);});
+segPick('#overviewType','t',v=>{overviewType=v;renderOverviewTrend();});
+segPick('#nbType','t',v=>{nbType=v;renderNewBusiness();});
+segPick('#cumMetric','m',v=>{cumMetric=v;renderCumulative();});
+$('#cmpDim').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cmp.dim=b.dataset.d;buildMetricChips();renderComparison();});
+$('#cmpType').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cmp.type=b.dataset.t;buildMetricChips();renderComparison();});
+$('#cmpMetrics').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
+  const k=b.dataset.k,i=cmp.metrics.indexOf(k);
+  if(i>=0){if(cmp.metrics.length>1)cmp.metrics.splice(i,1);}else cmp.metrics.push(k);
+  buildMetricChips();renderComparison();});
+function bindProj(id,key,scale){$(id).addEventListener('input',()=>{proj[key]=Number($(id).value)/scale;projDraw();});}
+bindProj('#projRet','retention',100);
+bindProj('#projGrowth','growth',100);
+bindProj('#projConv','conversion',100);
+bindProj('#projRenew','renewal',100);
+bindProj('#projCB','chargeback',100);
+$('#projYears').addEventListener('input',()=>{proj.years=Number($('#projYears').value);projDraw();});
+document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);});
+
+// ---- statement upload ----
+function openUpload(){ $('#uploadResults').innerHTML=''; $('#uploadModal').classList.add('open'); }
+function closeUpload(){ $('#uploadModal').classList.remove('open'); }
+function uploadRow(name,cls,msg){
+  const li=document.createElement('li'); li.className='ur '+cls;
+  const n=document.createElement('span'); n.className='ur-name'; n.textContent=name;
+  const m=document.createElement('span'); m.className='ur-msg'; m.textContent=msg;
+  li.append(n,m); $('#uploadResults').appendChild(li); return li;
+}
+async function uploadFiles(files){
+  let filed=0;
+  for(const f of files){
+    if(!/\.pdf$/i.test(f.name) && f.type!=='application/pdf'){ uploadRow(f.name,'err','Skipped — not a PDF'); continue; }
+    const li=uploadRow(f.name,'pending','Uploading…');
+    const msg=li.querySelector('.ur-msg');
+    try{
+      const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});
+      const j=await r.json();
+      li.className='ur '+(j.status==='filed'?'ok':j.status==='duplicate'?'dup':'err');
+      msg.textContent=j.message||j.status;
+      if(j.status==='filed')filed++;
+    }catch(e){ li.className='ur err'; msg.textContent='Upload failed'; }
+  }
+  if(filed) loadData(true); // refresh dashboard when something new was added
+}
+(function(){
+  const dz=$('#dropzone'), inp=$('#fileInput');
+  if(!dz) return;
+  inp.addEventListener('change',()=>{ if(inp.files.length)uploadFiles([...inp.files]); inp.value=''; });
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+  ['dragleave','dragend'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+  dz.addEventListener('drop',e=>{ e.preventDefault();dz.classList.remove('drag');
+    const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])]; if(fs.length)uploadFiles(fs); });
+})();
+window.addEventListener('keydown',e=>{ if(e.key==='Escape')closeUpload(); });
+
+loadData();
+</script>
+</body>
+</html>
