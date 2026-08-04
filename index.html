@@ -270,6 +270,11 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
           <p class="hint">How much of each year's earnings is recurring vs. one-time new sales.</p>
           <div class="chart-wrap"><canvas id="mixChart"></canvas></div>
         </div>
+        <div class="card chart-card">
+          <h3>Bonuses &amp; overrides <span id="bonusTotalPill" style="font-weight:600;color:var(--gold);font-size:14px;margin-left:8px"></span></h3>
+          <p class="hint">Trips, production bonuses, agency overrides and earnings adjustments show up in the statement's commission section but aren't recurring policy residual. They're separated out here (and excluded from the residual figures above) so one-off payouts don't distort the residual trend. Note: some trip / 1099 lines are non-cash — booked as income and offset by a matching chargeback the same week (net $0) — so this total can exceed actual bonus cash received.</p>
+          <div id="bonusBreakdown"></div>
+        </div>
       </section>
 
       <!-- COMPARISON -->
@@ -405,7 +410,11 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         <div class="caveat"><b>Estimates, not guarantees.</b> These forward numbers compound your current book using the assumptions below — retained members renew as residual, new enrollments convert into next year's residual, and switches drop the old residual but earn a new initial. Starting points come from your own history; drag the sliders to test scenarios. Not financial advice.</div>
         <div class="kpis" id="projKpis"></div>
         <div class="card" style="margin-bottom:24px">
-          <h3 style="margin:0 0 16px;font-size:15px;font-weight:500">Assumptions</h3>
+          <div class="controls" style="margin-bottom:10px">
+            <h3 style="margin:0;flex:1;font-size:15px;font-weight:500">Assumptions</h3>
+            <button class="btn tonal" id="projHistBtn" onclick="baseOnHistory()"><span>&#8635;</span> Base on my actual history</button>
+          </div>
+          <p class="hint" id="projObserved" style="margin:-2px 0 16px"></p>
           <div class="sliders">
             <div class="sl"><label>Residual retention <b id="vRet"></b></label>
               <input type="range" id="projRet" min="40" max="98" step="1">
@@ -579,6 +588,7 @@ function render(){
   renderYearTable();
   renderNewBusiness();
   renderResidual();
+  renderBonuses();
   renderCumulative();
   renderCarriers();
   renderDownline();
@@ -605,7 +615,8 @@ function renderKpis(){
     return `<div class="delta ${up?'pos':'neg'}">${up?'&#9650;':'&#9660;'} ${Math.abs(g).toFixed(0)}% vs ${prev.year}</div>`;};
   const kpis=[
     {l:'Latest YTD total',v:fmt0(cur.ytd_total||cur.net),s:`through ${cur.last_statement||''}`,d:''},
-    {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring renewals',d:'',gold:true},
+    {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring policy renewals',d:'',gold:true},
+    {l:'Bonuses & overrides',v:fmt0(d.bonuses?d.bonuses.total:0),s:'trips, bonuses, overrides — not residual',d:''},
     {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
     {l:'Pending pipeline',v:fmt0(d.pending.latest_total),s:d.pending.latest_date?('as of '+d.pending.latest_date):'none',d:''}
   ];
@@ -615,9 +626,9 @@ function renderKpis(){
 
 function renderYearTable(){
   const years=DATA.years;
-  $('#yearTable').innerHTML=thead(['Year','Statements','New business','Residual','Chargebacks','Net paid','Avg / stmt'])
+  $('#yearTable').innerHTML=thead(['Year','Statements','New business','Residual','Bonuses','Chargebacks','Net paid','Avg / stmt'])
     + '<tbody>'+years.map(y=>`<tr><td>${y.year}</td><td>${y.statements}</td>
-      <td>${fmt(y.advances)}</td><td>${fmt(y.residual)}</td>
+      <td>${fmt(y.advances)}</td><td>${fmt(y.residual)}</td><td>${fmt(y.bonus||0)}</td>
       <td class="neg">${fmt(y.chargebacks)}</td><td class="${cls(y.net)}">${fmt(y.net)}</td>
       <td>${fmt(y.avg_per_statement)}</td></tr>`).join('')+'</tbody>';
 }
@@ -672,6 +683,20 @@ function renderNewBusiness(){
     +'<tbody>'+buckets.slice().reverse().map(b=>`<tr><td>${b.label}</td><td>${b.statements}</td><td>${fmt(b.advances)}</td></tr>`).join('')+'</tbody>';
 }
 
+function renderBonuses(){
+  const b=DATA.bonuses;
+  const pill=$('#bonusTotalPill'), box=$('#bonusBreakdown');
+  if(!b||!box){ if(box)box.innerHTML=''; if(pill)pill.textContent=''; return; }
+  if(pill)pill.textContent=`${fmt0(b.total)} · ${b.count} lines`;
+  if(!b.count){ box.innerHTML='<p class="hint">No bonus or override lines detected.</p>'; return; }
+  const kinds=b.by_kind.map(k=>`<tr><td style="text-align:left">${k.kind}</td><td>${k.count}</td><td>${fmt(k.total)}</td></tr>`).join('');
+  const top=b.top.slice(0,12).map(t=>`<tr><td>${t.date}</td><td style="text-align:left">${t.kind}</td>
+    <td style="text-align:left">${((t.client||t.product||'').replace(/</g,'&lt;')).slice(0,26)}</td><td>${fmt(t.amount)}</td></tr>`).join('');
+  box.innerHTML=
+    `<table><thead><tr><th style="text-align:left">Category</th><th>Lines</th><th>Total</th></tr></thead><tbody>${kinds}</tbody></table>`+
+    `<h4 style="margin:18px 0 6px;font-size:13px;color:var(--on-surface-var)">Largest bonus / override lines</h4>`+
+    `<table><thead><tr><th>Date</th><th style="text-align:left">Category</th><th style="text-align:left">Detail</th><th>Amount</th></tr></thead><tbody>${top}</tbody></table>`;
+}
 function renderResidual(){
   if(charts.resid)charts.resid.destroy();
   if(charts.mix)charts.mix.destroy();
@@ -940,6 +965,14 @@ function initProj(){
   const df=DATA.projections.defaults;
   proj={retention:df.retention,growth:df.growth,conversion:df.conversion,renewal:df.renewal_ratio,chargeback:df.chargeback_rate,years:5};
 }
+function baseOnHistory(){
+  // snap every assumption to what the book has actually done (history-derived,
+  // clamped to each slider's range).
+  const df=DATA.projections.defaults;
+  proj={retention:df.retention,growth:df.growth,conversion:df.conversion,
+    renewal:df.renewal_ratio,chargeback:df.chargeback_rate,years:proj?proj.years:5};
+  renderProjections();
+}
 function projectFwd(P,s,years){
   let residual=P.residual_annual, newbiz=P.newbiz_annual;
   const rows=[];
@@ -959,6 +992,17 @@ function renderProjections(){
   $('#projRenew').value=Math.round(proj.renewal*100);
   $('#projCB').value=Math.round(proj.chargeback*100);
   $('#projYears').value=proj.years;
+  const ob=DATA.projections.observed||{};
+  const pv=x=>x==null?'&mdash;':Math.round(x*100)+'%';
+  const pg=x=>x==null?'&mdash;':(x>=0?'+':'')+Math.round(x*100)+'%';
+  const gy=DATA.projections.growth_yoy;
+  const growthTxt=gy
+    ? `new-business growth <b>${pg(ob.growth)}</b> (${gy.from_year}&rarr;${gy.to_year} through ${MONTHS[gy.through_month-1]}: ${fmt0(gy.from)}&rarr;${fmt0(gy.to)})`
+    : `new-business growth <b>${pg(ob.growth)}</b>`;
+  $('#projObserved').innerHTML=`Your book's actual history &mdash; residual retention <b>${pv(ob.retention_dollar)}</b>, `
+    +growthTxt+`, new&rarr;residual persistence <b>${pv(ob.retention_count)}</b>, `
+    +`renewal-to-initial <b>${pv(ob.renewal_ratio)}</b>, chargeback drag <b>${pv(ob.chargeback_rate)}</b>. `
+    +`The button snaps the sliders to these (capped to each slider's range).`;
   const ins=DATA.insights;
   const card=(c,cl)=>`<div class="ins ${cl}"><div class="ins-t">${c.title}</div><div class="ins-b">${c.body}</div></div>`;
   $('#insWorking').innerHTML=(ins.working||[]).map(c=>card(c,'good')).join('')||'<div class="ins-b">Not enough history yet.</div>';

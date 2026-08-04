@@ -68,6 +68,50 @@ function reclassifyMA(records, opts) {
   return { moved, dollars: round2(dollars), global_median: round2(gMed), floor: FLOOR, mult: MULT };
 }
 
+// ---- bonus / override / adjustment reclassification -----------------------
+// The statement's "Commission Earnings" section also carries comp that is NOT
+// recurring policy residual: 1099-MISC trips, production bonuses, agency
+// overrides, and earnings adjustments. These have no real policy number (or a
+// sentinel like 99999) and carry tell-tale text (BONUS / TRIP / OVERRIDE / ...).
+// Leaving them in residual produces large one-off spikes, so we move them to a
+// separate 'bonus' section and recompute every record's section totals. Genuine
+// residuals with alphanumeric policy IDs (e.g. Devoted's DAGJZU) are untouched.
+const BONUS_RE = /BONUS|ADJUST|1099|TRIP|OVERRIDE|COMPENSATION|EARNINGS/i;
+function bonusKind(it) {
+  const hay = `${it.policy || ''} ${it.client || ''} ${it.product || ''}`;
+  if (/1099|TRIP/i.test(hay)) return 'Trip / 1099 incentive';
+  if (/OVERRIDE/i.test(hay)) return 'Override';
+  if (/ADJUST|EARNINGS/i.test(hay)) return 'Earnings adjustment';
+  if (/BONUS|COMPENSATION/i.test(hay)) return 'Production bonus';
+  return 'Other comp';
+}
+function isBonusLine(it) {
+  return it.carrier === 'Bonus / Adjustment' || it.product === 'MISC' || it.policy === '99999'
+    || BONUS_RE.test(`${it.policy || ''} ${it.client || ''} ${it.product || ''} ${it.carrier || ''}`);
+}
+function classifyBonuses(records) {
+  let count = 0, dollars = 0;
+  for (const r of records) {
+    for (const it of (r.items || [])) {
+      if (it.section === 'commission' && it.payable > 0 && isBonusLine(it)) {
+        it.section = 'bonus'; it.bonus_kind = bonusKind(it);
+        count++; dollars += it.payable;
+      }
+    }
+    // recompute all section totals from items so downstream stays consistent
+    let adv = 0, res = 0, cbk = 0, bon = 0;
+    for (const it of (r.items || [])) {
+      if (it.section === 'advances') adv += it.payable;
+      else if (it.section === 'commission') res += it.payable;
+      else if (it.section === 'chargebacks') cbk += it.payable;
+      else if (it.section === 'bonus') bon += it.payable;
+    }
+    r.advances_total = round2(adv); r.residual_total = round2(res);
+    r.chargebacks_total = round2(cbk); r.bonus_total = round2(bon);
+  }
+  return { count, dollars: round2(dollars) };
+}
+
 function buildSummary(allRecords, config) {
   config = config || {};
   // Work on deep-ish clones so this module never mutates the server's parse cache.
@@ -75,10 +119,33 @@ function buildSummary(allRecords, config) {
   const records = cloned.filter(r => !r.pending);
   const pendingRecs = cloned.filter(r => r.pending);
   const reclass = reclassifyMA(records, config.ma_reclass);
+  const bonusInfo = classifyBonuses(records);
 
   const byYear = {};
   for (const r of records) (byYear[r.year] ||= []).push(r);
   const allYears = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+
+  // ---- bonuses & overrides (separated out of residual) ----
+  const bonusItems = [];
+  for (const r of records) for (const it of (r.items || [])) if (it.section === 'bonus')
+    bonusItems.push({ date: r.date, year: r.year, kind: it.bonus_kind || 'Other comp',
+      carrier: it.carrier, client: it.client, product: it.product, amount: round2(it.payable) });
+  const bKind = {}, bYear = {}, bSeries = {};
+  for (const b of bonusItems) {
+    (bKind[b.kind] ||= { kind: b.kind, total: 0, count: 0 });
+    bKind[b.kind].total += b.amount; bKind[b.kind].count++;
+    bYear[b.year] = (bYear[b.year] || 0) + b.amount;
+    bSeries[b.date] = (bSeries[b.date] || 0) + b.amount;
+  }
+  const bonuses = {
+    total: round2(bonusItems.reduce((s, b) => s + b.amount, 0)),
+    count: bonusItems.length,
+    by_kind: Object.values(bKind).map(k => ({ ...k, total: round2(k.total) })).sort((a, b) => b.total - a.total),
+    by_year: Object.fromEntries(allYears.map(y => [y, round2(bYear[y] || 0)])),
+    series: Object.entries(bSeries).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount: round2(amount) })),
+    top: bonusItems.slice().sort((a, b) => b.amount - a.amount).slice(0, 30),
+    items: bonusItems.slice().sort((a, b) => (a.date < b.date ? 1 : -1)),
+  };
 
   // ---- per-year rollups (with authoritative YTD from latest statement) ----
   const years = [];
@@ -87,11 +154,12 @@ function buildSummary(allRecords, config) {
     const adv = recs.reduce((s, r) => s + num(r.advances_total), 0);
     const res = recs.reduce((s, r) => s + num(r.residual_total), 0);
     const cbk = recs.reduce((s, r) => s + num(r.chargebacks_total), 0);
+    const bon = recs.reduce((s, r) => s + num(r.bonus_total), 0);
     const net = recs.reduce((s, r) => s + num(r.pay_period_net), 0);
     const latest = recs.reduce((a, b) => (a.date > b.date ? a : b));
     years.push({
       year, statements: recs.length,
-      advances: round2(adv), residual: round2(res), chargebacks: round2(cbk),
+      advances: round2(adv), residual: round2(res), chargebacks: round2(cbk), bonus: round2(bon),
       net: round2(net), gross: round2(adv + res),
       avg_per_statement: recs.length ? round2(net / recs.length) : 0,
       ytd_advances: latest.ytd_advances, ytd_commission: latest.ytd_commission,
@@ -105,6 +173,7 @@ function buildSummary(allRecords, config) {
     date: r.date, year: r.year,
     net: num(r.pay_period_net), advances: num(r.advances_total),
     residual: num(r.residual_total), chargebacks: num(r.chargebacks_total),
+    bonus: num(r.bonus_total),
   }));
 
   // ---- residual & new-business by carrier ----
@@ -244,16 +313,16 @@ function buildSummary(allRecords, config) {
   for (const r of records) {
     const key = r.date.slice(0, 7); // YYYY-MM
     const m = (mMap[key] ||= { year: r.year, month: Number(r.date.slice(5, 7)),
-      advances: 0, residual: 0, chargebacks: 0, net: 0, statements: 0 });
+      advances: 0, residual: 0, chargebacks: 0, bonus: 0, net: 0, statements: 0 });
     m.advances += num(r.advances_total); m.residual += num(r.residual_total);
-    m.chargebacks += num(r.chargebacks_total); m.net += num(r.pay_period_net);
+    m.chargebacks += num(r.chargebacks_total); m.bonus += num(r.bonus_total); m.net += num(r.pay_period_net);
     m.statements += 1;
   }
   const monthly = Object.entries(mMap).sort((a, b) => a[0] < b[0] ? -1 : 1).map(([key, m]) => ({
     key, year: m.year, month: m.month, label: `${MONTHS[m.month - 1]} ${m.year}`,
     month_name: MONTHS[m.month - 1],
     advances: round2(m.advances), residual: round2(m.residual),
-    chargebacks: round2(m.chargebacks), net: round2(m.net),
+    chargebacks: round2(m.chargebacks), bonus: round2(m.bonus), net: round2(m.net),
     gross: round2(m.advances + m.residual), statements: m.statements,
   }));
 
@@ -337,16 +406,24 @@ function buildSummary(allRecords, config) {
   const retentionDefault = clamp(retDollar, 0.45, 0.97) ?? 0.82;
   const conversionDefault = clamp(retCount, 0.55, 0.95) ?? 0.75;
 
-  // observed new-business growth
-  let growthObs = null;
-  const fullYears = allYears.filter(y => !(y === curYear && curPartial));
-  if (fullYears.length >= 2) {
-    const y0 = years.find(x => x.year === fullYears[fullYears.length - 2]);
-    const y1 = years.find(x => x.year === fullYears[fullYears.length - 1]);
-    if (y0 && y1 && y0.advances > 0) growthObs = (y1.advances - y0.advances) / y0.advances;
-  } else if (refYear) {
-    const y0 = years.find(x => x.year === refYear);
-    if (y0 && y0.advances > 0) growthObs = (newbizAnnual - y0.advances) / y0.advances;
+  // observed new-business growth: like-for-like year over year. Compare the current
+  // year's new business THROUGH the latest statement month against the prior year
+  // through the same month, so a partial current year or a ramp-up first year
+  // doesn't distort the comparison.
+  const ytdAdv = (yr, thru) => records
+    .filter(r => r.year === yr && Number(r.date.slice(5, 7)) <= thru)
+    .reduce((s, r) => s + num(r.advances_total), 0);
+  let growthObs = null, growthYoy = null;
+  const curYtdAdv = ytdAdv(curYear, lastStmtMonth);
+  for (let py = curYear - 1; py >= allYears[0]; py--) {
+    if (!byYear[py]) continue;
+    const prevYtd = ytdAdv(py, lastStmtMonth);
+    if (prevYtd > 0) {
+      growthObs = (curYtdAdv - prevYtd) / prevYtd;
+      growthYoy = { from_year: py, to_year: curYear, through_month: lastStmtMonth,
+        from: round2(prevYtd), to: round2(curYtdAdv) };
+      break;
+    }
   }
   const growthDefault = clamp(growthObs, -0.25, 0.5) ?? 0.05;
 
@@ -354,6 +431,31 @@ function buildSummary(allRecords, config) {
   const totCbk = records.reduce((s, r) => s + num(r.chargebacks_total), 0);
   const totAdv = records.reduce((s, r) => s + num(r.advances_total), 0);
   const chargebackRate = totAdv > 0 ? round2(Math.min(0.6, -totCbk / totAdv)) : 0;
+
+  // observed renewal-to-initial ratio: for policies that have BOTH an up-front
+  // initial (advance) and recurring residual, how much a year of residual is worth
+  // relative to the initial that created it. Median across matched policies.
+  const initByPol = {}, residByPol = {};
+  for (const r of records) {
+    for (const it of r.items) {
+      if (!it.policy) continue;
+      if (it.section === 'advances') initByPol[it.policy] = (initByPol[it.policy] || 0) + it.payable;
+      else if (it.section === 'commission') {
+        const p = (residByPol[it.policy] ||= { sum: 0, count: 0 });
+        p.sum += it.payable; p.count += 1;
+      }
+    }
+  }
+  const renewalRatios = [];
+  for (const pol in initByPol) {
+    const I = initByPol[pol], rp = residByPol[pol];
+    if (!rp || I <= 0 || rp.count < 1) continue;
+    const annualResid = (rp.sum / rp.count) * 12;   // avg monthly residual annualized
+    const ratio = annualResid / I;
+    if (ratio > 0.02 && ratio < 3) renewalRatios.push(ratio);
+  }
+  const renewalObs = renewalRatios.length >= 3 ? round2(median(renewalRatios)) : null;
+  const renewalDefault = clamp(renewalObs, 0.1, 1.0) ?? 0.5;
 
   const projections = {
     current_year: curYear, last_stmt_month: lastStmtMonth, current_partial: curPartial,
@@ -365,10 +467,13 @@ function buildSummary(allRecords, config) {
     seasonality_new: seasonNew, seasonality_net: seasonNet,
     hist: years.map(y => ({ year: y.year, residual: y.residual, advances: y.advances, net: y.net,
       partial: y.year === curYear && curPartial })),
+    growth_yoy: growthYoy,
     observed: { retention_dollar: retDollar, retention_count: retCount,
-      growth: growthObs == null ? null : round2(growthObs), chargeback_rate: chargebackRate },
+      growth: growthObs == null ? null : round2(growthObs), renewal_ratio: renewalObs,
+      chargeback_rate: chargebackRate },
     defaults: { retention: round2(retentionDefault), growth: round2(growthDefault),
-      conversion: round2(conversionDefault), renewal_ratio: 0.5, chargeback_rate: chargebackRate },
+      conversion: round2(conversionDefault), renewal_ratio: round2(renewalDefault),
+      chargeback_rate: chargebackRate },
   };
 
   // ---------------- INSIGHTS ----------------
@@ -446,6 +551,7 @@ function buildSummary(allRecords, config) {
     cumulative_by_year: cumulativeByYear,
     runrate,
     reclass,
+    bonuses,
     downline,
     projections,
     insights,
