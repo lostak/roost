@@ -337,18 +337,44 @@ function buildSummary(allRecords, config) {
   const retentionDefault = clamp(retDollar, 0.45, 0.97) ?? 0.82;
   const conversionDefault = clamp(retCount, 0.55, 0.95) ?? 0.75;
 
-  // observed new-business growth
-  let growthObs = null;
-  const fullYears = allYears.filter(y => !(y === curYear && curPartial));
-  if (fullYears.length >= 2) {
-    const y0 = years.find(x => x.year === fullYears[fullYears.length - 2]);
-    const y1 = years.find(x => x.year === fullYears[fullYears.length - 1]);
-    if (y0 && y1 && y0.advances > 0) growthObs = (y1.advances - y0.advances) / y0.advances;
-  } else if (refYear) {
-    const y0 = years.find(x => x.year === refYear);
-    if (y0 && y0.advances > 0) growthObs = (newbizAnnual - y0.advances) / y0.advances;
+  // observed new-business growth: like-for-like year over year -- current year through
+  // the latest statement month vs the prior year through the same month, so a partial
+  // current year or a ramp-up first year doesn't distort the comparison.
+  const ytdAdv = (yr, thru) => records
+    .filter(r => r.year === yr && Number(r.date.slice(5, 7)) <= thru)
+    .reduce((s, r) => s + num(r.advances_total), 0);
+  let growthObs = null, growthYoy = null;
+  const curYtdAdv = ytdAdv(curYear, lastStmtMonth);
+  for (let py = curYear - 1; py >= allYears[0]; py--) {
+    if (!byYear[py]) continue;
+    const prevYtd = ytdAdv(py, lastStmtMonth);
+    if (prevYtd > 0) {
+      growthObs = (curYtdAdv - prevYtd) / prevYtd;
+      growthYoy = { from_year: py, to_year: curYear, through_month: lastStmtMonth,
+        from: round2(prevYtd), to: round2(curYtdAdv) };
+      break;
+    }
   }
-  const growthDefault = clamp(growthObs, -0.25, 0.5) ?? 0.05;
+  const growthDefault = clamp(growthObs, -0.25, 0.25) ?? 0.05;  // cap for multi-year sanity
+
+  // observed renewal-to-initial ratio: for policies that have BOTH an up-front initial
+  // (advance) and recurring residual, a year of residual relative to the initial that
+  // created it. Median across matched policies.
+  const initByPol = {}, residByPol = {};
+  for (const r of records) for (const it of r.items) {
+    if (!it.policy) continue;
+    if (it.section === 'advances') initByPol[it.policy] = (initByPol[it.policy] || 0) + it.payable;
+    else if (it.section === 'commission') { const p = (residByPol[it.policy] ||= { sum: 0, count: 0 }); p.sum += it.payable; p.count += 1; }
+  }
+  const renewalRatios = [];
+  for (const pol in initByPol) {
+    const I = initByPol[pol], rp = residByPol[pol];
+    if (!rp || I <= 0 || rp.count < 1) continue;
+    const ratio = ((rp.sum / rp.count) * 12) / I;   // avg monthly residual annualized / initial
+    if (ratio > 0.02 && ratio < 3) renewalRatios.push(ratio);
+  }
+  const renewalObs = renewalRatios.length >= 3 ? round2(median(renewalRatios)) : null;
+  const renewalDefault = clamp(renewalObs, 0.1, 1.0) ?? 0.5;
 
   // chargeback drag on new business
   const totCbk = records.reduce((s, r) => s + num(r.chargebacks_total), 0);
@@ -364,11 +390,15 @@ function buildSummary(allRecords, config) {
     elapsed_new: round2(cumNewThrough), elapsed_net: round2(cumNetThrough),
     seasonality_new: seasonNew, seasonality_net: seasonNet,
     hist: years.map(y => ({ year: y.year, residual: y.residual, advances: y.advances, net: y.net,
-      partial: y.year === curYear && curPartial })),
+      partial: y.year === curYear && curPartial,
+      residual_annualized: (y.year === curYear && curPartial) ? residualAnnual : y.residual })),
+    growth_yoy: growthYoy,
     observed: { retention_dollar: retDollar, retention_count: retCount,
-      growth: growthObs == null ? null : round2(growthObs), chargeback_rate: chargebackRate },
+      growth: growthObs == null ? null : round2(growthObs), renewal_ratio: renewalObs,
+      chargeback_rate: chargebackRate },
     defaults: { retention: round2(retentionDefault), growth: round2(growthDefault),
-      conversion: round2(conversionDefault), renewal_ratio: 0.5, chargeback_rate: chargebackRate },
+      conversion: round2(conversionDefault), renewal_ratio: round2(renewalDefault),
+      chargeback_rate: chargebackRate },
   };
 
   // ---------------- INSIGHTS ----------------
