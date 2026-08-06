@@ -651,7 +651,7 @@ function renderKpis(){
   const deltaHtml=(c,p)=>{if(p==null||!p)return'';const g=(c-p)/Math.abs(p)*100;const up=g>=0;
     return `<div class="delta ${up?'pos':'neg'}">${up?'&#9650;':'&#9660;'} ${Math.abs(g).toFixed(0)}% vs ${prev.year}</div>`;};
   const kpis=[
-    {l:'Latest YTD total',v:fmt0(cur.ytd_total||cur.net),s:`through ${cur.last_statement||''}`,d:''},
+    {l:'YTD net paid',v:fmt0(cur.net),s:`actual paid through ${cur.last_statement||''}`,d:''},
     {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring policy renewals',d:'',gold:true},
     {l:'Bonuses & overrides',v:fmt0(d.bonuses?d.bonuses.total:0),s:'trips, bonuses, overrides — not residual',d:''},
     {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
