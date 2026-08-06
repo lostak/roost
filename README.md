@@ -272,7 +272,7 @@ before sharing publicly.
     roost/
   ```
 - Pull Repository
-  - Open **../Company/roost** Powershell/Terminal  
+  - Open **../Commission/roost** Powershell/Terminal by right clicking in the File Explorer
   - Type the following
   ```
   git init
@@ -282,7 +282,7 @@ before sharing publicly.
     This will download the code to your computer
 
 - Start Roost
-  - Open **../Company/roost/Start-Roost** to start the local server and open the web app in your browser
+  - Open **../Commissions/roost/Start-Roost** to start the local server and open the web app in your browser
 
 - Stop Roost
   - Close Terminal/Powershell
