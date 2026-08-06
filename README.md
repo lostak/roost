@@ -182,6 +182,10 @@ Parsed statements are stored in `.parse_cache.json`, keyed by file path,
 modification time, and a `PARSE_VERSION`. Only new or changed files are
 re-parsed; the cache regenerates automatically when a PDF changes or the parser
 is updated, so it is always safe to delete.
+Parsed statements are stored in `.parse_cache.json`, keyed by file path,
+modification time, and a `PARSE_VERSION`. Only new or changed files are
+re-parsed; the cache regenerates automatically when a PDF changes or the parser
+is updated, so it is always safe to delete.
 
 ## The dashboard, view by view
 
