@@ -16,6 +16,17 @@
   --shadow:0 1px 3px rgba(0,0,0,.14),0 1px 2px rgba(0,0,0,.10);
   --shadow-2:0 4px 12px rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.08);
 }
+body.dark{
+  --primary:#4dd8de; --primary-c:#00363a; --primary-container:#00504f; --on-primary-container:#a7f2f6;
+  --gold:#e8b45c; --gold-2:#e8b45c; --gold-container:#5a3f14; --on-gold-container:#ffe3ab;
+  --secondary:#a9cccc; --tertiary:#b4c5e6; --surface:#0f1514; --surface-1:#171e1d;
+  --surface-2:#1e2827; --surface-3:#273130; --on-surface:#dfe6e5; --on-surface-var:#b3bebd;
+  --outline:#8a9493; --outline-var:#3a4443; --error:#ffb4ab; --pos:#7fd48a; --neg:#f2a5a0; --amber:#e8b45c;
+  --shadow:0 1px 3px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.4);
+  --shadow-2:0 6px 16px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.4);
+}
+body.dark .brand{color:#8ce8ec}
+body{transition:background .2s,color .2s}
 *{box-sizing:border-box}
 body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);color:var(--on-surface)}
 .appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
@@ -170,6 +181,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
+  <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light"></button>
   <div class="meta" id="meta"></div>
 </div>
 
@@ -528,6 +540,26 @@ const METRICS={
 };
 const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
 let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null;
+// ---- theme (dark / light) ----
+let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
+function themeColors(){
+  const dark=document.body.classList.contains('dark');
+  GRID=dark?'rgba(255,255,255,.10)':'#e0e8e8';
+  GRIDQ=dark?'rgba(255,255,255,.30)':'rgba(0,0,0,.20)';
+  GRIDBOUND=dark?'rgba(255,255,255,.45)':'rgba(0,0,0,.30)';
+  if(window.Chart){Chart.defaults.color=dark?'#b3bebd':'#555';Chart.defaults.borderColor=GRID;}
+}
+function applyTheme(t){
+  document.body.classList.toggle('dark',t==='dark');
+  const b=document.getElementById('themeBtn');
+  if(b)b.innerHTML=(t==='dark')?'<span>&#9728;</span> Light':'<span>&#9789;</span> Dark';
+  themeColors();
+  try{localStorage.setItem('theme',t);}catch(e){}
+}
+function toggleTheme(){applyTheme(document.body.classList.contains('dark')?'light':'dark'); if(DATA)render();}
+(function(){let t;try{t=localStorage.getItem('theme');}catch(e){}
+  if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  applyTheme(t);})();
 let cmp={dim:'year',metrics:['net','residual','advances'],type:'bar'};
 try{const s=JSON.parse(localStorage.getItem('cmpState'));if(s&&s.dim)cmp=s;}catch(e){}
 try{const g=localStorage.getItem('grain');if(g&&g!=='day')GRAIN=g;}catch(e){}
@@ -586,19 +618,19 @@ function bucketSeries(grain,src){
 }
 function timeAxis(buckets,opt){
   opt=opt||{}; const money=opt.money!==false, stacked=!!opt.stacked;
-  const qc='rgba(0,0,0,.20)', faint='rgba(0,0,0,0)';
+  const qc=GRIDQ, faint='rgba(0,0,0,0)';
   return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{
       x:{stacked,grid:{color:c=>{const b=buckets[c.index];return b&&b.qStart?qc:faint;},drawTicks:true,tickLength:6},
         ticks:{autoSkip:true,maxRotation:0,autoSkipPadding:12}},
-      y:{stacked,grid:{color:'#e0e8e8'},ticks:{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}}},
+      y:{stacked,grid:{color:GRID},ticks:{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}}},
     plugins:{legend:{position:'bottom'},
       tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.dataset.money===false?Number(c.parsed.y).toLocaleString():fmt(c.parsed.y))}}}};
 }
 function baropts(stacked,horizontal){
   // The value axis gets the $ formatter; the category axis keeps its labels
   // (e.g. carrier names). For horizontal bars the value axis is x, not y.
-  const valAxis={stacked:!!stacked,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:'#e0e8e8'}};
+  const valAxis={stacked:!!stacked,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}};
   const catAxis={stacked:!!stacked,grid:{display:false},ticks:{autoSkip:false}};
   return{responsive:true,maintainAspectRatio:false,
     indexAxis:horizontal?'y':'x',interaction:{mode:'index',intersect:false},
@@ -772,9 +804,9 @@ function renderCumulative(){
   charts.cum=new Chart($('#cumChart'),{type:'line',data:{datasets},
     options:{responsive:true,maintainAspectRatio:false,parsing:false,
       scales:{x:{type:'linear',min:0,max:366,title:{display:true,text:'Day of year (quarter gridlines)'},
-        grid:{color:ctx=>qDays.some(q=>Math.abs(ctx.tick.value-q)<6)?'rgba(0,0,0,.20)':'rgba(0,0,0,0)'},
+        grid:{color:ctx=>qDays.some(q=>Math.abs(ctx.tick.value-q)<6)?GRIDQ:'rgba(0,0,0,0)'},
         ticks:{stepSize:30.4,callback:v=>MONTHS[Math.min(11,Math.floor(v/30.4))]}},
-        y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:'#e0e8e8'}}},
+        y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
       plugins:{legend:{position:'bottom'},
         tooltip:{callbacks:{title:items=>'Day '+items[0].parsed.x,label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
 }
@@ -1059,12 +1091,12 @@ function renderCmpTable(labels,datasets){
   $('#cmpTable').innerHTML=thead(head)+'<tbody>'+rows+'</tbody>'+`<tfoot><tr><td>Total</td>${totals}</tr></tfoot>`;
 }
 function cmpOptions(stacked,horizontal,money,buckets){
-  const qc='rgba(0,0,0,.20)',faint='rgba(0,0,0,0)';
+  const qc=GRIDQ,faint='rgba(0,0,0,0)';
   const xgrid=(buckets&&!horizontal)?{color:c=>{const b=buckets[c.index];return b&&b.qStart?qc:faint;}}:{display:false};
   return{responsive:true,maintainAspectRatio:false,indexAxis:horizontal?'y':'x',interaction:{mode:'index',intersect:false},
     scales:{x:{stacked:!!stacked,grid:xgrid,
         ticks:horizontal?{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}:{autoSkip:true,maxRotation:0,autoSkipPadding:12}},
-      y:{stacked:!!stacked,grid:{color:'#e0e8e8'},
+      y:{stacked:!!stacked,grid:{color:GRID},
         ticks:horizontal?{}:{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}}},
     plugins:{legend:{position:'bottom'},
       tooltip:{callbacks:{label:c=>{const v=c.parsed[horizontal?'x':'y'];
@@ -1166,8 +1198,8 @@ function projDraw(){
     {label:'Residual',data:baseLine,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.25,pointRadius:3,fill:false,
       segment:{borderDash:ctx=>ctx.p0DataIndex>=nH-1?[6,4]:undefined}}
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    scales:{x:{grid:{color:c=>c.index===nH-1?'rgba(0,0,0,.30)':'#eef3f3'}},
-      y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:'#e0e8e8'}}},
+    scales:{x:{grid:{color:c=>c.index===nH-1?GRIDBOUND:GRID}},
+      y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
     plugins:{legend:{position:'bottom',labels:{filter:i=>i.text!=='Optimistic'}},
       tooltip:{filter:i=>i.dataset.label!=='Optimistic',callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
 
