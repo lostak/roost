@@ -182,10 +182,6 @@ Parsed statements are stored in `.parse_cache.json`, keyed by file path,
 modification time, and a `PARSE_VERSION`. Only new or changed files are
 re-parsed; the cache regenerates automatically when a PDF changes or the parser
 is updated, so it is always safe to delete.
-Parsed statements are stored in `.parse_cache.json`, keyed by file path,
-modification time, and a `PARSE_VERSION`. Only new or changed files are
-re-parsed; the cache regenerates automatically when a PDF changes or the parser
-is updated, so it is always safe to delete.
 
 ## The dashboard, view by view
 
@@ -260,19 +256,19 @@ before sharing publicly.
   - Click on the downloaded file and use all default suggestions to install
 
 - Install Node.js
-  - Got [this](https://nodejs.org/en/download) link to download Node.js
+  - Go to [this](https://nodejs.org/en/download) link to download Node.js
   - Click on the downloaded file and use all default suggestions to install
 
 - Download/Move Statements
-  - Create a the following directories
+  - Create the following directories
   ```
-  Commisions/
+  Commissions/
     Statements/
       2024/ 2025/ 2026/ ...
     roost/
   ```
 - Pull Repository
-  - Open **../Commission/roost** Powershell/Terminal by right clicking in the File Explorer
+  - Open **../Commissions/roost** Powershell/Terminal by right-clicking in the File Explorer
   - Type the following
   ```
   git init
