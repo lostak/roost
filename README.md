@@ -65,9 +65,10 @@ your machine.
   Aetna, Devoted, Cigna, Mutual of Omaha, Americo, Medico, and many more).
 - **Per-policy residual tracker** — every policy that pays residual, with its
   client, carrier, product, payment count, and year-by-year totals.
-- **Downline / override reporting** — rolls up production written by agents on
-  your roster so you can see the override income you earn on your downline,
-  broken out over time and by carrier.
+- **Downline / override reporting** — auto-detects your downline from your
+  commissions (any writing agent who ever appears at level 100 is flagged as your
+  downline) and rolls up all of their production as your override income — over
+  time and by carrier, with the date each agent first joined your downline.
 - **Projections & insights** — annualized run-rates, retention/persistence
   estimates, book-growth, carrier concentration risk, chargeback drag, AEP
   seasonality, and quarter-over-quarter momentum, surfaced as plain-language
@@ -124,7 +125,6 @@ You never have to touch the code.
 | Setting | Default | What it does |
 |---|---|---|
 | `statements_dir` | `"../Statements"` | Folder holding the year subfolders (`2024/`, `2025/`, …), relative to the `roost/` app folder. Falls back to the parent folder if it has no year folders. |
-| `downline_roster` | `["Michael Schwab"]` | Writing-agent names you earn an override on. First/last-name matching is fuzzy; add each downline agent here. |
 | `ma_reclass.mult` | `3.5` | Medicare Advantage new-business detection. A residual-section line is treated as new business when its payable is at least this multiple of the policy's typical recurring payment. |
 | `ma_reclass.floor_min` | `80` | Floor (in dollars) below which residual lines are never reclassified, guarding small recurring amounts. |
 

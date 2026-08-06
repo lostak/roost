@@ -248,6 +248,28 @@ function handleUpload(req, res) {
   });
 }
 
+// ---- manual downline overrides ----
+// Persists the user's add/remove choices into config.json (downline_include /
+// downline_exclude) so the aggregation honours them. Body: {include:[], exclude:[]}.
+function handleDownlineOverrides(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const clean = a => Array.isArray(a) ? [...new Set(a.filter(x => typeof x === 'string' && x.trim()))] : [];
+      const cfg = loadConfig();
+      cfg.downline_include = clean(o.include);
+      cfg.downline_exclude = clean(o.exclude);
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', include: cfg.downline_include, exclude: cfg.downline_exclude });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 const server = http.createServer((req, res) => {
   try {
     const url = req.url.split('?')[0];
@@ -256,6 +278,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/upload' && req.method === 'POST') {
       return handleUpload(req, res);
+    }
+    if (url === '/api/downline-overrides' && req.method === 'POST') {
+      return handleDownlineOverrides(req, res);
     }
     if (url === '/api/data') {
       const records = loadStatements();

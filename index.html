@@ -134,6 +134,24 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .ur.err{background:#fdecea} .ur.err .ur-msg{color:var(--neg)}
 .ur.pending .ur-msg{color:var(--on-surface-var)}
 .modal-foot{display:flex;justify-content:flex-end;margin-top:16px}
+.dltree{overflow-x:auto}
+.dltree ul{list-style:none;margin:0;padding-left:22px}
+.dltree>ul{padding-left:0}
+.dltree li{position:relative;padding:5px 0}
+.dltree ul ul{border-left:1px solid var(--outline-var);margin-left:10px;padding-left:20px}
+.dlnode{display:inline-flex;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--outline-var);
+  border-radius:22px;padding:6px 14px;white-space:nowrap}
+.dlnode.you{background:var(--primary-container);color:var(--on-primary-container);border-color:transparent;font-weight:700}
+.dlnode .nm{font-weight:600}
+.dlnode .cnt{font-size:11px;font-weight:600;background:var(--gold-container);color:var(--on-gold-container);border-radius:11px;padding:1px 9px}
+.dlnode .amt{font-size:12px;color:var(--on-surface-var);font-variant-numeric:tabular-nums}
+.dlnode .since{font-size:11px;color:var(--on-surface-var)}
+.dledit-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.dlchips{display:inline-flex;flex-wrap:wrap;gap:6px}
+.dlchip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:16px;padding:3px 6px 3px 12px;font-size:12px}
+.dlchip.manual{background:var(--gold-container);color:var(--on-gold-container);border-color:transparent}
+.dlchip button{border:none;background:var(--surface-3);color:var(--on-surface-var);border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.dlchip button:hover{background:var(--error);color:#fff}
 </style>
 </head>
 <body>
@@ -367,8 +385,21 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
       <!-- DOWNLINE -->
       <section class="view" id="view-downline">
         <h2 class="section">Downline &amp; override income</h2>
-        <div class="banner">Downline production = business written by agents you manage. You earn an override (a portion) of everything they produce. Downline roster: <b id="dlRoster"></b>. Every writing agent you earn an override on is listed below; add names to <span class="mono">DOWNLINE_ROSTER</span> in aggregate.js to track more as your own downline.</div>
+        <div class="banner">Your downline is auto-detected from your commissions: any writing agent who ever appears at level <b>(100)</b> on one of your <b>actual client policies</b> is flagged as your downline (house/accounting lines like interest, bonuses and overrides don't count). All of their production is rolled up here. "Since" is when each agent first appeared &mdash; i.e. when they joined your downline.</div>
         <div class="kpis" id="dlKpis"></div>
+        <div class="card chart-card">
+          <h3>Downline hierarchy</h3>
+          <p class="hint">You at the top, your downline beneath. Each agent shows how many people sit under them and their override income. Nesting appears when an agent writes at (100) under another of your downline agents.</p>
+          <div id="dlTree" class="dltree"></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Adjust downline</h3>
+          <p class="hint">The (100) rule isn't perfect. Remove anyone it flagged by mistake, or add an agent it missed. Changes save to <span class="mono">config.json</span> and apply right away.</p>
+          <div class="dledit-row"><span class="lbl-inline">Downline:</span><span id="dlEditChips" class="dlchips"></span></div>
+          <div class="dledit-row"><span class="lbl-inline">Add agent:</span><span id="dlEditAdd"></span>
+            <button class="btn ghost" id="dlResetBtn" style="margin-left:auto">Reset to automatic</button></div>
+          <p class="hint" id="dlEditMsg" style="margin:6px 0 0"></p>
+        </div>
         <div class="controls">
           <span class="lbl-inline">Timeframe</span>
           <div class="seg grainSeg">
@@ -802,11 +833,64 @@ function renderCarriers(){
   charts.carrier=draw('#carrierChart','res');
 }
 
+let dlInc=[], dlExc=[];
+function renderDownlineEditor(dl){
+  dlInc=(dl.manual_include||[]).slice(); dlExc=(dl.manual_exclude||[]).slice();
+  const agents=dl.agents||[];
+  $('#dlEditChips').innerHTML=agents.length?agents.map(a=>
+    `<span class="dlchip${a.manual?' manual':''}" title="${a.manual?'manually added':'auto (level 100)'}">${a.name}<button data-rm="${encodeURIComponent(a.name)}" title="Remove from downline">&times;</button></span>`
+  ).join(''):'<span class="hint">none flagged</span>';
+  const cands=dl.candidates||[];
+  $('#dlEditAdd').innerHTML=cands.length
+    ?`<select id="dlAddSel" class="searchbox" style="width:auto;margin:0;padding:8px 12px">${cands.map(n=>`<option>${n}</option>`).join('')}</select> <button class="btn ghost" id="dlAddBtn"><span>&#43;</span> Add</button>`
+    :'<span class="hint">every writing agent is already in your downline</span>';
+}
+async function saveDownlineOverrides(){
+  const msg=$('#dlEditMsg'); if(msg)msg.textContent='Saving…';
+  try{
+    const r=await fetch('/api/downline-overrides',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({include:dlInc,exclude:dlExc})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    await loadData(true);
+  }catch(e){if($('#dlEditMsg'))$('#dlEditMsg').textContent='Could not save: '+e;}
+}
+const dlEq=(a,b)=>a.toUpperCase()===b.toUpperCase();
+document.addEventListener('click',e=>{
+  const rm=e.target.closest('#dlEditChips [data-rm]');
+  if(rm){const n=decodeURIComponent(rm.dataset.rm);
+    if(dlInc.some(x=>dlEq(x,n))) dlInc=dlInc.filter(x=>!dlEq(x,n));
+    else if(!dlExc.some(x=>dlEq(x,n))) dlExc.push(n);
+    saveDownlineOverrides(); return;}
+  if(e.target.closest('#dlAddBtn')){const sel=$('#dlAddSel');
+    if(sel&&sel.value){const n=sel.value;
+      if(!dlInc.some(x=>dlEq(x,n))) dlInc.push(n);
+      dlExc=dlExc.filter(x=>!dlEq(x,n));
+      saveDownlineOverrides();}
+    return;}
+  if(e.target.closest('#dlResetBtn')){if(dlInc.length||dlExc.length){dlInc=[];dlExc=[];saveDownlineOverrides();}return;}
+});
+
+function renderDownlineTree(h){
+  const el=$('#dlTree'); if(!el)return;
+  if(!h||!h.children||!h.children.length){
+    el.innerHTML='<ul><li><div class="dlnode you"><span class="nm">You</span></div></li></ul>'
+      +'<p class="hint" style="margin:8px 0 0">No downline agents flagged yet — nobody has written at (100) on your policies.</p>';
+    return;
+  }
+  const node=(n,you)=>{
+    const cnt=n.descendants>0?`<span class="cnt">${n.descendants} downline</span>`:'';
+    const amt=you?'':`<span class="amt">${fmt0(n.total)}</span>`;
+    const since=you?'':`<span class="since">since ${n.since||''}</span>`;
+    const kids=(n.children&&n.children.length)?`<ul>${n.children.map(c=>`<li>${node(c,false)}</li>`).join('')}</ul>`:'';
+    return `<div class="dlnode${you?' you':''}"><span class="nm">${n.name}</span>${cnt}${amt}${since}</div>${kids}`;
+  };
+  el.innerHTML=`<ul><li>${node(h,true)}</li></ul>`;
+}
+
 function renderDownline(){
   ['dlTime','dlCarrier','dlAgents'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
   const d=DATA, yl=d.all_years;
-  const dl=d.downline||{agents:[],series:[],policies:[],by_carrier:[],totals:{net:0,count:0},roster:[],agent_count:0};
-  $('#dlRoster').textContent=(dl.roster||[]).join(', ')||'(none configured)';
+  const dl=d.downline||{agents:[],series:[],policies:[],by_carrier:[],totals:{net:0,count:0},agent_count:0};
   const totalNet=d.years.reduce((s,y)=>s+y.net,0)||1;
   const share=(dl.totals.net||0)/totalNet*100;
   const cur=d.years[d.years.length-1]||{};
@@ -815,10 +899,13 @@ function renderDownline(){
     {l:'Downline income (all-time)',v:fmt0(dl.totals.net||0),s:`${dl.totals.count||0} override line items`,gold:true},
     {l:`${cur.year||''} downline income`,v:fmt0(curDl),s:'override earned this year'},
     {l:'Share of your net',v:share.toFixed(1)+'%',s:'downline vs. total income'},
-    {l:'Agents you override',v:String(dl.agent_count||0),s:'writing agents in your book'}
+    {l:'Downline agents',v:String(dl.agent_count||0),s:'flagged from solo production'}
   ];
   $('#dlKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+
+  renderDownlineTree(dl.hierarchy);
+  renderDownlineEditor(dl);
 
   if((dl.series||[]).length){
     const buckets=bucketSeries(GRAIN, dl.series);
@@ -834,14 +921,12 @@ function renderDownline(){
 
   const ag=(dl.agents||[]).slice(0,12);
   charts.dlAgents=new Chart($('#dlAgentChart'),{type:'bar',data:{labels:ag.map(a=>a.name),
-    datasets:[{label:'Override income',data:ag.map(a=>a.total),money:true,
-      backgroundColor:ag.map(a=>a.downline?COLORS.resid:COLORS.nb)}]},
+    datasets:[{label:'Override income',data:ag.map(a=>a.total),money:true,backgroundColor:COLORS.resid}]},
     options:baropts(false,true)});
 
-  const dlChip='<span class="chip" style="background:var(--gold-container);color:var(--on-gold-container)">downline</span>';
-  $('#dlAgentTable').innerHTML=thead(['Writing agent','',...yl.map(String),'Advances','Residual','Chargebacks','Total','Lines'])
+  $('#dlAgentTable').innerHTML=thead(['Writing agent','Since',...yl.map(String),'Advances','Residual','Chargebacks','Total','Lines'])
     +'<tbody>'+(dl.agents||[]).map(a=>`<tr>
-      <td>${a.name}</td><td>${a.downline?dlChip:''}</td>
+      <td>${a.name}</td><td>${a.since||''}</td>
       ${yl.map(y=>`<td>${fmt(a[String(y)]||0)}</td>`).join('')}
       <td>${fmt(a.advances)}</td><td>${fmt(a.residual)}</td><td class="neg">${fmt(a.chargebacks)}</td>
       <td><b>${fmt(a.total)}</b></td><td>${a.count}</td></tr>`).join('')+'</tbody>';

@@ -237,55 +237,77 @@ function buildSummary(allRecords, config) {
   }
   policies.sort((a, b) => b.total - a.total);
 
-  // ---- downline / override production (income from agents you manage) ----
-  // Each statement line lists its "Writing Agent(s)". Lines written by someone else
-  // are production you earn an override on. We roll that up per writing agent and,
-  // for the configured downline roster, break it out over time / by carrier.
-  const DOWNLINE_ROSTER = (config.downline_roster && config.downline_roster.length)
-    ? config.downline_roster : ['Michael Schwab']; // set in config.json
+  // ---- downline: agents you earn an override on -------------------------------
+  // Simple, data-driven rule: a writing agent is YOUR downline if they ever appear
+  // at level (100) on your statements (they took the full writing comp beneath you).
+  // We then roll up ALL of that agent's production as your downline production, and
+  // track when they first appeared (when they joined your downline).
   const normName = s => (s || '').toUpperCase().replace(/[^A-Z]/g, '');
   const prettyName = s => (s || '').toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase())
     .replace(/\bLlc\b/g, 'LLC').replace(/\s+/g, ' ').trim();
-  function rosterMatch(nm) {
-    const n = normName(nm);
-    return DOWNLINE_ROSTER.some(r => {
-      const rn = normName(r), last = normName(r.split(/\s+/).pop());
-      return (rn && n.includes(rn)) || (last.length >= 4 && n.includes(last));
-    });
-  }
   const secKey = s => (s === 'advances' ? 'advances' : s === 'commission' ? 'residual'
     : s === 'chargebacks' ? 'chargebacks' : null);
+  // Only actual client policies written by a person count for downline — not house /
+  // accounting lines (interest on chargebacks, production bonuses, overrides, earnings
+  // adjustments). Those name the "client" after the accounting entry, e.g.
+  // "INTEREST, ACC", "BONUS-MCA HUMANA, OVERRIDE", "ADJ ADJUSTMENT, EARNINGS".
+  const HOUSE_RE = /\b(INTEREST|BONUS|OVERRIDE|ADJUSTMENT|EARNINGS|COMPENSATION|1099|TRIP|AWARD|CONTEST|EAPP|VBE)\b/i;
+  const isRealPolicy = it => !!it.policy && it.product !== 'MISC' && !HOUSE_RE.test(it.client || '');
+  // pass 1 — collect every real-policy writing agent, and who ever hits level 100 (auto).
+  // Manual overrides from config (downline_include / downline_exclude) then force agents
+  // in or out, so you can correct the automatic result.
+  const INC = (config.downline_include || []).map(normName).filter(Boolean);
+  const EXC = (config.downline_exclude || []).map(normName).filter(Boolean);
+  const allAgents = {}, autoDL = {};
+  for (const r of records) for (const it of (r.items || [])) {
+    if (!secKey(it.section) || !isRealPolicy(it)) continue;
+    for (const a of (it.agents || [])) {
+      const k = normName(a.name); if (!k) continue;
+      allAgents[k] = prettyName(a.name);
+      if ((a.level || 0) >= 100) autoDL[k] = true;
+    }
+  }
+  const isDL = {};
+  for (const k of Object.keys(allAgents)) {
+    let dl = !!autoDL[k];
+    if (INC.includes(k)) dl = true;
+    if (EXC.includes(k)) dl = false;
+    if (dl) isDL[k] = true;
+  }
+  // pass 2 — roll up each downline agent's real-policy production + your override on it
   const agentMap = {}, dlSeriesMap = {}, dlCarriers = {};
   const dlTotals = { advances: 0, residual: 0, chargebacks: 0, count: 0 };
   const dlPolicies = [];
   for (const r of records) {
-    for (const it of r.items) {
-      if (!it.agents || !it.agents.length) continue;
-      const sk = secKey(it.section); if (!sk) continue;
+    for (const it of (r.items || [])) {
+      const sk = secKey(it.section); if (!sk || !isRealPolicy(it) || !it.agents || !it.agents.length) continue;
+      const onLine = it.agents.filter(a => isDL[normName(a.name)]);
+      if (!onLine.length) continue;                        // no downline agent on this line
       const seen = new Set();
-      for (const a of it.agents) {
-        const key = normName(a.name); if (!key || seen.has(key)) continue; seen.add(key);
-        const m = (agentMap[key] ||= { name: prettyName(a.name), norm: key, total: 0,
-          advances: 0, residual: 0, chargebacks: 0, count: 0, years: {}, carriers: {},
-          downline: rosterMatch(a.name) });
+      for (const a of onLine) {
+        const key = normName(a.name); if (seen.has(key)) continue; seen.add(key);
+        const m = (agentMap[key] ||= { name: prettyName(a.name), total: 0, advances: 0, residual: 0,
+          chargebacks: 0, count: 0, years: {}, carriers: {}, since: r.date, last_seen: r.date, since_100: null });
         m[sk] += it.payable; m.total += it.payable; m.count += 1;
+        if ((a.level || 0) >= 100 && (!m.since_100 || r.date < m.since_100)) m.since_100 = r.date;
+        if (r.date < m.since) m.since = r.date;
+        if (r.date > m.last_seen) m.last_seen = r.date;
         m.years[r.year] = (m.years[r.year] || 0) + it.payable;
         m.carriers[it.carrier] = (m.carriers[it.carrier] || 0) + it.payable;
       }
-      if (it.agents.some(a => rosterMatch(a.name))) {
-        dlTotals[sk] += it.payable; dlTotals.count += 1;
-        (dlSeriesMap[r.date] ||= { advances: 0, residual: 0, chargebacks: 0 })[sk] += it.payable;
-        dlCarriers[it.carrier] = (dlCarriers[it.carrier] || 0) + it.payable;
-        dlPolicies.push({ date: r.date, year: r.year, policy: it.policy, client: it.client,
-          carrier: it.carrier, product: it.product, section: sk, amount: round2(it.payable),
-          agents: it.agents.map(a => prettyName(a.name)).join(', ') });
-      }
+      dlTotals[sk] += it.payable; dlTotals.count += 1;
+      (dlSeriesMap[r.date] ||= { advances: 0, residual: 0, chargebacks: 0 })[sk] += it.payable;
+      dlCarriers[it.carrier] = (dlCarriers[it.carrier] || 0) + it.payable;
+      dlPolicies.push({ date: r.date, year: r.year, policy: it.policy, client: it.client,
+        carrier: it.carrier, product: it.product, section: sk, amount: round2(it.payable),
+        agents: onLine.map(a => prettyName(a.name)).join(', ') });
     }
   }
   const agentList = Object.values(agentMap).map(m => {
-    const row = { name: m.name, downline: m.downline, count: m.count,
-      total: round2(m.total), advances: round2(m.advances), residual: round2(m.residual),
-      chargebacks: round2(m.chargebacks),
+    const row = { name: m.name, since: m.since, since_100: m.since_100, last_seen: m.last_seen,
+      manual: !autoDL[normName(m.name)],   // in the downline but never auto-flagged = manually added
+      count: m.count, total: round2(m.total), advances: round2(m.advances),
+      residual: round2(m.residual), chargebacks: round2(m.chargebacks),
       top_carrier: (Object.entries(m.carriers).sort((a, b) => b[1] - a[1])[0] || ['', 0])[0] };
     for (const y of allYears) row[y] = round2(m.years[y] || 0);
     return row;
@@ -295,8 +317,46 @@ function buildSummary(allRecords, config) {
       advances: round2(v.advances), residual: round2(v.residual), chargebacks: round2(v.chargebacks),
       net: round2(v.advances + v.residual + v.chargebacks) }));
   dlPolicies.sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  // ---- downline hierarchy (You -> your downline -> their downline -> ...) ----
+  // A flagged agent's parent is the flagged agent who is their nearest upline on the
+  // same real policy (a co-listed flagged agent one step lower in level); otherwise You.
+  const flagged = new Set(Object.keys(agentMap));
+  const parentCount = {};
+  for (const r of records) for (const it of (r.items || [])) {
+    if (!secKey(it.section) || !isRealPolicy(it) || !it.agents) continue;
+    const fa = it.agents.filter(a => flagged.has(normName(a.name)))
+      .sort((a, b) => (a.level || 0) - (b.level || 0));
+    for (let i = 1; i < fa.length; i++) {
+      const child = normName(fa[i].name), par = normName(fa[i - 1].name);
+      if (child !== par) ((parentCount[child] ||= {})[par] = (parentCount[child][par] || 0) + 1);
+    }
+  }
+  const parentOf = {};
+  for (const c of flagged) {
+    const pc = parentCount[c];
+    parentOf[c] = pc ? Object.entries(pc).sort((a, b) => b[1] - a[1])[0][0] : 'YOU';
+  }
+  for (const c of Object.keys(parentOf)) {      // break any cycles -> attach to You
+    let x = parentOf[c]; const chain = new Set([c]);
+    while (x && x !== 'YOU') { if (chain.has(x)) { parentOf[c] = 'YOU'; break; } chain.add(x); x = parentOf[x]; }
+  }
+  const byKey = {}; for (const a of agentList) byKey[normName(a.name)] = a;
+  function buildNode(key) {
+    const a = byKey[key];
+    const children = Object.keys(parentOf).filter(k => parentOf[k] === key).map(buildNode)
+      .sort((x, y) => Math.abs(y.total) - Math.abs(x.total));
+    const descendants = children.reduce((s, c) => s + 1 + c.descendants, 0);
+    return { name: a.name, total: a.total, count: a.count, since: a.since, since_100: a.since_100,
+      advances: a.advances, residual: a.residual, chargebacks: a.chargebacks, children, descendants };
+  }
+  const roots = Object.keys(parentOf).filter(k => parentOf[k] === 'YOU').map(buildNode)
+    .sort((x, y) => Math.abs(y.total) - Math.abs(x.total));
+  const hierarchy = { name: 'You', children: roots,
+    descendants: roots.reduce((s, c) => s + 1 + c.descendants, 0) };
+
   const downline = {
-    roster: DOWNLINE_ROSTER,
+    rule: 'A writing agent is flagged as your downline when they ever appear at level (100).',
     totals: { advances: round2(dlTotals.advances), residual: round2(dlTotals.residual),
       chargebacks: round2(dlTotals.chargebacks),
       net: round2(dlTotals.advances + dlTotals.residual + dlTotals.chargebacks), count: dlTotals.count },
@@ -304,6 +364,11 @@ function buildSummary(allRecords, config) {
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total)),
     agents: agentList,
     agent_count: agentList.length,
+    hierarchy,
+    candidates: Object.entries(allAgents).filter(([k]) => !isDL[k]).map(([, v]) => v)
+      .sort((a, b) => (a < b ? -1 : 1)),
+    manual_include: config.downline_include || [],
+    manual_exclude: config.downline_exclude || [],
     series: downlineSeries,
     policies: dlPolicies.slice(0, 500),
   };
