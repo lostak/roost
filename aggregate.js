@@ -68,12 +68,43 @@ function reclassifyMA(records, opts) {
   return { moved, dollars: round2(dollars), global_median: round2(gMed), floor: FLOOR, mult: MULT };
 }
 
+// One-time incentive/trip/production bonuses (1099-MISC trips, awards) are NOT policy
+// commissions. Pull them out of advances/residual/chargebacks into their own 'bonus'
+// section and remove them from net income, so they don't distort commission & residual
+// trends. (e.g. the "1099-MISC trips" line that jumps a cumulative chart.)
+const isBonus = it => it.carrier === 'Bonus / Adjustment' || it.product === 'MISC'
+  || /1099|TRIP|BONUS|INCENTIVE|AWARD|CONTEST/i.test(`${it.policy || ''} ${it.client || ''} ${it.product || ''}`);
+function extractBonus(records) {
+  let moved = 0;
+  for (const r of records) {
+    let changed = false;
+    for (const it of (r.items || [])) {
+      if (it.section === 'bonus') continue;
+      if (isBonus(it)) { it.section = 'bonus'; it.bonus = true; moved++; changed = true; }
+    }
+    if (changed) {
+      let adv = 0, res = 0, cbk = 0, bon = 0;
+      for (const it of (r.items || [])) {
+        if (it.section === 'advances') adv += it.payable;
+        else if (it.section === 'commission') res += it.payable;
+        else if (it.section === 'chargebacks') cbk += it.payable;
+        else if (it.section === 'bonus') bon += it.payable;
+      }
+      r.advances_total = round2(adv); r.residual_total = round2(res);
+      r.chargebacks_total = round2(cbk); r.bonus_total = round2(bon);
+      r.pay_period_net = round2(num(r.pay_period_net) - bon); // exclude bonus from income
+    }
+  }
+  return { moved };
+}
+
 function buildSummary(allRecords, config) {
   config = config || {};
   // Work on deep-ish clones so this module never mutates the server's parse cache.
   const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
   const records = cloned.filter(r => !r.pending);
   const pendingRecs = cloned.filter(r => r.pending);
+  const bonusReclass = extractBonus(records);           // pull bonuses out first
   const reclass = reclassifyMA(records, config.ma_reclass);
 
   const byYear = {};
@@ -106,6 +137,26 @@ function buildSummary(allRecords, config) {
     net: num(r.pay_period_net), advances: num(r.advances_total),
     residual: num(r.residual_total), chargebacks: num(r.chargebacks_total),
   }));
+
+  // ---- bonus / incentive category (its own bucket; excluded from income) ----
+  const bonusItems = [];
+  for (const r of records) for (const it of (r.items || [])) if (it.section === 'bonus')
+    bonusItems.push({ date: r.date, year: r.year, amount: round2(it.payable),
+      label: (it.client || it.product || 'Bonus'), carrier: it.carrier });
+  const bonusByYearMap = {}, bonusSeriesMap = {};
+  let bonusTotal = 0;
+  for (const b of bonusItems) {
+    bonusTotal += b.amount;
+    bonusByYearMap[b.year] = (bonusByYearMap[b.year] || 0) + b.amount;
+    bonusSeriesMap[b.date] = (bonusSeriesMap[b.date] || 0) + b.amount;
+  }
+  const bonus = {
+    total: round2(bonusTotal), count: bonusItems.length,
+    by_year: allYears.map(y => ({ year: y, amount: round2(bonusByYearMap[y] || 0) })),
+    series: Object.entries(bonusSeriesMap).sort((a, b) => a[0] < b[0] ? -1 : 1)
+      .map(([date, v]) => ({ date, amount: round2(v) })),
+    items: bonusItems.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 100),
+  };
 
   // ---- residual & new-business by carrier ----
   const carrierResidual = {}, carrierNew = {};
@@ -476,6 +527,7 @@ function buildSummary(allRecords, config) {
     cumulative_by_year: cumulativeByYear,
     runrate,
     reclass,
+    bonus,
     downline,
     projections,
     insights,
