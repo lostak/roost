@@ -118,6 +118,7 @@ function buildSummary(allRecords, config) {
   const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
   const records = cloned.filter(r => !r.pending);
   const pendingRecs = cloned.filter(r => r.pending);
+  const bonusReclass = extractBonus(records);           // pull bonuses out first
   const reclass = reclassifyMA(records, config.ma_reclass);
   const bonusInfo = classifyBonuses(records);
 
@@ -175,6 +176,26 @@ function buildSummary(allRecords, config) {
     residual: num(r.residual_total), chargebacks: num(r.chargebacks_total),
     bonus: num(r.bonus_total),
   }));
+
+  // ---- bonus / incentive category (its own bucket; excluded from income) ----
+  const bonusItems = [];
+  for (const r of records) for (const it of (r.items || [])) if (it.section === 'bonus')
+    bonusItems.push({ date: r.date, year: r.year, amount: round2(it.payable),
+      label: (it.client || it.product || 'Bonus'), carrier: it.carrier });
+  const bonusByYearMap = {}, bonusSeriesMap = {};
+  let bonusTotal = 0;
+  for (const b of bonusItems) {
+    bonusTotal += b.amount;
+    bonusByYearMap[b.year] = (bonusByYearMap[b.year] || 0) + b.amount;
+    bonusSeriesMap[b.date] = (bonusSeriesMap[b.date] || 0) + b.amount;
+  }
+  const bonus = {
+    total: round2(bonusTotal), count: bonusItems.length,
+    by_year: allYears.map(y => ({ year: y, amount: round2(bonusByYearMap[y] || 0) })),
+    series: Object.entries(bonusSeriesMap).sort((a, b) => a[0] < b[0] ? -1 : 1)
+      .map(([date, v]) => ({ date, amount: round2(v) })),
+    items: bonusItems.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 100),
+  };
 
   // ---- residual & new-business by carrier ----
   const carrierResidual = {}, carrierNew = {};
@@ -425,7 +446,8 @@ function buildSummary(allRecords, config) {
       break;
     }
   }
-  const growthDefault = clamp(growthObs, -0.25, 0.5) ?? 0.05;
+  const renewalObs = renewalRatios.length >= 3 ? round2(median(renewalRatios)) : null;
+  const renewalDefault = clamp(renewalObs, 0.1, 1.0) ?? 0.5;
 
   // chargeback drag on new business
   const totCbk = records.reduce((s, r) => s + num(r.chargebacks_total), 0);

@@ -415,13 +415,18 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
             <button class="btn tonal" id="projHistBtn" onclick="baseOnHistory()"><span>&#8635;</span> Base on my actual history</button>
           </div>
           <p class="hint" id="projObserved" style="margin:-2px 0 16px"></p>
+          <div class="controls" style="margin-bottom:10px">
+            <h3 style="margin:0;flex:1;font-size:15px;font-weight:500">Assumptions</h3>
+            <button class="btn tonal" id="projHistBtn" onclick="baseOnHistory()"><span>&#8635;</span> Base on my actual history</button>
+          </div>
+          <p class="hint" id="projObserved" style="margin:-2px 0 16px"></p>
           <div class="sliders">
             <div class="sl"><label>Residual retention <b id="vRet"></b></label>
               <input type="range" id="projRet" min="40" max="98" step="1">
               <div class="sub">Share of this year's residual that renews next year.</div></div>
             <div class="sl"><label>New-business growth <b id="vGrowth"></b></label>
               <input type="range" id="projGrowth" min="-25" max="50" step="1">
-              <div class="sub">Year-over-year change in new enrollments/advances.</div></div>
+              <div class="sub">First-year change in new enrollments; fades toward flat in later years.</div></div>
             <div class="sl"><label>New &rarr; residual conversion <b id="vConv"></b></label>
               <input type="range" id="projConv" min="40" max="95" step="1">
               <div class="sub">Share of new enrollments that persist into a recurring residual.</div></div>
@@ -600,10 +605,11 @@ function render(){
 }
 
 function renderReclassNotes(){
-  const rc=DATA.reclass||{};
-  const txt = rc.moved>0
-    ? `Parser adjustment: ${rc.moved} large Medicare Advantage initial payment${rc.moved===1?'':'s'} (${fmt0(rc.dollars)}) were reclassified out of residual into new business, so recurring figures reflect true renewals.`
-    : '';
+  const rc=DATA.reclass||{}, b=DATA.bonus||{};
+  const parts=[];
+  if(rc.moved>0)parts.push(`${rc.moved} large Medicare Advantage initial payment${rc.moved===1?'':'s'} (${fmt0(rc.dollars)}) reclassified out of residual into new business.`);
+  if(b.count>0)parts.push(`${b.count} one-time incentive/bonus line${b.count===1?'':'s'} (${fmt0(b.total)}) held out as their own category and excluded from income.`);
+  const txt=parts.length?('Parser adjustments: '+parts.join(' ')):'';
   document.querySelectorAll('.reclassNote').forEach(e=>{e.textContent=txt;e.style.display=txt?'block':'none';});
 }
 
@@ -620,6 +626,7 @@ function renderKpis(){
     {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
     {l:'Pending pipeline',v:fmt0(d.pending.latest_total),s:d.pending.latest_date?('as of '+d.pending.latest_date):'none',d:''}
   ];
+  if(d.bonus&&d.bonus.count>0)kpis.push({l:'Incentive & bonuses',v:fmt0(d.bonus.total),s:'one-time; excluded from income',d:''});
   $('#kpis').innerHTML=kpis.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div>${k.d}<div class="sub">${k.s}</div></div>`).join('');
 }
@@ -974,12 +981,13 @@ function baseOnHistory(){
   renderProjections();
 }
 function projectFwd(P,s,years){
-  let residual=P.residual_annual, newbiz=P.newbiz_annual;
+  let residual=P.residual_annual, newbiz=P.newbiz_annual, g=s.growth;
   const rows=[];
   for(let i=1;i<=years;i++){
     const addResid=newbiz*s.conversion*s.renewal;
     residual=residual*s.retention+addResid;
-    newbiz=newbiz*(1+s.growth);
+    newbiz=newbiz*(1+g);
+    g=g*0.6;   // new-business growth fades toward flat so it doesn't compound to infinity
     rows.push({year:P.current_year+i,residual,newbiz,total:residual+newbiz,net:residual+newbiz*(1-s.chargeback)});
   }
   return rows;
@@ -1025,20 +1033,21 @@ function projDraw(){
   const cagr=P.residual_annual>0?(Math.pow(last.residual/P.residual_annual,1/y)-1):0;
   const kp=[
     {l:'Residual now (annualized)',v:fmt0(P.residual_annual),s:'recurring run-rate',gold:true},
-    {l:`Residual in ${y} yr${y===1?'':'s'}`,v:fmt0(last.residual),s:`${(cagr>=0?'+':'')+(cagr*100).toFixed(0)}% / yr`},
-    {l:`Total book in ${y} yr${y===1?'':'s'}`,v:fmt0(last.total),s:'residual + new business'},
+    {l:`Residual in ${y} yr${y===1?'':'s'}`,v:fmt0(last.residual),s:`recurring book, ${(cagr>=0?'+':'')+(cagr*100).toFixed(0)}% / yr`},
+    {l:`Annual income, yr ${y}`,v:fmt0(last.total),s:'residual + new business (gross)'},
     {l:`Projected net, yr ${y}`,v:fmt0(last.net),s:'after chargeback drag'}
   ];
   $('#projKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
 
   const hist=P.hist||[], nH=hist.length;
+  const hv=h=>h.residual_annualized!=null?h.residual_annualized:h.residual; // annualize partial current yr
   const labels=[...hist.map(h=>String(h.year)),...base.map(r=>String(r.year))];
   const pad=n=>Array(n).fill(null);
-  const baseLine=[...hist.map(h=>h.residual),...base.map(r=>r.residual)];
+  const baseLine=[...hist.map(hv),...base.map(r=>r.residual)];
   const optLine=[...pad(nH),...optm.map(r=>r.residual)];
   const consLine=[...pad(nH),...cons.map(r=>r.residual)];
-  if(nH>0){optLine[nH-1]=hist[nH-1].residual;consLine[nH-1]=hist[nH-1].residual;}
+  if(nH>0){optLine[nH-1]=hv(hist[nH-1]);consLine[nH-1]=hv(hist[nH-1]);}
   if(charts.proj)charts.proj.destroy();
   charts.proj=new Chart($('#projChart'),{type:'line',data:{labels,datasets:[
     {label:'Optimistic',data:optLine,borderColor:'transparent',backgroundColor:'transparent',pointRadius:0,fill:false,spanGaps:true},
@@ -1057,7 +1066,7 @@ function projDraw(){
     {label:'New business',data:base.map(r=>r.newbiz),backgroundColor:COLORS.nb}
   ]},options:baropts(true)});
 
-  $('#projTable').innerHTML=thead(['Year','New business','Residual','Total book','Net (after CB)'])
+  $('#projTable').innerHTML=thead(['Year','New business','Residual','Annual income','Net (after CB)'])
     +'<tbody>'+base.map(r=>`<tr><td>${r.year}</td><td>${fmt0(r.newbiz)}</td><td>${fmt0(r.residual)}</td>
       <td><b>${fmt0(r.total)}</b></td><td class="${cls(r.net)}">${fmt0(r.net)}</td></tr>`).join('')+'</tbody>';
 }
