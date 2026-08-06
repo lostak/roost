@@ -465,8 +465,15 @@ function buildSummary(allRecords, config) {
     net_ytd: netYtd, net_annual: netAnnual,
     elapsed_new: round2(cumNewThrough), elapsed_net: round2(cumNetThrough),
     seasonality_new: seasonNew, seasonality_net: seasonNet,
-    hist: years.map(y => ({ year: y.year, residual: y.residual, advances: y.advances, net: y.net,
-      partial: y.year === curYear && curPartial })),
+    hist: years.map(y => {
+      // Annualize the current partial year so the trajectory compares like-for-like
+      // with completed prior years (7 months of 2026 vs 12 months of 2025).
+      const isCur = y.year === curYear && curPartial;
+      return { year: y.year, residual: y.residual, advances: y.advances, net: y.net, partial: isCur,
+        residual_annualized: isCur ? residualAnnual : y.residual,
+        advances_annualized: isCur ? newbizAnnual : y.advances,
+        net_annualized: isCur ? netAnnual : y.net };
+    }),
     growth_yoy: growthYoy,
     observed: { retention_dollar: retDollar, retention_count: retCount,
       growth: growthObs == null ? null : round2(growthObs), renewal_ratio: renewalObs,
