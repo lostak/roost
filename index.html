@@ -605,7 +605,7 @@ function render(){
 }
 
 function renderReclassNotes(){
-  const rc=DATA.reclass||{}, b=DATA.bonus||{};
+  const rc=DATA.reclass||{}, b=DATA.bonuses||{};
   const parts=[];
   if(rc.moved>0)parts.push(`${rc.moved} large Medicare Advantage initial payment${rc.moved===1?'':'s'} (${fmt0(rc.dollars)}) reclassified out of residual into new business.`);
   if(b.count>0)parts.push(`${b.count} one-time incentive/bonus line${b.count===1?'':'s'} (${fmt0(b.total)}) held out as their own category and excluded from income.`);
@@ -626,7 +626,6 @@ function renderKpis(){
     {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
     {l:'Pending pipeline',v:fmt0(d.pending.latest_total),s:d.pending.latest_date?('as of '+d.pending.latest_date):'none',d:''}
   ];
-  if(d.bonus&&d.bonus.count>0)kpis.push({l:'Incentive & bonuses',v:fmt0(d.bonus.total),s:'one-time; excluded from income',d:''});
   $('#kpis').innerHTML=kpis.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div>${k.d}<div class="sub">${k.s}</div></div>`).join('');
 }
