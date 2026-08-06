@@ -318,30 +318,22 @@ function buildSummary(allRecords, config) {
       net: round2(v.advances + v.residual + v.chargebacks) }));
   dlPolicies.sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  // ---- downline hierarchy (You -> your downline -> their downline -> ...) ----
-  // A flagged agent's parent is the flagged agent who is their nearest upline on the
-  // same real policy (a co-listed flagged agent one step lower in level); otherwise You.
-  const flagged = new Set(Object.keys(agentMap));
-  const parentCount = {};
-  for (const r of records) for (const it of (r.items || [])) {
-    if (!secKey(it.section) || !isRealPolicy(it) || !it.agents) continue;
-    const fa = it.agents.filter(a => flagged.has(normName(a.name)))
-      .sort((a, b) => (a.level || 0) - (b.level || 0));
-    for (let i = 1; i < fa.length; i++) {
-      const child = normName(fa[i].name), par = normName(fa[i - 1].name);
-      if (child !== par) ((parentCount[child] ||= {})[par] = (parentCount[child][par] || 0) + 1);
-    }
-  }
+  // ---- downline hierarchy ----
+  // Every downline agent sits directly under You by default (same level). The user can
+  // nest an agent under another via drag-and-drop; those choices persist in config as
+  // downline_parents { childName: parentName } and are applied here (with cycle safety).
+  const byKey = {}; for (const a of agentList) byKey[normName(a.name)] = a;
+  const rawParents = (config.downline_parents && typeof config.downline_parents === 'object') ? config.downline_parents : {};
   const parentOf = {};
-  for (const c of flagged) {
-    const pc = parentCount[c];
-    parentOf[c] = pc ? Object.entries(pc).sort((a, b) => b[1] - a[1])[0][0] : 'YOU';
+  for (const a of agentList) {
+    const k = normName(a.name);
+    const pk = rawParents[a.name] ? normName(rawParents[a.name]) : null;
+    parentOf[k] = (pk && byKey[pk] && pk !== k) ? pk : 'YOU'; // parent must be another downline agent
   }
   for (const c of Object.keys(parentOf)) {      // break any cycles -> attach to You
     let x = parentOf[c]; const chain = new Set([c]);
     while (x && x !== 'YOU') { if (chain.has(x)) { parentOf[c] = 'YOU'; break; } chain.add(x); x = parentOf[x]; }
   }
-  const byKey = {}; for (const a of agentList) byKey[normName(a.name)] = a;
   function buildNode(key) {
     const a = byKey[key];
     const children = Object.keys(parentOf).filter(k => parentOf[k] === key).map(buildNode)
@@ -369,6 +361,7 @@ function buildSummary(allRecords, config) {
       .sort((a, b) => (a < b ? -1 : 1)),
     manual_include: config.downline_include || [],
     manual_exclude: config.downline_exclude || [],
+    manual_parents: config.downline_parents || {},
     series: downlineSeries,
     policies: dlPolicies.slice(0, 500),
   };

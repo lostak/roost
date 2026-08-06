@@ -279,6 +279,31 @@ function handleDownlineOverrides(req, res) {
   });
 }
 
+// ---- downline hierarchy (drag-to-nest) ----
+// Persists the parent-of map into config.json (downline_parents { child: parent }).
+function handleDownlineHierarchy(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const parents = {};
+      if (o.parents && typeof o.parents === 'object') {
+        for (const [k, v] of Object.entries(o.parents)) {
+          if (typeof k === 'string' && typeof v === 'string' && k.trim() && v.trim() && k !== v) parents[k] = v;
+        }
+      }
+      const cfg = loadConfig();
+      cfg.downline_parents = parents;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', parents });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 const server = http.createServer((req, res) => {
   try {
     const url = req.url.split('?')[0];
@@ -290,6 +315,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/downline-overrides' && req.method === 'POST') {
       return handleDownlineOverrides(req, res);
+    }
+    if (url === '/api/downline-hierarchy' && req.method === 'POST') {
+      return handleDownlineHierarchy(req, res);
     }
     if (url === '/api/data') {
       const records = loadStatements();

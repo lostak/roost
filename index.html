@@ -146,6 +146,8 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .dlnode .cnt{font-size:11px;font-weight:600;background:var(--gold-container);color:var(--on-gold-container);border-radius:11px;padding:1px 9px}
 .dlnode .amt{font-size:12px;color:var(--on-surface-var);font-variant-numeric:tabular-nums}
 .dlnode .since{font-size:11px;color:var(--on-surface-var)}
+.dltree .dlnode[data-agent]{cursor:grab}
+.dltree .dlnode.drop-hover{outline:2px dashed var(--primary);outline-offset:2px;background:var(--primary-container)}
 .dledit-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .dlchips{display:inline-flex;flex-wrap:wrap;gap:6px}
 .dlchip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--outline-var);border-radius:16px;padding:3px 6px 3px 12px;font-size:12px}
@@ -389,7 +391,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         <div class="kpis" id="dlKpis"></div>
         <div class="card chart-card">
           <h3>Downline hierarchy</h3>
-          <p class="hint">You at the top, your downline beneath. Each agent shows how many people sit under them and their override income. Nesting appears when an agent writes at (100) under another of your downline agents.</p>
+          <p class="hint">You at the top, your downline beneath (all at the same level by default). <b>Drag</b> an agent onto another to nest them if they're actually on that agent's downline; drop on <b>You</b> to move them back to the top. Each shows their downline count and override income.</p>
           <div id="dlTree" class="dltree"></div>
         </div>
         <div class="card chart-card">
@@ -870,10 +872,34 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#dlResetBtn')){if(dlInc.length||dlExc.length){dlInc=[];dlExc=[];saveDownlineOverrides();}return;}
 });
 
+let dlParents={};
+function moveDownlineAgent(child,parent){
+  if(parent&&parent!==child) dlParents[child]=parent; else delete dlParents[child];
+  saveDownlineHierarchy();
+}
+async function saveDownlineHierarchy(){
+  const msg=$('#dlEditMsg'); if(msg)msg.textContent='Saving…';
+  try{
+    const r=await fetch('/api/downline-hierarchy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({parents:dlParents})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    await loadData(true);
+  }catch(e){if($('#dlEditMsg'))$('#dlEditMsg').textContent='Could not save: '+e;}
+}
+let dlDrag=null;
+document.addEventListener('dragstart',e=>{const n=e.target.closest('#dlTree .dlnode[data-agent]'); if(n){dlDrag=decodeURIComponent(n.dataset.agent); if(e.dataTransfer)e.dataTransfer.effectAllowed='move';}});
+document.addEventListener('dragend',()=>{document.querySelectorAll('#dlTree .drop-hover').forEach(x=>x.classList.remove('drop-hover')); dlDrag=null;});
+document.addEventListener('dragover',e=>{if(!dlDrag)return; const n=e.target.closest('#dlTree .dlnode'); if(n){e.preventDefault(); n.classList.add('drop-hover');}});
+document.addEventListener('dragleave',e=>{const n=e.target.closest('#dlTree .dlnode'); if(n)n.classList.remove('drop-hover');});
+document.addEventListener('drop',e=>{if(!dlDrag)return; const n=e.target.closest('#dlTree .dlnode'); if(!n)return; e.preventDefault(); n.classList.remove('drop-hover');
+  const target=n.dataset.agent?decodeURIComponent(n.dataset.agent):'YOU'; const child=dlDrag; dlDrag=null;
+  if(target!==child) moveDownlineAgent(child, target==='YOU'?null:target);
+});
+
 function renderDownlineTree(h){
   const el=$('#dlTree'); if(!el)return;
+  dlParents=Object.assign({}, (DATA.downline&&DATA.downline.manual_parents)||{});
   if(!h||!h.children||!h.children.length){
-    el.innerHTML='<ul><li><div class="dlnode you"><span class="nm">You</span></div></li></ul>'
+    el.innerHTML='<ul><li><div class="dlnode you" data-you="1"><span class="nm">You</span></div></li></ul>'
       +'<p class="hint" style="margin:8px 0 0">No downline agents flagged yet — nobody has written at (100) on your policies.</p>';
     return;
   }
@@ -882,7 +908,8 @@ function renderDownlineTree(h){
     const amt=you?'':`<span class="amt">${fmt0(n.total)}</span>`;
     const since=you?'':`<span class="since">since ${n.since||''}</span>`;
     const kids=(n.children&&n.children.length)?`<ul>${n.children.map(c=>`<li>${node(c,false)}</li>`).join('')}</ul>`:'';
-    return `<div class="dlnode${you?' you':''}"><span class="nm">${n.name}</span>${cnt}${amt}${since}</div>${kids}`;
+    const attrs=you?'class="dlnode you" data-you="1"':`class="dlnode" draggable="true" data-agent="${encodeURIComponent(n.name)}"`;
+    return `<div ${attrs}><span class="nm">${n.name}</span>${cnt}${amt}${since}</div>${kids}`;
   };
   el.innerHTML=`<ul><li>${node(h,true)}</li></ul>`;
 }
