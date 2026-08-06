@@ -16,12 +16,14 @@ const path = require('path');
 const { extractText } = require('./pdftext.js');
 const { buildXlsx } = require('./xlsxlite.js');
 const { parseStatement } = require('./parser.js');
-const { buildSummary } = require('./aggregate.js');
+const { buildSummary, prepareRecords } = require('./aggregate.js');
+const { writeClientFolders } = require('./clients.js');
 
 const HERE = __dirname;
 const ROOT = path.dirname(HERE);              // the Commissions folder
 const CACHE_FILE = path.join(HERE, '.parse_cache.json');
 const CONFIG_FILE = path.join(HERE, 'config.json');
+const CLIENTS_DIR = path.join(ROOT, 'Clients'); // ../Commissions/Clients
 const PORT = process.env.PORT || 5000;
 // Bump when parser.js output shape changes so cached records are re-parsed.
 // (v5: expanded carrier detection.)
@@ -106,6 +108,13 @@ function loadStatements() {
     }
   }
   if (dirty) saveCache();
+  if (dirty || !fs.existsSync(CLIENTS_DIR)) {
+    try {
+      // Use reclassified records so Medicare Advantage initials count as new business.
+      const s = writeClientFolders(prepareRecords(records, loadConfig()), CLIENTS_DIR);
+      console.log(`  Client folders: ${s.clients} clients, ${s.policies} policies -> ${CLIENTS_DIR}`);
+    } catch (e) { console.warn('  Client folder generation failed:', e.message); }
+  }
   if (skipped.length) {
     console.warn(`\n  ${skipped.length} statement(s) skipped:`);
     for (const s of skipped) console.warn(`   - ${s.file}  (${s.reason})`);
@@ -305,4 +314,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('Roost running at  http://127.0.0.1:' + PORT);
   console.log('Scanning year folders under:', statementsDir());
+  // Parse statements once at startup so the cache is warm and the per-client
+  // spreadsheets under Commissions/Clients/ are generated right away.
+  try { loadStatements(); } catch (e) { console.warn('  Startup scan failed:', e.message); }
 });

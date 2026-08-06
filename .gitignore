@@ -8,3 +8,6 @@ node_modules/
 
 # Local files
 Statements/
+
+# Generated per-client policy spreadsheets (client PII — regenerated from statements)
+Clients/

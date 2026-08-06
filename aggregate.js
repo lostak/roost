@@ -634,4 +634,16 @@ function buildSummary(allRecords, config) {
     },
   };
 }
-module.exports = { buildSummary };
+// Clone + reclassify records the same way buildSummary does (MA initials -> new
+// business, bonuses -> their own bucket), for consumers like the client-folder export
+// that need "new business" to include Medicare Advantage initials.
+function prepareRecords(allRecords, config) {
+  config = config || {};
+  const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
+  const records = cloned.filter(r => !r.pending);
+  reclassifyMA(records, config.ma_reclass);
+  classifyBonuses(records);
+  return records;
+}
+
+module.exports = { buildSummary, prepareRecords };
