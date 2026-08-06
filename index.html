@@ -1214,10 +1214,24 @@ function projDraw(){
       <td><b>${fmt0(r.total)}</b></td><td class="${cls(r.net)}">${fmt0(r.net)}</td></tr>`).join('')+'</tbody>';
 }
 
+let polSort={k:'total',dir:-1};   // default: highest total first
 function renderPolicies(yl){
   const q=($('#polSearch').value||'').toLowerCase();
+  const cols=[{l:'Client',k:'client',n:false},{l:'Carrier',k:'carrier',n:false},
+    {l:'Policy',k:'policy',n:false},{l:'Product',k:'product',n:false},
+    ...yl.map(y=>({l:String(y),k:String(y),n:true})),
+    {l:'Total',k:'total',n:true},{l:'Pmts',k:'payments',n:true}];
   const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
-  $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Product',...yl.map(String),'Total','Pmts'])
+  const sc=cols.find(c=>c.k===polSort.k)||cols[cols.length-2];
+  rows.sort((a,b)=>{
+    if(sc.n) return ((Number(a[sc.k])||0)-(Number(b[sc.k])||0))*polSort.dir;
+    const av=(a[sc.k]||'').toString().toLowerCase(), bv=(b[sc.k]||'').toString().toLowerCase();
+    return av<bv?-polSort.dir:av>bv?polSort.dir:0;
+  });
+  const th='<thead><tr>'+cols.map(c=>{
+    const arrow=c.k===polSort.k?(polSort.dir<0?' ▾':' ▴'):'';
+    return `<th data-sk="${c.k}" data-n="${c.n?1:0}">${c.l}${arrow}</th>`;}).join('')+'</tr></thead>';
+  $('#polTable').innerHTML=th
     +'<tbody>'+rows.slice(0,400).map(p=>`<tr>
       <td>${p.client||'&mdash;'}</td><td><span class="chip">${p.carrier}</span></td>
       <td class="mono">${p.policy}</td><td>${(p.product||'').slice(0,34)}</td>
@@ -1252,6 +1266,10 @@ bindProj('#projRenew','renewal',100);
 bindProj('#projCB','chargeback',100);
 $('#projYears').addEventListener('input',()=>{proj.years=Number($('#projYears').value);projDraw();});
 document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);});
+document.addEventListener('click',e=>{const th=e.target.closest('#polTable th[data-sk]'); if(!th||!DATA)return;
+  const k=th.dataset.sk, isNum=th.dataset.n==='1';
+  if(polSort.k===k) polSort.dir=-polSort.dir; else { polSort.k=k; polSort.dir=isNum?-1:1; }
+  renderPolicies(DATA.all_years);});
 
 // ---- statement upload ----
 function openUpload(){ $('#uploadResults').innerHTML=''; $('#uploadModal').classList.add('open'); }
