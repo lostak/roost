@@ -165,6 +165,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .dlchip.manual{background:var(--gold-container);color:var(--on-gold-container);border-color:transparent}
 .dlchip button{border:none;background:var(--surface-3);color:var(--on-surface-var);border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
 .dlchip button:hover{background:var(--error);color:#fff}
+.sort-arrow{font-size:11px;opacity:.75}
 </style>
 </head>
 <body>
@@ -386,9 +387,18 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
           <div class="chart-wrap"><canvas id="incomeCarrierChart"></canvas></div>
         </div>
         <div class="card chart-card">
+          <h3>New business by carrier</h3>
+          <p class="hint">New-business (initial) income only. At Year, carriers sit on the x-axis; at smaller timeframes the x-axis becomes time stacked by carrier.</p>
+          <div class="chart-wrap"><canvas id="newbizCarrierChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
           <h3>Residual income by carrier</h3>
           <p class="hint">Recurring residual only. At Year, carriers sit on the x-axis; at smaller timeframes the x-axis becomes time stacked by carrier.</p>
           <div class="chart-wrap"><canvas id="carrierChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Carrier detail (new business)</h3>
+          <table id="nbCarrierTable"></table>
         </div>
         <div class="card chart-card tablecard">
           <h3>Carrier detail (residual)</h3>
@@ -812,17 +822,19 @@ function renderCumulative(){
 }
 
 function renderCarriers(){
-  ['carrier','incomeCarrier'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  ['carrier','incomeCarrier','newbizCarrier'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
   const d=DATA, yl=d.all_years, cs=d.carrier_series||[];
-  $('#carrierTable').innerHTML=thead(['Carrier',...yl.map(String),'Total'])
-    +'<tbody>'+d.residual_by_carrier.map(c=>`<tr><td>${c.carrier}</td>
-      ${yl.map(y=>`<td>${fmt(c[String(y)]||0)}</td>`).join('')}<td><b>${fmt(c.total)}</b></td></tr>`).join('')+'</tbody>';
+  const detailTable=(el,data)=>{ $(el).innerHTML=thead(['Carrier',...yl.map(String),'Total'])
+    +'<tbody>'+data.map(c=>`<tr><td>${c.carrier}</td>
+      ${yl.map(y=>`<td>${fmt(c[String(y)]||0)}</td>`).join('')}<td><b>${fmt(c.total)}</b></td></tr>`).join('')+'</tbody>'; };
+  detailTable('#carrierTable', d.residual_by_carrier);
+  detailTable('#nbCarrierTable', d.new_by_carrier);
 
   // roll per-(date,carrier) income into carrier x time-bucket for the selected grain
   function build(field){
     const map={}, bmap={}, ctot={};
     for(const row of cs){
-      const val=field==='res'?row.res:(row.nb+row.res);
+      const val=field==='res'?row.res:field==='nb'?row.nb:(row.nb+row.res);
       if(!val)continue;
       const info=bucketInfo(row.date,GRAIN);
       (map[row.carrier] ||= {});
@@ -836,16 +848,18 @@ function renderCarriers(){
     return {map,carriers,buckets,ctot};
   }
 
-  function draw(id,field,color){
+  function draw(id,field){
+    const lbl=field==='res'?'Residual':field==='nb'?'New business':'Total income';
     // Fallback (server not restarted with carrier_series): carriers on x, all-time totals.
     if(!cs.length){
       let rows;
       if(field==='res') rows=d.residual_by_carrier.slice(0,12).map(c=>({carrier:c.carrier,val:c.total}));
+      else if(field==='nb') rows=d.new_by_carrier.slice(0,12).map(c=>({carrier:c.carrier,val:c.total}));
       else { const inc={}; d.new_by_carrier.forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
         d.residual_by_carrier.forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
         rows=Object.entries(inc).map(([carrier,o])=>({carrier,val:o.v})).sort((a,b)=>b.val-a.val).slice(0,12); }
       return new Chart($(id),{type:'bar',data:{labels:rows.map(r=>r.carrier),
-        datasets:[{label:field==='res'?'Residual':'Total income',data:rows.map(r=>r.val),
+        datasets:[{label:lbl,data:rows.map(r=>r.val),
           backgroundColor:rows.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
     }
     const g=build(field);
@@ -853,7 +867,7 @@ function renderCarriers(){
       // carriers on x-axis, earned income on y-axis (one bar per carrier)
       const carriers=g.carriers.slice(0,14);
       return new Chart($(id),{type:'bar',data:{labels:carriers,
-        datasets:[{label:field==='res'?'Residual':'Total income',data:carriers.map(c=>g.ctot[c]),
+        datasets:[{label:lbl,data:carriers.map(c=>g.ctot[c]),
           backgroundColor:carriers.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
     }
     // sub-year: timeframes on the x-axis (like the overview graphs), stacked by carrier
@@ -864,6 +878,7 @@ function renderCarriers(){
       options:timeAxis(g.buckets,{money:true,stacked:true})});
   }
   charts.incomeCarrier=draw('#incomeCarrierChart','total');
+  charts.newbizCarrier=draw('#newbizCarrierChart','nb');
   charts.carrier=draw('#carrierChart','res');
 }
 
@@ -1214,24 +1229,10 @@ function projDraw(){
       <td><b>${fmt0(r.total)}</b></td><td class="${cls(r.net)}">${fmt0(r.net)}</td></tr>`).join('')+'</tbody>';
 }
 
-let polSort={k:'total',dir:-1};   // default: highest total first
 function renderPolicies(yl){
   const q=($('#polSearch').value||'').toLowerCase();
-  const cols=[{l:'Client',k:'client',n:false},{l:'Carrier',k:'carrier',n:false},
-    {l:'Policy',k:'policy',n:false},{l:'Product',k:'product',n:false},
-    ...yl.map(y=>({l:String(y),k:String(y),n:true})),
-    {l:'Total',k:'total',n:true},{l:'Pmts',k:'payments',n:true}];
   const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
-  const sc=cols.find(c=>c.k===polSort.k)||cols[cols.length-2];
-  rows.sort((a,b)=>{
-    if(sc.n) return ((Number(a[sc.k])||0)-(Number(b[sc.k])||0))*polSort.dir;
-    const av=(a[sc.k]||'').toString().toLowerCase(), bv=(b[sc.k]||'').toString().toLowerCase();
-    return av<bv?-polSort.dir:av>bv?polSort.dir:0;
-  });
-  const th='<thead><tr>'+cols.map(c=>{
-    const arrow=c.k===polSort.k?(polSort.dir<0?' ▾':' ▴'):'';
-    return `<th data-sk="${c.k}" data-n="${c.n?1:0}">${c.l}${arrow}</th>`;}).join('')+'</tr></thead>';
-  $('#polTable').innerHTML=th
+  $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Product',...yl.map(String),'Total','Pmts'])
     +'<tbody>'+rows.slice(0,400).map(p=>`<tr>
       <td>${p.client||'&mdash;'}</td><td><span class="chip">${p.carrier}</span></td>
       <td class="mono">${p.policy}</td><td>${(p.product||'').slice(0,34)}</td>
@@ -1266,10 +1267,28 @@ bindProj('#projRenew','renewal',100);
 bindProj('#projCB','chargeback',100);
 $('#projYears').addEventListener('input',()=>{proj.years=Number($('#projYears').value);projDraw();});
 document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);});
-document.addEventListener('click',e=>{const th=e.target.closest('#polTable th[data-sk]'); if(!th||!DATA)return;
-  const k=th.dataset.sk, isNum=th.dataset.n==='1';
-  if(polSort.k===k) polSort.dir=-polSort.dir; else { polSort.k=k; polSort.dir=isNum?-1:1; }
-  renderPolicies(DATA.all_years);});
+
+// ---- generic click-to-sort for every table (sorts the rendered rows in place) ----
+function sortTableByHeader(th){
+  const table=th.closest('table'); if(!table||!table.tHead||!table.tBodies.length)return;
+  if(th.closest('thead')!==table.tHead)return;
+  const headCells=[...th.parentElement.children], idx=headCells.indexOf(th); if(idx<0)return;
+  const tbody=table.tBodies[0], rows=[...tbody.rows]; if(rows.length<2)return;
+  const text=r=>(r.cells[idx]?r.cells[idx].textContent.trim():'');
+  const toNum=s=>{if(!s||s==='—')return null;const n=parseFloat(s.replace(/[$,%()]/g,'').replace(/\s/g,''));return isNaN(n)?null:n;};
+  const numeric=rows.every(r=>{const v=text(r);return !v||v==='—'||toNum(v)!==null;});
+  const prev=table.getAttribute('data-sort-idx');
+  const dir=(String(idx)===prev)?(table.getAttribute('data-sort-dir')==='asc'?'desc':'asc'):(numeric?'desc':'asc');
+  rows.sort((a,b)=>{
+    if(numeric){const x=toNum(text(a)),y=toNum(text(b));const xv=x==null?-Infinity:x,yv=y==null?-Infinity:y;return dir==='asc'?xv-yv:yv-xv;}
+    const av=text(a).toLowerCase(),bv=text(b).toLowerCase();return dir==='asc'?(av<bv?-1:av>bv?1:0):(av<bv?1:av>bv?-1:0);
+  });
+  const frag=document.createDocumentFragment(); rows.forEach(r=>frag.appendChild(r)); tbody.appendChild(frag);
+  table.setAttribute('data-sort-idx',idx); table.setAttribute('data-sort-dir',dir);
+  headCells.forEach((h,i)=>{const a=h.querySelector('.sort-arrow');if(a)a.remove();
+    if(i===idx){const s=document.createElement('span');s.className='sort-arrow';s.textContent=dir==='asc'?' ▴':' ▾';h.appendChild(s);}});
+}
+document.addEventListener('click',e=>{const th=e.target.closest('thead th'); if(th)sortTableByHeader(th);});
 
 // ---- statement upload ----
 function openUpload(){ $('#uploadResults').innerHTML=''; $('#uploadModal').classList.add('open'); }
