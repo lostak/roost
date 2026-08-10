@@ -248,6 +248,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <a data-view="cumulative"><span class="ic">&#8599;</span><span class="lbl">Cumulative</span></a>
         <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
         <a data-view="products"><span class="ic">&#9638;</span><span class="lbl">By Product</span></a>
+        <a data-view="bonuses"><span class="ic">&#9733;</span><span class="lbl">Bonuses</span></a>
       </div>
     </div>
     <div class="navgroup" data-group="book">
@@ -375,11 +376,6 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
           <h3>Residual vs. new business by year</h3>
           <p class="hint">How much of each year's earnings is recurring vs. one-time new sales.</p>
           <div class="chart-wrap"><canvas id="mixChart"></canvas></div>
-        </div>
-        <div class="card chart-card">
-          <h3>Bonuses &amp; overrides <span id="bonusTotalPill" style="font-weight:600;color:var(--gold);font-size:14px;margin-left:8px"></span></h3>
-          <p class="hint">Trips, production bonuses, agency overrides and earnings adjustments show up in the statement's commission section but aren't recurring policy residual. They're separated out here (and excluded from the residual figures above) so one-off payouts don't distort the residual trend. Note: some trip / 1099 lines are non-cash — booked as income and offset by a matching chargeback the same week (net $0) — so this total can exceed actual bonus cash received.</p>
-          <div id="bonusBreakdown"></div>
         </div>
       </section>
 
@@ -570,6 +566,36 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <div class="card chart-card tablecard">
           <h3>Product detail</h3>
           <table id="prodTable"></table>
+        </div>
+      </section>
+
+      <!-- BONUSES -->
+      <section class="view" id="view-bonuses">
+        <h2 class="section">Bonuses &amp; overrides</h2>
+        <div class="banner">Trips, production bonuses, agency overrides and earnings adjustments show up in the statement's commission section but aren't recurring policy residual. Roost separates them here (and excludes them from your residual and income figures) so one-off payouts don't distort the trend. Note: some trip / 1099 lines are non-cash &mdash; booked as income and offset by a matching chargeback the same week (net $0) &mdash; so this total can exceed the actual bonus cash received.</div>
+        <div class="kpis" id="bonusKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>By category</h3>
+            <p class="hint">Where your bonus and override dollars come from.</p>
+            <div class="chart-wrap"><canvas id="bonusKindChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3>Over time</h3>
+            <div class="controls"><span class="lbl-inline">Timeframe:</span>
+              <div class="seg grainSeg">
+                <button data-g="week">Week</button>
+                <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+                <button data-g="year">Year</button>
+              </div>
+            </div>
+            <p class="hint">Bonus / override income per period &mdash; trips and production bonuses often cluster near year-end.</p>
+            <div class="chart-wrap"><canvas id="bonusTimeChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Detail</h3>
+          <div id="bonusBreakdown"></div>
         </div>
       </section>
 
@@ -963,8 +989,8 @@ function bucketSeries(grain,src){
     const info=bucketInfo(p.date,grain);
     let b=map.get(info.key);
     if(!b){b={key:info.key,label:info.label,year:info.year,q:info.q,sort:info.sort,
-      advances:0,residual:0,net:0,chargebacks:0,statements:0};map.set(info.key,b);}
-    b.advances+=p.advances;b.residual+=p.residual;b.net+=p.net;b.chargebacks+=p.chargebacks;b.statements++;
+      advances:0,residual:0,net:0,chargebacks:0,bonus:0,statements:0};map.set(info.key,b);}
+    b.advances+=p.advances;b.residual+=p.residual;b.net+=p.net;b.chargebacks+=p.chargebacks;b.bonus+=(p.bonus||0);b.statements++;
   }
   const arr=[...map.values()].sort((a,b)=>a.sort<b.sort?-1:1);
   arr.forEach(b=>{b.gross=Math.round((b.advances+b.residual)*100)/100;
@@ -1128,14 +1154,29 @@ function renderNewBusiness(){
 }
 
 function renderBonuses(){
-  const b=DATA.bonuses;
-  const pill=$('#bonusTotalPill'), box=$('#bonusBreakdown');
-  if(!b||!box){ if(box)box.innerHTML=''; if(pill)pill.textContent=''; return; }
-  if(pill)pill.textContent=`${fmt0(b.total)} · ${b.count} lines`;
-  if(!b.count){ box.innerHTML='<p class="hint">No bonus or override lines detected.</p>'; return; }
+  ['bonusKind','bonusTime'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const b=DATA.bonuses, box=$('#bonusBreakdown'); if(!box)return;
+  const kp=[
+    {l:'Bonuses & overrides',v:fmt0(b?b.total:0),s:`${b?b.count:0} lines, all-time`,gold:true},
+    {l:'Top category',v:(b&&b.by_kind[0])?b.by_kind[0].kind:'—',s:(b&&b.by_kind[0])?fmt0(b.by_kind[0].total):''},
+    {l:'Largest single',v:(b&&b.top[0])?fmt0(b.top[0].amount):'—',s:(b&&b.top[0])?`${b.top[0].kind} · ${b.top[0].date}`:''},
+    {l:'This year',v:fmt0((DATA.years&&DATA.years[DATA.years.length-1]||{}).bonus||0),s:'bonus/override income'}
+  ];
+  $('#bonusKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val" style="font-size:${String(k.v).length>10?'20px':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  if(!b||!b.count){ box.innerHTML='<p class="hint">No bonus or override lines detected.</p>'; return; }
+  // by category (accompanies the table)
+  const bk=b.by_kind.slice(0,10);
+  charts.bonusKind=new Chart($('#bonusKindChart'),{type:'bar',data:{labels:bk.map(k=>k.kind),
+    datasets:[{label:'Total',data:bk.map(k=>k.total),backgroundColor:bk.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,true)});
+  // over time (from per-statement bonus in the series)
+  const buckets=bucketSeries(GRAIN);
+  charts.bonusTime=new Chart($('#bonusTimeChart'),{type:'bar',data:{labels:buckets.map(x=>x.label),
+    datasets:[{label:'Bonuses & overrides',data:buckets.map(x=>x.bonus||0),money:true,backgroundColor:COLORS.gold||'#c0872f'}]},
+    options:timeAxis(buckets,{money:true})});
   const kinds=b.by_kind.map(k=>`<tr><td style="text-align:left">${k.kind}</td><td>${k.count}</td><td>${fmt(k.total)}</td></tr>`).join('');
-  const top=b.top.slice(0,12).map(t=>`<tr><td>${t.date}</td><td style="text-align:left">${t.kind}</td>
-    <td style="text-align:left">${((t.client||t.product||'').replace(/</g,'&lt;')).slice(0,26)}</td><td>${fmt(t.amount)}</td></tr>`).join('');
+  const top=b.top.slice(0,15).map(t=>`<tr><td>${t.date}</td><td style="text-align:left">${t.kind}</td>
+    <td style="text-align:left">${((t.client||t.product||'').replace(/</g,'&lt;')).slice(0,30)}</td><td>${fmt(t.amount)}</td></tr>`).join('');
   box.innerHTML=
     `<table><thead><tr><th style="text-align:left">Category</th><th>Lines</th><th>Total</th></tr></thead><tbody>${kinds}</tbody></table>`+
     `<h4 style="margin:18px 0 6px;font-size:13px;color:var(--on-surface-var)">Largest bonus / override lines</h4>`+
@@ -2171,7 +2212,7 @@ function renderPolicies(yl){
 
 // ---- selectors / wiring ----
 function syncGrainSegs(){document.querySelectorAll('.grainSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===GRAIN));}
-function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderLifetime();renderNewBusiness();renderResidual();renderCarriers();renderProducts();renderDownline();renderGoals();
+function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderLifetime();renderNewBusiness();renderResidual();renderBonuses();renderCarriers();renderProducts();renderDownline();renderGoals();
   try{localStorage.setItem('grain',g);}catch(e){}}
 function segPick(container,attr,cb){$(container).addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;
