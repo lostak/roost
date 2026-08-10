@@ -2170,16 +2170,34 @@ function renderConvention(){
   $('#convChecklist').innerHTML=rows.map(r=>`<div>${r}</div>`).join('');
   // two production graphs: personal and downline, each vs its level target
   function convProg(id,series,target,color){
-    const ser=series||[]; let run=0; const cum=ser.map(s=>{run+=s.points;return Math.round(run);});
-    let labels=ser.map(s=>s.date); if(!labels.length){labels=['—'];cum.push(0);}
-    const ds=[{label:'Cumulative points',data:cum,borderColor:color,backgroundColor:hexA(color,.16),tension:.2,pointRadius:2,fill:true}];
-    if(target)ds.push({label:'Level target ('+num0(target)+')',data:labels.map(()=>target),borderColor:'#d64545',borderWidth:2.5,borderDash:[8,5],pointRadius:0,fill:false});
-    const maxY=Math.max(cum[cum.length-1]||0,target||0)*1.1;
+    const win=V.window||{start:'2026-02-01',end:'2027-01-31'};
+    const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const start=Date.UTC(...win.start.split('-').map((x,i)=>i===1?x-1:+x));
+    const end=Date.UTC(...win.end.split('-').map((x,i)=>i===1?x-1:+x));
+    const totalDays=(end-start)/864e5+1;
+    const [ay,am,ad]=(V.as_of||win.start).split('-').map(Number);
+    const asOf=Date.UTC(ay,am-1,ad);
+    const ser=(series||[]).slice().sort((a,b)=>a.date<b.date?-1:1)
+      .map(s=>({ms:Date.UTC(...s.date.split('-').map((x,i)=>i===1?x-1:+x)),points:s.points}));
+    const [sy,sm]=win.start.split('-').map(Number);
+    const labels=[], reqLine=[], actLine=[];
+    for(let i=0;i<12;i++){
+      const mIdx=(sm-1)+i, y=sy+Math.floor(mIdx/12), mo=((mIdx%12)+12)%12;
+      const monthStart=Date.UTC(y,mo,1), monthEnd=Date.UTC(y,mo+1,0);
+      labels.push(MON[mo]+" '"+String(y).slice(2));
+      const frac=Math.min(Math.max((Math.min(monthEnd,end)-start)/864e5+1,0)/totalDays,1);
+      reqLine.push(target?Math.round(target*frac):null);
+      if(monthStart>asOf){actLine.push(null);}
+      else{const cut=Math.min(monthEnd,asOf);let run=0;for(const s of ser)if(s.ms<=cut)run+=s.points;actLine.push(Math.round(run));}
+    }
+    const ds=[{label:'Your production',data:actLine,borderColor:color,backgroundColor:hexA(color,.16),tension:.2,pointRadius:2,fill:true,spanGaps:false}];
+    if(target)ds.push({label:'Required pace to qualify',data:reqLine,borderColor:'#d64545',borderWidth:2.5,borderDash:[8,5],pointRadius:0,fill:false});
+    const maxY=Math.max(...actLine.filter(x=>x!=null),target||0)*1.05;
     return new Chart($(id),{type:'line',data:{labels,datasets:ds},
       options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-        scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:7}},
+        scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},
           y:{beginAtZero:true,suggestedMax:maxY,ticks:{callback:v=>Number(v).toLocaleString()},grid:{color:GRID}}},
-        plugins:{legend:{display:!!target,position:'bottom'},tooltip:{callbacks:{label:c=>num0(c.parsed.y)+' pts'}}}}});
+        plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y==null?'—':num0(c.parsed.y)+' pts')}}}}});
   }
   charts.convPersonal=convProg('#convPersonalChart',V.personal_series,lt?lt.personal:null,COLORS.resid);
   charts.convDownline=convProg('#convDownlineChart',V.combined_series,lt?lt.downline:null,COLORS.nb);
