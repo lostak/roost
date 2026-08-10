@@ -188,12 +188,20 @@ function buildSummary(allRecords, config) {
     });
   }
 
+  // ---- enrollments: count a new policy once, on the date of its first advance ----
+  const enrollFirst = {};
+  for (const r of records) for (const it of (r.items || []))
+    if (it.section === 'advances' && it.policy && (!enrollFirst[it.policy] || r.date < enrollFirst[it.policy]))
+      enrollFirst[it.policy] = r.date;
+  const enrollByDate = {};
+  for (const p in enrollFirst) { const d = enrollFirst[p]; enrollByDate[d] = (enrollByDate[d] || 0) + 1; }
+
   // ---- per-statement time series ----
   const series = records.map(r => ({
     date: r.date, year: r.year,
     net: num(r.pay_period_net), advances: num(r.advances_total),
     residual: num(r.residual_total), chargebacks: num(r.chargebacks_total),
-    bonus: num(r.bonus_total),
+    bonus: num(r.bonus_total), enrollments: enrollByDate[r.date] || 0,
   }));
 
   // ---- residual & new-business by carrier ----
@@ -676,6 +684,10 @@ function buildSummary(allRecords, config) {
     downline,
     projections,
     insights,
+    goals: {
+      config: (config.goals && typeof config.goals === 'object') ? config.goals : {},
+      current_year: allYears[allYears.length - 1] || new Date().getFullYear(),
+    },
     pending: {
       count: pendingRecs.length,
       latest_date: latestPending ? latestPending.date : null,

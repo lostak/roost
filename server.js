@@ -304,6 +304,31 @@ function handleDownlineHierarchy(req, res) {
   });
 }
 
+// ---- goals (annual net-paid target per year) ----
+// Persists into config.json as goals { "<year>": { net: <number> } }.
+function handleGoals(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cfg = loadConfig();
+      const goals = (cfg.goals && typeof cfg.goals === 'object') ? cfg.goals : {};
+      const year = String(parseInt(o.year, 10));
+      const net = Number(o.net);
+      if (!/^\d{4}$/.test(year)) throw new Error('invalid year');
+      if (!isFinite(net) || net < 0) { delete goals[year]; }         // clearing the goal
+      else { goals[year] = { net: Math.round(net) }; }
+      cfg.goals = goals;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', goals });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 const server = http.createServer((req, res) => {
   try {
     const url = req.url.split('?')[0];
@@ -318,6 +343,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/downline-hierarchy' && req.method === 'POST') {
       return handleDownlineHierarchy(req, res);
+    }
+    if (url === '/api/goals' && req.method === 'POST') {
+      return handleGoals(req, res);
     }
     if (url === '/api/data') {
       const records = loadStatements();

@@ -84,6 +84,9 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .tablecard{overflow-x:auto}
 .searchbox{font-family:inherit;font-size:14px;padding:10px 16px;border:1px solid var(--outline-var);
   border-radius:24px;background:var(--surface);width:280px;margin-bottom:16px;color:var(--on-surface)}
+.numbox,.sel{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--outline-var);
+  border-radius:10px;background:var(--surface);color:var(--on-surface)}
+.numbox{width:150px}
 .banner{background:var(--primary-container);color:var(--on-primary-container);padding:12px 18px;
   border-radius:12px;font-size:13px;margin-bottom:20px}
 .caveat{background:#fff4e0;color:#5a4300;border:1px solid #f0d089;padding:12px 18px;border-radius:12px;font-size:13px;margin-bottom:20px}
@@ -215,6 +218,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
     <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
     <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
     <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
+    <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
     <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
   </nav>
   <main class="main">
@@ -527,6 +531,56 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         </div>
       </section>
 
+      <!-- GOALS -->
+      <section class="view" id="view-goals">
+        <h2 class="section">Annual goal &amp; pace</h2>
+        <div class="banner">Set your <b>annual net-paid goal</b> for the year. Roost tracks where you actually are versus where you need to be by this point in the calendar year (goal &times; share of the year elapsed), and breaks down how new business, residual, and enrollments are getting you there.</div>
+        <div class="card" style="margin-bottom:24px">
+          <div class="controls" style="gap:14px;flex-wrap:wrap">
+            <span class="lbl-inline">Year</span>
+            <select id="goalYear" class="sel"></select>
+            <span class="lbl-inline">Net-paid goal $</span>
+            <input type="number" id="goalInput" class="numbox" min="0" step="1000" placeholder="e.g. 250000">
+            <button class="btn tonal" id="goalSave" onclick="saveGoal()"><span>&#128190;</span> Save goal</button>
+            <span class="hint" id="goalSaveMsg" style="align-self:center"></span>
+          </div>
+        </div>
+        <div class="kpis" id="goalKpis"></div>
+        <div class="card chart-card">
+          <h3>Pace to goal</h3>
+          <div class="controls"><span class="lbl-inline">Timeframe:</span>
+            <div class="seg grainSeg">
+              <button data-g="week">Week</button>
+              <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+              <button data-g="year">Year</button>
+            </div>
+          </div>
+          <p class="hint">Bars = actual net each period. The line = the cumulative pace you need to hit the goal by year-end (evenly across the calendar). Dashed marker = where you should be today.</p>
+          <div class="chart-wrap"><canvas id="goalPaceChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Cumulative: actual vs. required</h3>
+          <p class="hint">Your running net for the year against the straight-line path to goal. Above the line = ahead of pace.</p>
+          <div class="chart-wrap"><canvas id="goalCumChart"></canvas></div>
+        </div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>What's driving your net this year</h3>
+            <p class="hint">New business, residual and chargebacks that make up your net so far &mdash; plus enrollments written.</p>
+            <div class="chart-wrap"><canvas id="goalDriverChart"></canvas></div>
+          </div>
+          <div class="card chart-card tablecard">
+            <h3>Drivers, year to date</h3>
+            <table id="goalDriverTable"></table>
+          </div>
+        </div>
+        <h2 class="section" style="margin-top:28px">What's working &amp; what to change</h2>
+        <div class="grid2">
+          <div class="ins-col"><h3>&#9989; Working</h3><div id="goalWorking"></div></div>
+          <div class="ins-col"><h3>&#127919; To hit the goal</h3><div id="goalToDo"></div></div>
+        </div>
+      </section>
+
       <!-- POLICIES -->
       <section class="view" id="view-policies">
         <h2 class="section">Recurring residual policies</h2>
@@ -558,7 +612,7 @@ const METRICS={
   avg_per_statement:{label:'Avg / statement',color:'#bc5090',money:true},
 };
 const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
-let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual';
+let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null;
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
 function themeColors(){
@@ -684,6 +738,7 @@ function render(){
   buildMetricChips();
   renderComparison();
   renderProjections();
+  renderGoals();
   renderPolicies(yl);
   renderReclassNotes();
 }
@@ -1259,6 +1314,147 @@ function projDraw(){
       <td><b>${fmt0(r.total)}</b></td><td class="${cls(r.net)}">${fmt0(r.net)}</td></tr>`).join('')+'</tbody>';
 }
 
+// ================= GOALS =================
+const PERIODS={week:52,month:12,quarter:4,year:1};
+function periodFrac(b,grain){ // share of the calendar year elapsed by the END of this bucket
+  if(grain==='year')return 1;
+  if(grain==='quarter')return (b.q+1)/4;
+  if(grain==='month')return Number(b.key.slice(5,7))/12;
+  if(grain==='week')return Math.min(Number(b.key.slice(6))/52,1);
+  return 1;
+}
+function dayInfo(dateStr,year){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const start=Date.UTC(year,0,1), end=Date.UTC(year+1,0,1), cur=Date.UTC(y,m-1,d);
+  const yearDays=(end-start)/86400000;
+  const elapsed=Math.min(Math.max((cur-start)/86400000+1,0),yearDays);
+  return {yearDays,elapsed,frac:elapsed/yearDays,weeksLeft:Math.max(0,(yearDays-elapsed)/7)};
+}
+async function saveGoal(){
+  const year=Number($('#goalYear').value), net=Number($('#goalInput').value);
+  $('#goalSaveMsg').textContent='Saving…';
+  try{
+    const r=await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({year,net:isFinite(net)?net:''})});
+    const j=await r.json();
+    if(j.status!=='ok')throw new Error(j.message||'error');
+    DATA.goals.config=j.goals;
+    $('#goalSaveMsg').textContent='Saved.';
+    setTimeout(()=>{$('#goalSaveMsg').textContent='';},1800);
+    renderGoals();
+  }catch(e){$('#goalSaveMsg').textContent='Could not save: '+e.message;}
+}
+function renderGoals(){
+  ['goalPace','goalCum','goalDriver'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const G=DATA.goals||{config:{},current_year:(DATA.all_years||[]).slice(-1)[0]};
+  const years=DATA.all_years||[];
+  if(GOAL_YEAR==null||!years.includes(GOAL_YEAR)) GOAL_YEAR=G.current_year;
+  const sel=$('#goalYear');
+  sel.innerHTML=years.map(y=>`<option value="${y}"${y===GOAL_YEAR?' selected':''}>${y}</option>`).join('');
+  sel.onchange=()=>{GOAL_YEAR=Number(sel.value);renderGoals();};
+  const year=GOAL_YEAR;
+  const goal=(G.config[year]&&Number(G.config[year].net))||0;
+  if(document.activeElement!==$('#goalInput')) $('#goalInput').value=goal?goal:'';
+
+  const rows=(DATA.series||[]).filter(s=>s.year===year).sort((a,b)=>a.date<b.date?-1:1);
+  const sum=f=>rows.reduce((s,r)=>s+(r[f]||0),0);
+  const ytdNet=sum('net'), ytdNew=sum('advances'), ytdRes=sum('residual'), ytdCB=sum('chargebacks'), ytdEnr=sum('enrollments');
+  const asOf=rows.length?rows[rows.length-1].date:(year+'-01-01');
+  const di=dayInfo(asOf,year);
+  const needed=goal*di.frac, delta=ytdNet-needed;
+  const projected=di.frac>0?ytdNet/di.frac:ytdNet, gap=goal-ytdNet;
+  const avgWk=di.elapsed>0?ytdNet/(di.elapsed/7):0;
+  const needWk=di.weeksLeft>0?Math.max(0,gap)/di.weeksLeft:0;
+  const pct=goal>0?Math.round(ytdNet/goal*100):0;
+
+  // ---- KPIs ----
+  let kp;
+  if(!goal){
+    kp=[{l:'No goal set',v:'—',s:`Enter a ${year} net-paid goal above to start tracking`,gold:true},
+      {l:`${year} net so far`,v:fmt0(ytdNet),s:`as of ${asOf}`},
+      {l:'New business YTD',v:fmt0(ytdNew),s:`${ytdEnr} enrollments`},
+      {l:'Residual YTD',v:fmt0(ytdRes),s:'recurring'}];
+  }else{
+    const ahead=delta>=0;
+    kp=[
+      {l:`${year} goal (net)`,v:fmt0(goal),s:'annual net-paid target',gold:true},
+      {l:'Net so far',v:fmt0(ytdNet),s:`${pct}% of goal · as of ${asOf}`},
+      {l:ahead?'Ahead of pace':'Behind pace',v:(ahead?'+':'−')+fmt0(Math.abs(delta)).replace('$','$'),
+        s:`need ${fmt0(needed)} by now (${Math.round(di.frac*100)}% of year)`},
+      {l:'Projected year-end',v:fmt0(projected),s:`${gap>0?'short by '+fmt0(gap):'over by '+fmt0(-gap)} at current pace`},
+      {l:'To finish on goal',v:fmt0(needWk)+'/wk',s:`over ${Math.round(di.weeksLeft)} wks left · lately ${fmt0(avgWk)}/wk`}
+    ];
+  }
+  $('#goalKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+
+  // ---- pace chart: actual net per period vs even target per period ----
+  const buckets=bucketSeries(GRAIN,rows);
+  const perTarget=goal?goal/PERIODS[GRAIN]:0;
+  charts.goalPace=new Chart($('#goalPaceChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),datasets:[
+    {label:'Actual net',data:buckets.map(b=>b.net),backgroundColor:COLORS.resid},
+    ...(goal?[{label:'Target',data:buckets.map(()=>perTarget),backgroundColor:hexA(COLORS.nb,.55)}]:[])
+  ]},options:timeAxis(buckets,{money:true})});
+
+  // ---- cumulative: actual vs required straight line ----
+  let run=0; const cumActual=buckets.map(b=>(run+=b.net));
+  const cumReq=goal?buckets.map(b=>goal*periodFrac(b,GRAIN)):[];
+  const cumDs=[{label:'Cumulative net',data:cumActual,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.2,pointRadius:2,fill:false}];
+  if(goal)cumDs.push({label:'Required pace',data:cumReq,borderColor:hexA(COLORS.nb,.9),borderDash:[6,4],backgroundColor:'transparent',pointRadius:0,fill:false});
+  charts.goalCum=new Chart($('#goalCumChart'),{type:'line',data:{labels:buckets.map(b=>b.label),datasets:cumDs},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      scales:{x:{grid:{color:GRID}},y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
+      plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
+
+  // ---- driver breakdown ----
+  charts.goalDriver=new Chart($('#goalDriverChart'),{type:'bar',data:{labels:['New business','Residual','Chargebacks','Net'],
+    datasets:[{label:year+' YTD',data:[ytdNew,ytdRes,ytdCB,ytdNet],
+      backgroundColor:[COLORS.nb,COLORS.resid,'#b3261e','#4a6364']}]},options:baropts(false,false)});
+
+  const share=v=>ytdNet?Math.round(v/ytdNet*100)+'%':'—';
+  const rr=v=>di.frac>0?v/di.frac:v;
+  $('#goalDriverTable').innerHTML=thead(['Driver','YTD','Share of net','Annualized pace'])
+    +'<tbody>'
+    +`<tr><td>New business</td><td>${fmt0(ytdNew)}</td><td>${share(ytdNew)}</td><td>${fmt0(rr(ytdNew))}</td></tr>`
+    +`<tr><td>Residual</td><td>${fmt0(ytdRes)}</td><td>${share(ytdRes)}</td><td>${fmt0(rr(ytdRes))}</td></tr>`
+    +`<tr><td>Chargebacks</td><td class="neg">${fmt0(ytdCB)}</td><td>${share(ytdCB)}</td><td>${fmt0(rr(ytdCB))}</td></tr>`
+    +`<tr><td><b>Net</b></td><td><b>${fmt0(ytdNet)}</b></td><td>100%</td><td><b>${fmt0(rr(ytdNet))}</b></td></tr>`
+    +`<tr><td>Enrollments</td><td>${ytdEnr}</td><td>—</td><td>${Math.round(rr(ytdEnr))}</td></tr>`
+    +'</tbody>';
+
+  goalInsights({year,goal,ytdNet,ytdNew,ytdRes,ytdCB,ytdEnr,needed,delta,projected,gap,avgWk,needWk,di,asOf});
+}
+function goalInsights(x){
+  const card=(t,b,cl)=>`<div class="ins ${cl}"><div class="ins-t">${t}</div><div class="ins-b">${b}</div></div>`;
+  const work=[],todo=[];
+  if(!x.goal){
+    $('#goalWorking').innerHTML='<div class="ins-b">Set a goal above to see what’s working toward it.</div>';
+    $('#goalToDo').innerHTML='<div class="ins-b">Once a goal is set, Roost shows the pace and the gap to close.</div>';
+    return;
+  }
+  const nbTop=(DATA.new_by_carrier||[])[0], resTop=(DATA.residual_by_carrier||[])[0];
+  const avgInit=x.ytdEnr?x.ytdNew/x.ytdEnr:0;
+  // Working
+  if(x.delta>=0) work.push(card('Ahead of pace',`You're <b>${fmt0(x.delta)}</b> ahead of where you need to be, on track to finish about <b>${fmt0(x.projected)}</b> vs a <b>${fmt0(x.goal)}</b> goal.`,'good'));
+  if(x.ytdRes>0) work.push(card('Residual is doing the heavy lifting',`Recurring residual is <b>${fmt0(x.ytdRes)}</b> (${x.ytdNet?Math.round(x.ytdRes/x.ytdNet*100):0}% of net) — income you keep earning without writing anything new.`,'good'));
+  if(x.ytdEnr>0) work.push(card('New enrollments are landing',`<b>${x.ytdEnr}</b> new policies written this year at ~<b>${fmt0(avgInit)}</b> of new-business commission each.`,'good'));
+  if(nbTop) work.push(card('Top new-business carrier',`<b>${nbTop.carrier}</b> is your biggest new-business source. Leaning into what already converts is the fastest lift.`,'good'));
+  if(!work.length) work.push(card('Getting started',`Track builds as more ${x.year} statements come in.`,'good'));
+  // To hit the goal
+  if(x.gap>0){
+    todo.push(card('Close the gap',`You need <b>${fmt0(x.gap)}</b> more to reach the goal. Over the ~<b>${Math.round(x.di.weeksLeft)}</b> weeks left that's <b>${fmt0(x.needWk)}/week</b> — versus <b>${fmt0(x.avgWk)}/week</b> lately.`,'focus'));
+    if(x.needWk>x.avgWk*1.05) todo.push(card('Pace needs to step up',`The required <b>${fmt0(x.needWk)}/week</b> is above your recent run-rate. New business is the main lever — residual compounds slowly, so extra enrollments move the number fastest.`,'focus'));
+    else todo.push(card('Stay the course',`Your recent <b>${fmt0(x.avgWk)}/week</b> is enough to reach the goal if you hold it. Protect renewals (watch chargebacks) so residual doesn't leak.`,'focus'));
+    if(avgInit>0) todo.push(card('In enrollments',`At ~<b>${fmt0(avgInit)}</b> per new policy, roughly <b>${Math.ceil(x.gap/avgInit)}</b> more enrollments would cover the remaining gap.`,'focus'));
+    todo.push(card('Use the season',`Medicare skews to AEP (Oct–Dec) and the Jan effective-date wave, so new business — and the gap — can close quickly in Q4/Q1.`,'focus'));
+  }else{
+    todo.push(card('Goal in reach',`At the current pace you finish about <b>${fmt0(x.projected)}</b>, <b>${fmt0(-x.gap)}</b> over goal. Consider setting a stretch target, or bank the cushion against Q4 chargebacks.`,'focus'));
+  }
+  if(x.ytdCB<0) todo.push(card('Watch chargebacks',`Chargebacks are running <b>${fmt0(x.ytdCB)}</b> this year. Each lapse claws back paid commission and drops the residual — retention protects the goal.`,'focus'));
+  $('#goalWorking').innerHTML=work.join('');
+  $('#goalToDo').innerHTML=todo.join('');
+}
+
 function renderPolicies(yl){
   const q=($('#polSearch').value||'').toLowerCase();
   const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
@@ -1272,7 +1468,7 @@ function renderPolicies(yl){
 
 // ---- selectors / wiring ----
 function syncGrainSegs(){document.querySelectorAll('.grainSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===GRAIN));}
-function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderNewBusiness();renderResidual();renderCarriers();renderDownline();
+function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderNewBusiness();renderResidual();renderCarriers();renderDownline();renderGoals();
   try{localStorage.setItem('grain',g);}catch(e){}}
 function segPick(container,attr,cb){$(container).addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;
