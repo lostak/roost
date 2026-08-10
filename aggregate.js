@@ -976,7 +976,11 @@ function buildSummary(allRecords, config) {
     const cp = convPointsFor(fam, d.premium, d.carrier, d.product);
     const ags = d.agents || [];
     const otherListed = ags.reduce((s, a) => s + (selfSet.has(normName(a.name)) ? 0 : (a.level || 0)), 0);
-    const selfShare = Math.max(0, Math.min(100, 100 - otherListed)) / 100;   // your cut of this policy
+    // A policy a DOWNLINE agent wrote is override income (their production, not yours) — it
+    // counts toward downline/combined, NOT personal. Peer splits (co-agents who aren't your
+    // downline) still count your share as personal.
+    const hasDownline = ags.some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
+    const selfShare = hasDownline ? 0 : Math.max(0, Math.min(100, 100 - otherListed)) / 100;   // your cut, if you wrote it
     const dlShare = ags.reduce((s, a) => s + ((isDL[normName(a.name)] && !selfSet.has(normName(a.name))) ? (a.level || 0) : 0), 0) / 100;
     const pPts = cp.pts * selfShare, dPts = cp.pts * dlShare;
     convApps++; if (selfShare > 0) convPApps++;
