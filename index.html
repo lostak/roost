@@ -57,7 +57,7 @@ body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);
 .navgroup.collapsed .navgroup-items{display:none}
 .navgroup.collapsed .navgroup-header .arrow{transform:rotate(-90deg)}
 .navgroup.hasactive .navgroup-header{color:var(--primary);opacity:1}
-.main{flex:1;padding:24px 28px;max-width:1240px}
+.main{flex:1;min-width:0;padding:24px 28px;max-width:1240px}
 .view{display:none;animation:fade .25s ease} .view.active{display:block}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px 0 16px;
@@ -75,7 +75,7 @@ h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px
 .chart-card h3{font-size:15px;font-weight:500;margin:0 0 4px}
 .chart-card p.hint{font-size:12px;color:var(--on-surface-var);margin:0 0 14px}
 .chart-wrap{position:relative;height:340px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}
   .navgroup-header{display:none}.navgroup-items{margin:0;padding:0;border:none}
   .navgroup.collapsed .navgroup-items{display:block}}
@@ -93,7 +93,8 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .spinner{width:36px;height:36px;border:4px solid var(--outline-var);border-top-color:var(--primary);
   border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.tablecard{overflow-x:auto}
+.tablecard{overflow-x:auto;max-width:100%}
+.tablecard table{min-width:max-content}
 .searchbox{font-family:inherit;font-size:14px;padding:10px 16px;border:1px solid var(--outline-var);
   border-radius:24px;background:var(--surface);width:280px;margin-bottom:16px;color:var(--on-surface)}
 tr.rowlink{cursor:pointer;transition:background .12s}
