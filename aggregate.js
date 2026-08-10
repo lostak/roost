@@ -871,6 +871,20 @@ function buildSummary(allRecords, config) {
     cashflow,
     cashflow_total: round2(cashflow.reduce((s, m) => s + m.amount, 0)),
   };
+  // AEP re-enrollment forecast: next year's Medicare Advantage renewal income. Every active
+  // MA member (including this year's new enrollments, who begin paying in January) renews at
+  // roughly their per-member annual residual, discounted by the retention rate.
+  const activeMA = famMA ? famMA.active : 0;
+  const perMemberAnnual = round2(matureMAMonthly * 12);
+  const maRetention = (famMA && famMA.persistency != null) ? famMA.persistency : 0.85;
+  value.ma_renewal = {
+    active_members: activeMA,
+    new_this_year: newMAThisYear,
+    per_member_annual: perMemberAnnual,
+    retention: maRetention,
+    next_year_income: round2(activeMA * perMemberAnnual * maRetention),
+    next_year_income_full: round2(activeMA * perMemberAnnual),  // if every member renews
+  };
 
   return {
     generated: new Date().toISOString().slice(0, 19),

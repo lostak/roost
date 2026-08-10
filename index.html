@@ -550,6 +550,10 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         <h2 class="section">Book value &amp; forward cash flow</h2>
         <div class="banner">What you're building. Your in-force residual is an asset &mdash; agencies buy and sell books at a multiple of annual renewals. The cash-flow calendar shows the recurring residual you can expect over the next 12 months if the book holds, including the step-up in January when this year's new Medicare Advantage members begin paying.</div>
         <div class="kpis" id="valKpis"></div>
+        <div class="card" id="aepCard" style="margin-bottom:24px">
+          <h3 style="margin-top:0">AEP re-enrollment forecast &mdash; next-year Medicare Advantage renewals</h3>
+          <p class="hint" id="aepNote"></p>
+        </div>
         <div class="card chart-card">
           <h3>Expected residual, next 12 months</h3>
           <p class="hint">Current residual run-rate held flat (teal), plus the January step-up as this year's new Medicare Advantage members start paying (gold). Assumes the book holds &mdash; lapses would lower it.</p>
@@ -1771,6 +1775,14 @@ function renderValue(){
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
     plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
+  const mr=V.ma_renewal;
+  if(mr){
+    $('#aepNote').innerHTML=`You have <b>${mr.active_members}</b> active Medicare Advantage members`
+      +(mr.new_this_year?` (${mr.new_this_year} written this year, who start paying in January)`:'')
+      +`. At about <b>${fmt0(mr.per_member_annual)}</b> renewal per member and your observed <b>${Math.round(mr.retention*100)}%</b> retention, `
+      +`next year's MA renewal income projects to roughly <b>${fmt0(mr.next_year_income)}</b> `
+      +`(up to <b>${fmt0(mr.next_year_income_full)}</b> if everyone re-enrolls). Protecting these members through AEP is the cheapest income you'll earn all year — no new writing required.`;
+  } else { const ac=$('#aepCard'); if(ac)ac.style.display='none'; }
   $('#valNote').innerHTML=`Valued at <b>${fmt0(bv.mid||0)}</b> (midpoint of ${bv.mult_low}–${bv.mult_high}× your ${fmt0(V.residual_annual||0)} annualized residual). `
     +`Your <b>${V.new_ma_this_year||0}</b> new Medicare Advantage members written this year begin paying residual in January, adding about <b>${fmt0(V.ma_step_up_monthly||0)}/month</b> (~${fmt0((V.ma_step_up_monthly||0)*12)}/yr) to the recurring book. `
     +`This is an estimate of the recurring stream only — it excludes new business you'll write and assumes current policies persist.`;
