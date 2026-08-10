@@ -836,11 +836,15 @@ function buildSummary(allRecords, config) {
       components, drops,
       printed_latest: latest ? round2(latest.ytd_total) : null, printed_latest_date: latest ? latest.date : null };
   });
-  // residual "dip" watch: a policy whose latest residual is well under its own median (excl.
-  // Medicare Advantage, whose initial->monthly transition would false-positive).
+  // residual "dip" watch: a policy whose latest residual is well under its own median.
+  // Exclude families whose payout structure naturally steps down and would false-positive:
+  //  - Medicare Advantage (large initial -> small monthly renewal), and
+  //  - Life / Final Expense (first year is ~9 months advanced, then months 10-12 paid
+  //    "as earned", so those trailing payments are legitimately smaller).
+  const DIP_SKIP = new Set(['Medicare Advantage', 'Life / Final Expense']);
   const payByPol = {};
   for (const r of nonPending) for (const it of (r.items || [])) {
-    if (it.section === 'commission' && it.policy && it.payable > 0 && productFamily(it.product) !== 'Medicare Advantage')
+    if (it.section === 'commission' && it.policy && it.payable > 0 && !DIP_SKIP.has(productFamily(it.product)))
       (payByPol[it.policy] ||= { client: it.client, carrier: it.carrier, product: it.product, pays: [] })
         .pays.push({ date: r.date, amt: it.payable });
   }
