@@ -39,9 +39,19 @@ function reclassifyMA(records, opts) {
   for (const k in byPol) if (byPol[k].length >= 3) polBase[k] = median(byPol[k]);
   const MULT = opts.mult != null ? opts.mult : 3.5;   // an initial is ~12x a monthly residual
   const FLOOR = Math.max(opts.floor_min != null ? opts.floor_min : 80, round2(gMed * 3)); // never touch small recurring amounts
-  let moved = 0, dollars = 0;
+  // New business for an MA policy is the first-enrollment payout cluster: the initial
+  // commission PLUS the initial-enrollment bonus, which land in the same enrollment
+  // window (same day up to a few months apart). Large payouts in LATER years are
+  // renewals -- a payout on an existing line of business -- and must stay residual.
+  // We also never touch a policy that already booked a real advance elsewhere: its
+  // commission lines are renewals/residual, not another new-business event.
+  const ENROLL_WINDOW_DAYS = 150; // initial + enrollment bonus fall within this of the first payout
+  const hasAdvance = new Set();
+  for (const r of records) for (const it of (r.items || []))
+    if (it.section === 'advances' && it.policy) hasAdvance.add(it.policy);
+
+  const candByPol = {};   // policy -> [all qualifying commission lines]
   for (const r of records) {
-    let changed = false;
     for (const it of (r.items || [])) {
       if (it.section !== 'commission' || !(it.payable > 0)) continue;
       // Only reclassify genuine policy commissions -- skip bonus/trip/adjustment/MISC
@@ -49,21 +59,31 @@ function reclassifyMA(records, opts) {
       // MA initials; they just happen to be large and sit in the commission section.
       if (!it.policy || it.product === 'MISC' ||
           /BONUS|ADJUST|1099|TRIP|EXPENSE|EARNINGS/i.test(`${it.policy} ${it.client} ${it.product}`)) continue;
-      const base = (it.policy && polBase[it.policy] != null) ? polBase[it.policy] : gMed;
-      if (it.payable >= base * MULT && it.payable >= FLOOR) {
-        it.section = 'advances'; it.ma_initial = true;
-        moved++; dollars += it.payable; changed = true;
-      }
+      if (hasAdvance.has(it.policy)) continue;   // policy already had its new-business event
+      const base = polBase[it.policy] != null ? polBase[it.policy] : gMed;
+      if (!(it.payable >= base * MULT && it.payable >= FLOOR)) continue;
+      (candByPol[it.policy] ||= []).push({ it, date: r.date || '', payable: it.payable, r });
     }
-    if (changed) {
-      let adv = 0, res = 0;
-      for (const it of (r.items || [])) {
-        if (it.section === 'advances') adv += it.payable;
-        else if (it.section === 'commission') res += it.payable;
-      }
-      r.advances_total = round2(adv);
-      r.residual_total = round2(res);
+  }
+  let moved = 0, dollars = 0; const touched = new Set();
+  for (const k in candByPol) {
+    const list = candByPol[k].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const first = Date.parse(list[0].date + 'T00:00:00Z');
+    for (const c of list) {                       // enrollment cluster = new business; later = renewal (residual)
+      const d = Date.parse(c.date + 'T00:00:00Z');
+      if (isFinite(first) && isFinite(d) && (d - first) / 86400000 > ENROLL_WINDOW_DAYS) break;
+      c.it.section = 'advances'; c.it.ma_initial = true;
+      moved++; dollars += c.payable; touched.add(c.r);
     }
+  }
+  for (const r of touched) {                      // rebuild affected records' section totals
+    let adv = 0, res = 0;
+    for (const it of (r.items || [])) {
+      if (it.section === 'advances') adv += it.payable;
+      else if (it.section === 'commission') res += it.payable;
+    }
+    r.advances_total = round2(adv);
+    r.residual_total = round2(res);
   }
   return { moved, dollars: round2(dollars), global_median: round2(gMed), floor: FLOOR, mult: MULT };
 }
