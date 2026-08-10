@@ -503,7 +503,15 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
           </div>
         </div>
         <div class="card chart-card">
-          <h3>Residual trajectory</h3>
+          <h3 id="projTrajTitle">Residual trajectory</h3>
+          <div class="controls">
+            <span class="lbl-inline">Show:</span>
+            <div class="seg" id="projMetric">
+              <button data-m="residual" class="on">Residual</button>
+              <button data-m="newbiz">New business</button>
+              <button data-m="total">Total</button>
+            </div>
+          </div>
           <p class="hint">Solid = history, dashed = projection. The current (partial) year is shown at its annualized run-rate so it compares like-for-like with completed years. Shaded band spans a conservative-to-optimistic range around your assumptions.</p>
           <div class="chart-wrap"><canvas id="projChart"></canvas></div>
         </div>
@@ -555,7 +563,7 @@ const METRICS={
   avg_per_statement:{label:'Avg / statement',color:'#bc5090',money:true},
 };
 const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
-let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null;
+let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual';
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
 function themeColors(){
@@ -1217,19 +1225,27 @@ function projDraw(){
   $('#projKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
 
+  // metric switch: residual / new business / total, applied to history + all three forward lines
+  const m=projMetric;
+  const label=m==='newbiz'?'New business':m==='total'?'Total income':'Residual';
+  const color=m==='newbiz'?COLORS.nb:COLORS.resid;
+  $('#projTrajTitle').textContent=label+' trajectory';
+  const fwd=r=>m==='newbiz'?r.newbiz:m==='total'?r.total:r.residual;   // forward projected years
+  const hv=h=>{const res=h.residual_annualized!=null?h.residual_annualized:h.residual,   // annualize partial current yr
+    nb=h.advances_annualized!=null?h.advances_annualized:h.advances;
+    return m==='newbiz'?nb:m==='total'?(res+nb):res;};
   const hist=P.hist||[], nH=hist.length;
-  const hv=h=>h.residual_annualized!=null?h.residual_annualized:h.residual; // annualize partial current yr
   const labels=[...hist.map(h=>String(h.year)),...base.map(r=>String(r.year))];
   const pad=n=>Array(n).fill(null);
-  const baseLine=[...hist.map(hv),...base.map(r=>r.residual)];
-  const optLine=[...pad(nH),...optm.map(r=>r.residual)];
-  const consLine=[...pad(nH),...cons.map(r=>r.residual)];
+  const baseLine=[...hist.map(hv),...base.map(fwd)];
+  const optLine=[...pad(nH),...optm.map(fwd)];
+  const consLine=[...pad(nH),...cons.map(fwd)];
   if(nH>0){optLine[nH-1]=hv(hist[nH-1]);consLine[nH-1]=hv(hist[nH-1]);}
   if(charts.proj)charts.proj.destroy();
   charts.proj=new Chart($('#projChart'),{type:'line',data:{labels,datasets:[
     {label:'Optimistic',data:optLine,borderColor:'transparent',backgroundColor:'transparent',pointRadius:0,fill:false,spanGaps:true},
-    {label:'Range',data:consLine,borderColor:'transparent',backgroundColor:hexA(COLORS.resid,.15),fill:'-1',pointRadius:0,spanGaps:true},
-    {label:'Residual',data:baseLine,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.25,pointRadius:3,fill:false,
+    {label:'Range',data:consLine,borderColor:'transparent',backgroundColor:hexA(color,.15),fill:'-1',pointRadius:0,spanGaps:true},
+    {label,data:baseLine,borderColor:color,backgroundColor:color,tension:.25,pointRadius:3,fill:false,
       segment:{borderDash:ctx=>ctx.p0DataIndex>=nH-1?[6,4]:undefined}}
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     scales:{x:{grid:{color:c=>c.index===nH-1?GRIDBOUND:GRID}},
@@ -1272,6 +1288,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('.grainSeg button
 segPick('#overviewType','t',v=>{overviewType=v;renderOverviewTrend();});
 segPick('#nbType','t',v=>{nbType=v;renderNewBusiness();});
 segPick('#cumMetric','m',v=>{cumMetric=v;renderCumulative();});
+segPick('#projMetric','m',v=>{projMetric=v;projDraw();});
 $('#cmpDim').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cmp.dim=b.dataset.d;buildMetricChips();renderComparison();});
 $('#cmpType').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cmp.type=b.dataset.t;buildMetricChips();renderComparison();});
 $('#cmpMetrics').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
