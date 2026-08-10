@@ -455,6 +455,11 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
           <table id="dlAgentTable"></table>
         </div>
         <div class="card chart-card tablecard">
+          <h3>Co-written with you, per agent (excluded from override)</h3>
+          <p class="hint">Policies each downline agent wrote <b>with you on the split</b> (listed levels below 100). Their override is lumped into your own cut on the statement, so it's held out of the override totals above &mdash; shown here for context.</p>
+          <table id="dlCoTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
           <h3>Downline production detail (roster)</h3>
           <table id="dlPolTable"></table>
         </div>
@@ -1009,6 +1014,15 @@ function renderDownline(){
       ${yl.map(y=>`<td>${fmt(a[String(y)]||0)}</td>`).join('')}
       <td>${fmt(a.advances)}</td><td>${fmt(a.residual)}</td><td class="neg">${fmt(a.chargebacks)}</td>
       <td><b>${fmt(a.total)}</b></td><td>${a.count}</td></tr>`).join('')+'</tbody>';
+
+  const coAgents=(dl.agents||[]).filter(a=>a.cw_count).sort((a,b)=>Math.abs(b.cw_total)-Math.abs(a.cw_total));
+  $('#dlCoTable').innerHTML=coAgents.length
+    ? thead(['Writing agent','New business','Residual','Chargebacks','Co-written net','Lines'])
+      +'<tbody>'+coAgents.map(a=>`<tr>
+        <td>${a.name}</td><td>${fmt(a.cw_advances)}</td><td>${fmt(a.cw_residual)}</td>
+        <td class="neg">${fmt(a.cw_chargebacks)}</td><td><b>${fmt(a.cw_total)}</b></td><td>${a.cw_count}</td></tr>`).join('')
+      +'</tbody>'
+    : '<tbody><tr><td class="hint">No co-written production — every downline policy was pure override.</td></tr></tbody>';
 
   $('#dlPolTable').innerHTML=thead(['Date','Client','Carrier','Product','Type','Amount','Writing agents'])
     +'<tbody>'+(dl.policies||[]).slice(0,300).map(p=>`<tr>

@@ -289,6 +289,9 @@ function buildSummary(allRecords, config) {
   const dlTotals = { advances: 0, residual: 0, chargebacks: 0, count: 0 };
   const excluded = { advances: 0, residual: 0, chargebacks: 0, count: 0 }; // co-written with you (lumped)
   const dlPolicies = [];
+  const mkAgent = name => ({ name, total: 0, advances: 0, residual: 0, chargebacks: 0, count: 0,
+    years: {}, carriers: {},
+    cw_total: 0, cw_advances: 0, cw_residual: 0, cw_chargebacks: 0, cw_count: 0 }); // cw = co-written w/ you
   for (const r of records) {
     for (const it of (r.items || [])) {
       const sk = secKey(it.section); if (!sk || !isRealPolicy(it) || !it.agents || !it.agents.length) continue;
@@ -296,13 +299,19 @@ function buildSummary(allRecords, config) {
       if (!onLine.length) continue;                        // no downline agent on this line
       const lvlSum = it.agents.reduce((s, a) => s + (a.level || 0), 0);
       if (lvlSum < 100) {                                  // you hold the remainder -> lumped, exclude
-        excluded[sk] += it.payable; excluded.count += 1; continue;
+        excluded[sk] += it.payable; excluded.count += 1;
+        const seenX = new Set();                           // still break the excluded amount out per agent
+        for (const a of onLine) {
+          const key = normName(a.name); if (seenX.has(key)) continue; seenX.add(key);
+          const m = (agentMap[key] ||= mkAgent(prettyName(a.name)));
+          m['cw_' + sk] += it.payable; m.cw_total += it.payable; m.cw_count += 1;
+        }
+        continue;
       }
       const seen = new Set();
       for (const a of onLine) {
         const key = normName(a.name); if (seen.has(key)) continue; seen.add(key);
-        const m = (agentMap[key] ||= { name: prettyName(a.name), total: 0, advances: 0, residual: 0,
-          chargebacks: 0, count: 0, years: {}, carriers: {} });
+        const m = (agentMap[key] ||= mkAgent(prettyName(a.name)));
         m[sk] += it.payable; m.total += it.payable; m.count += 1;
         m.years[r.year] = (m.years[r.year] || 0) + it.payable;
         m.carriers[it.carrier] = (m.carriers[it.carrier] || 0) + it.payable;
@@ -319,13 +328,15 @@ function buildSummary(allRecords, config) {
   // hierarchy / drag-and-drop config stays stable. Income comes from qualifying lines only;
   // first/last-seen timing comes from all of their appearances (agentSeen, pass 1).
   const agentList = Object.keys(isDL).map(k => {
-    const m = agentMap[k] || { name: allAgents[k], total: 0, advances: 0, residual: 0,
-      chargebacks: 0, count: 0, years: {}, carriers: {} };
+    const m = agentMap[k] || mkAgent(allAgents[k]);
     const t = agentSeen[k] || { first: null, last: null, since100: null };
     const row = { name: m.name || allAgents[k], since: t.first, since_100: t.since100, last_seen: t.last,
       manual: !autoDL[k],   // in the downline but never auto-flagged = manually added
       count: m.count, total: round2(m.total), advances: round2(m.advances),
       residual: round2(m.residual), chargebacks: round2(m.chargebacks),
+      // co-written with you (excluded from override income above), broken out per agent
+      cw_count: m.cw_count, cw_total: round2(m.cw_total), cw_advances: round2(m.cw_advances),
+      cw_residual: round2(m.cw_residual), cw_chargebacks: round2(m.cw_chargebacks),
       top_carrier: (Object.entries(m.carriers).sort((a, b) => b[1] - a[1])[0] || ['', 0])[0] };
     for (const y of allYears) row[y] = round2(m.years[y] || 0);
     return row;
