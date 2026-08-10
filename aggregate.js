@@ -822,8 +822,19 @@ function buildSummary(allRecords, config) {
     const rs = byYr[y] || [];
     const summed = round2(rs.reduce((s, r) => s + num(r.pay_period_net), 0));
     const printed = round2(rs.reduce((m, r) => (r.ytd_total != null && r.ytd_total > m ? r.ytd_total : m), 0));
+    const components = {
+      advances: round2(rs.reduce((s, r) => s + num(r.advances_total), 0)),
+      residual: round2(rs.reduce((s, r) => s + num(r.residual_total), 0)),
+      chargebacks: round2(rs.reduce((s, r) => s + num(r.chargebacks_total), 0)),
+      bonus: round2(rs.reduce((s, r) => s + num(r.bonus_total), 0)),
+    };
+    const withYtd = rs.filter(r => r.ytd_total != null);
+    const latest = withYtd.length ? withYtd[withYtd.length - 1] : null;  // rs is date-sorted
+    const drops = ytdDrops.filter(d => String(d.date).slice(0, 4) === String(y));
     return { year: y, summed_net: summed, printed_ytd: printed, diff: round2(summed - printed),
-      pct: printed ? round2((summed - printed) / printed) : null };
+      pct: printed ? round2((summed - printed) / printed) : null,
+      components, drops,
+      printed_latest: latest ? round2(latest.ytd_total) : null, printed_latest_date: latest ? latest.date : null };
   });
   // residual "dip" watch: a policy whose latest residual is well under its own median (excl.
   // Medicare Advantage, whose initial->monthly transition would false-positive).

@@ -110,6 +110,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
   border-radius:24px;background:var(--surface);width:280px;margin-bottom:16px;color:var(--on-surface)}
 tr.rowlink{cursor:pointer;transition:background .12s}
 tr.rowlink:hover td{background:var(--surface-3)}
+tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
 .backlink{display:inline-block;cursor:pointer;color:var(--primary);font-size:14px;font-weight:600;text-decoration:none}
 .backlink:hover{text-decoration:underline}
 .numbox,.sel{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--outline-var);
@@ -788,8 +789,9 @@ tr.rowlink:hover td{background:var(--surface-3)}
         <div class="kpis" id="audKpis"></div>
         <div class="card chart-card tablecard">
           <h3>Year-to-date reconciliation</h3>
-          <p class="hint">Your summed pay-period net vs. the highest printed YTD on that year's statements. A gap means a statement carries income on a separate stream, or an off-sequence statement is throwing the running total.</p>
+          <p class="hint">Your summed pay-period net vs. the highest printed YTD on that year's statements. A gap means a statement carries income on a separate stream, or an off-sequence statement is throwing the running total. <b>Click a year to see why.</b></p>
           <table id="audReconTable"></table>
+          <div id="audReconDetail" style="display:none;margin-top:16px;padding:16px 18px;border-radius:12px;background:var(--surface-2);font-size:14px;line-height:1.65"></div>
         </div>
         <div class="card chart-card tablecard">
           <h3>&#9888; Off-sequence statements (YTD went backwards)</h3>
@@ -1945,9 +1947,9 @@ function renderAudit(){
   ];
   $('#audKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
-  $('#audReconTable').innerHTML=thead(['Year','Summed net','Printed YTD','Difference'])
-    +'<tbody>'+(A.reconciliation||[]).map(r=>`<tr><td>${r.year}</td><td>${fmt(r.summed_net)}</td>
-      <td>${fmt(r.printed_ytd)}</td><td class="${cls(r.diff)}">${fmt(r.diff)}</td></tr>`).join('')+'</tbody>';
+  $('#audReconTable').innerHTML=thead(['Year','Summed net','Printed YTD','Difference',''])
+    +'<tbody>'+(A.reconciliation||[]).map(r=>`<tr class="rowlink" data-year="${r.year}"><td><b>${r.year}</b></td><td>${fmt(r.summed_net)}</td>
+      <td>${fmt(r.printed_ytd)}</td><td class="${cls(r.diff)}">${fmt(r.diff)}</td><td class="hint">explain &rsaquo;</td></tr>`).join('')+'</tbody>';
   $('#audDropTable').innerHTML=(A.ytd_drops&&A.ytd_drops.length)
     ? thead(['Statement','Printed YTD','Prior statement','Prior YTD','Drop'])
       +'<tbody>'+A.ytd_drops.map(d=>`<tr><td>${d.date}</td><td>${fmt(d.ytd)}</td><td>${d.prev_date}</td>
@@ -1964,6 +1966,40 @@ function renderAudit(){
         <td>${u.latest_date}</td><td class="neg">${fmt(-u.shortfall)}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No residual payments materially below their norm.</td></tr></tbody>';
 }
+
+function explainRecon(r,all){
+  const c=r.components||{}, diff=r.diff;
+  const head=`<b>${r.year}:</b> summed pay-period net <b>${fmt0(r.summed_net)}</b> vs. highest printed year-to-date <b>${fmt0(r.printed_ytd)}</b> &mdash; a difference of <b class="${cls(diff)}">${fmt0(diff)}</b>`
+    +(r.printed_ytd?` (${Math.abs(Math.round((r.pct||0)*100))}%)`:'')+`.`;
+  const breakdown=`Your ${r.year} net is: new business ${fmt0(c.advances)}, residual ${fmt0(c.residual)}, chargebacks ${fmt0(c.chargebacks)}`
+    +(c.bonus?`, bonuses/trips ${fmt0(c.bonus)}`:'')+`.`;
+  const reasons=[];
+  const tol=Math.max(2,(r.printed_ytd||0)*0.005);
+  if(Math.abs(diff)<=tol){ reasons.push('The gap is within rounding &mdash; nothing to chase.'); }
+  else {
+    (r.drops||[]).forEach(d=>reasons.push(`An <b>off-sequence statement on ${d.date}</b> dropped the printed YTD from ${fmt0(d.prev_ytd)} to ${fmt0(d.ytd)} (a ${fmt0(d.drop)} reversal). A year-to-date can't decrease, so that statement is out of sequence or paid on a separate stream &mdash; its income still counts in your net but breaks the carrier's running total.`));
+    if(r.printed_latest!=null && r.printed_latest < r.printed_ytd-1)
+      reasons.push(`Your most recent statement's printed YTD (${fmt0(r.printed_latest)}) is below the year's peak (${fmt0(r.printed_ytd)}) &mdash; a sign the running total was reset or split across payment streams mid-year.`);
+    // equal-and-opposite gap in another year => carrier attributed income to a different year
+    const opp=(all||[]).find(o=>o.year!==r.year && Math.abs(o.diff+diff)<Math.max(2,Math.abs(diff)*0.05));
+    if(opp) reasons.push(`This is almost exactly offset by <b>${fmt0(opp.diff)} in ${opp.year}</b>. The carrier's running total attributed that income to a different calendar year than your pay-period nets did &mdash; the two years reconcile when viewed together.`);
+    if(c.bonus && Math.abs(c.bonus)>1 && Math.abs(Math.abs(diff)-Math.abs(c.bonus))<Math.abs(diff)*0.5)
+      reasons.push(`Bonuses/trips of ${fmt0(c.bonus)} sit in your net, but a carrier's printed YTD usually tracks only the core commission stream &mdash; that alone explains much of the gap.`);
+    reasons.push(diff>0
+      ? `Because your net is <b>higher</b> than the printed YTD, you were paid income the running total didn't fully capture &mdash; typically a separate stream or the off-sequence statement above.`
+      : `Because your net is <b>lower</b> than the printed YTD, the printed figure likely includes a stream or timing your pay-period nets haven't fully accrued into this year.`);
+  }
+  reasons.push(`In short: the printed YTD is the carrier's running figure on the primary stream, while your summed net totals every pay period across all streams. Small differences are normal; reconcile a large one against the flagged statement with the carrier.`);
+  return `<div style="margin-bottom:8px">${head}</div><div class="hint" style="margin-bottom:10px">${breakdown}</div>`
+    +'<ul style="margin:0;padding-left:20px">'+reasons.map(x=>`<li style="margin:5px 0">${x}</li>`).join('')+'</ul>';
+}
+document.addEventListener('click',e=>{
+  const tr=e.target.closest('#audReconTable tbody tr[data-year]'); if(!tr)return;
+  const y=Number(tr.dataset.year), A=DATA.audit||{reconciliation:[]};
+  const r=(A.reconciliation||[]).find(x=>x.year===y); if(!r)return;
+  const box=$('#audReconDetail'); box.innerHTML=explainRecon(r,A.reconciliation); box.style.display='block';
+  document.querySelectorAll('#audReconTable tbody tr').forEach(x=>x.classList.toggle('sel',x===tr));
+});
 
 // ================= CLIENTS & HOUSEHOLDS =================
 function renderClients(){
