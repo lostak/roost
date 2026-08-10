@@ -548,12 +548,18 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         <div class="kpis" id="goalKpis"></div>
         <div class="card chart-card">
           <h3 id="goalTrajTitle">Goal trajectory</h3>
-          <div class="controls"><span class="lbl-inline">Scenario:</span>
+          <div class="controls" style="flex-wrap:wrap;gap:10px 18px">
+            <span class="lbl-inline">Scenario:</span>
             <div class="seg" id="goalTrajMode">
               <button data-t="pace" class="on">Current pace</button>
               <button data-t="residual">Residuals only</button>
-              <button data-t="seasonal">Seasonal (AEP)</button>
               <button data-t="apps">Applications</button>
+            </div>
+            <span class="lbl-inline">Timescale:</span>
+            <div class="seg" id="goalTrajGrain">
+              <button data-t="week">Week</button>
+              <button data-t="month" class="on">Month</button>
+              <button data-t="quarter">Quarter</button>
             </div>
           </div>
           <p class="hint" id="goalTrajHint"></p>
@@ -625,7 +631,7 @@ const METRICS={
   avg_per_statement:{label:'Avg / statement',color:'#bc5090',money:true},
 };
 const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
-let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null, goalTrajMode='pace', _goalCtx=null;
+let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null, goalTrajMode='pace', goalTrajGrain='month', _goalCtx=null;
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
 function themeColors(){
@@ -1452,73 +1458,69 @@ function renderGoalTraj(){
   const c=_goalCtx; if(!c)return;
   const {year,goal,rows,ytdNet,ytdNew,ytdRes,ytdEnr,di,asOf,gap}=c;
   const mode=goalTrajMode;
+  const N={week:52,month:12,quarter:4}[g]||12;
   const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const labels=MON.map(m=>m+" '"+String(year).slice(2));
-  const mNet=Array(12).fill(0),mRes=Array(12).fill(0),mNew=Array(12).fill(0),mEnr=Array(12).fill(0);
-  let lastM=Number(asOf.slice(5,7))-1;
-  for(const r of rows){const mi=Number(r.date.slice(5,7))-1;mNet[mi]+=r.net;mRes[mi]+=r.residual;mNew[mi]+=r.advances;mEnr[mi]+=r.enrollments;if(mi>lastM)lastM=mi;}
-  const elapsedM=Math.max(di.elapsed/30.4368,0.5);
-  const remMonths=11-lastM;                      // whole months left in the year after the last data month
-  const paceM=ytdNet/elapsedM, resM=ytdRes/elapsedM, enrM=ytdEnr/elapsedM;
-  const avgApp=ytdEnr>0?ytdNew/ytdEnr:0;         // average new-business commission per application
-  const seas=(DATA.projections&&DATA.projections.seasonality_net)||null;
-  const paceAnnual=di.frac>0?ytdNet/di.frac:ytdNet;
-  const nul=n=>Array(n).fill(null);
-  const pad=(arr)=>arr.map(v=>Math.round(v));
-
-  // cumulative actuals up to the last data month
+  const start=Date.UTC(year,0,1), yearDays=(Date.UTC(year+1,0,1)-start)/864e5;
+  const doy=ds=>{const[y,m,d]=ds.split('-').map(Number);return (Date.UTC(y,m-1,d)-start)/864e5+1;};
+  // period labels + fraction of the year elapsed at each period's END
+  const labels=[], endFrac=[];
+  for(let i=0;i<N;i++){
+    let lab, ed;
+    if(g==='month'){lab=MON[i]+" '"+String(year).slice(2); ed=(Date.UTC(year,i+1,0)-start)/864e5+1;}
+    else if(g==='quarter'){lab='Q'+(i+1)+" '"+String(year).slice(2); ed=(Date.UTC(year,3*i+3,0)-start)/864e5+1;}
+    else {lab='W'+(i+1); ed=Math.min((i+1)*7,yearDays);}
+    labels.push(lab); endFrac.push(Math.min(ed/yearDays,1));
+  }
+  const pidx=ds=>{const[y,m,d]=ds.split('-').map(Number);
+    if(g==='month')return m-1;
+    if(g==='quarter')return Math.floor((m-1)/3);
+    return Math.min(Math.floor((doy(ds)-1)/7),N-1);};
+  const bNet=Array(N).fill(0), bEnr=Array(N).fill(0);
+  for(const r of rows){const i=pidx(r.date); bNet[i]+=r.net; bEnr[i]+=r.enrollments;}
+  const lastIdx=pidx(asOf);
   const cumNet=[],cumEnr=[]; let rn=0,re=0;
-  for(let i=0;i<12;i++){rn+=mNet[i];re+=mEnr[i];cumNet.push(i<=lastM?Math.round(rn):null);cumEnr.push(i<=lastM?re:null);}
-  const cumNetAt=cumNet[lastM]||ytdNet, cumEnrAt=cumEnr[lastM]||ytdEnr;
-
-  const goalLine=goal?Array(12).fill(goal):null;
-  const reqLine=goal?labels.map((_,i)=>Math.round(goal*(i+1)/12)):null;   // even straight-line to goal by Dec
+  for(let i=0;i<N;i++){rn+=bNet[i];re+=bEnr[i];cumNet.push(i<=lastIdx?Math.round(rn):null);cumEnr.push(i<=lastIdx?re:null);}
+  const cumNetAt=cumNet[lastIdx]!=null?cumNet[lastIdx]:ytdNet, cumEnrAt=cumEnr[lastIdx]!=null?cumEnr[lastIdx]:ytdEnr;
+  const fNow=Math.max(di.frac,1e-6);
+  const paceAnnual=ytdNet/fNow, resAnnual=ytdRes/fNow, appsAnnual=ytdEnr/fNow;
+  const avgApp=ytdEnr>0?ytdNew/ytdEnr:0;                 // avg new-business commission per application
   const DASH=[6,4];
+  // forward: seed the actual value at lastIdx, then extend by an annual-rate function of the
+  // elapsed-fraction delta, so the Dec landing point is identical across week/month/quarter.
+  const fwdLine=(seed,rate)=>{const a=Array(N).fill(null); a[lastIdx]=Math.round(seed);
+    for(let i=lastIdx+1;i<N;i++)a[i]=Math.round(seed+rate(endFrac[i])); return a;};
   let datasets=[], yMoney=true, title='Goal trajectory', hint='';
 
-  function forward(seedIdx,seedVal,stepFn){         // returns 12-length line, nulls before seedIdx, filled seedIdx..11
-    const a=nul(12); a[seedIdx]=seedVal; for(let i=seedIdx+1;i<12;i++)a[i]=stepFn(a[i-1],i); return a;
-  }
   if(mode==='apps'){
     yMoney=false; title='Applications trajectory';
-    const paceFwd=forward(lastM,cumEnrAt,(p)=>p+enrM);
-    datasets=[{label:'Applications written',data:cumEnr,borderColor:COLORS.nb,backgroundColor:COLORS.nb,tension:.2,pointRadius:2,fill:false,spanGaps:false},
-      {label:'At current pace',data:paceFwd.map(v=>v==null?null:Math.round(v)),borderColor:COLORS.nb,borderDash:DASH,backgroundColor:'transparent',pointRadius:0,fill:false}];
+    datasets=[{label:'Applications written',data:cumEnr,borderColor:COLORS.nb,backgroundColor:COLORS.nb,tension:.2,pointRadius:2,fill:false},
+      {label:'At current pace',data:fwdLine(cumEnrAt,f=>appsAnnual*(f-fNow)),borderColor:COLORS.nb,borderDash:DASH,backgroundColor:'transparent',pointRadius:0,fill:false}];
     if(goal&&avgApp>0){
       const appsNeed=Math.max(0,(goal-cumNetAt)/avgApp);
-      const perMo=remMonths>0?appsNeed/remMonths:0;
-      const needFwd=forward(lastM,cumEnrAt,(p)=>p+perMo);
-      datasets.push({label:'Needed to hit goal',data:needFwd.map(v=>v==null?null:Math.round(v)),borderColor:'#c0872f',borderDash:[3,3],backgroundColor:'transparent',pointRadius:0,fill:false});
+      datasets.push({label:'Needed to hit goal',data:fwdLine(cumEnrAt,f=>(1-fNow>0?appsNeed*((f-fNow)/(1-fNow)):0)),borderColor:'#c0872f',borderDash:[3,3],backgroundColor:'transparent',pointRadius:0,fill:false});
+      const perMo=appsNeed/Math.max((1-fNow)*12,0.1);
       hint=`Average <b>${fmt0(avgApp)}</b> of commission per application. `+
-        (appsNeed>0?`You'd need about <b>${Math.ceil(appsNeed)}</b> more applications by year-end (~<b>${Math.ceil(perMo)}/mo</b>) to reach the goal; you're writing ~<b>${enrM.toFixed(1)}/mo</b>.`
+        (appsNeed>0?`About <b>${Math.ceil(appsNeed)}</b> more applications by year-end (~<b>${Math.ceil(perMo)}/mo</b>) reach the goal; you're writing ~<b>${(appsAnnual/12).toFixed(1)}/mo</b> lately.`
         :`You've already written enough to reach the goal on commissions booked.`);
     }else hint=`Applications written this year, projected through December at your current pace.`;
   }else{
-    let seedStep, label, color=COLORS.resid;
-    if(mode==='residual'){ label='Residuals only (no new business)'; seedStep=(p)=>p+resM; color='#c0872f';
-      hint=`If you wrote <b>no new business</b> the rest of the year and only your existing residual kept paying (~<b>${fmt0(resM)}/mo</b>), this is where you'd land by December — the floor under your goal.`; }
-    else if(mode==='seasonal' && seas){ label='Seasonal pace (AEP-weighted)';
-      let acc=cumNetAt; const a=nul(12); a[lastM]=cumNetAt;
-      for(let i=lastM+1;i<12;i++){acc+=paceAnnual*(seas[i]||0);a[i]=Math.round(acc);}
-      datasets=[{label:'Actual',data:cumNet,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.2,pointRadius:2,fill:false,spanGaps:false},
-        {label,data:a,borderColor:COLORS.resid,borderDash:DASH,backgroundColor:'transparent',pointRadius:0,fill:false}];
-      hint=`Remaining months weighted by your historical seasonality of net income, so the Medicare AEP surge (Oct&ndash;Dec) and January effective-date wave land where they usually do.`;
+    let label, color=COLORS.resid, rate;
+    if(mode==='residual'){ label='Residuals only (no new business)'; color='#c0872f'; rate=f=>resAnnual*(f-fNow);
+      hint=`If you wrote <b>no new business</b> the rest of the year and only existing residual kept paying (~<b>${fmt0(resAnnual/12)}/mo</b>), this is where you'd land by December - the floor under your goal.`; }
+    else { label='At current pace'; rate=f=>paceAnnual*(f-fNow);
+      hint=`Your net so far, continued at your current run-rate (~<b>${fmt0(paceAnnual/12)}/mo</b>) through December.`; }
+    datasets=[{label:'Actual',data:cumNet,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.2,pointRadius:2,fill:false},
+      {label,data:fwdLine(cumNetAt,rate),borderColor:color,borderDash:DASH,backgroundColor:'transparent',pointRadius:0,fill:false}];
+    if(goal){
+      datasets.push({label:'Goal',data:Array(N).fill(goal),borderColor:hexA(COLORS.nb,.9),borderDash:[2,3],backgroundColor:'transparent',pointRadius:0,fill:false});
+      datasets.push({label:'Required pace',data:endFrac.map(f=>Math.round(goal*f)),borderColor:'rgba(120,120,120,.6)',backgroundColor:'transparent',pointRadius:0,fill:false});
     }
-    else { label='At current pace'; seedStep=(p)=>p+paceM;
-      hint=`Your net so far, continued at your current run-rate (~<b>${fmt0(paceM)}/mo</b>) through December.`; }
-    if(!datasets.length){
-      const fwd=forward(lastM,cumNetAt,seedStep);
-      datasets=[{label:'Actual',data:cumNet,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.2,pointRadius:2,fill:false,spanGaps:false},
-        {label,data:fwd.map(v=>v==null?null:Math.round(v)),borderColor:color,borderDash:DASH,backgroundColor:'transparent',pointRadius:0,fill:false}];
-    }
-    if(goalLine)datasets.push({label:'Goal',data:goalLine,borderColor:hexA(COLORS.nb,.9),borderDash:[2,3],backgroundColor:'transparent',pointRadius:0,fill:false});
-    if(reqLine)datasets.push({label:'Required pace',data:reqLine,borderColor:'rgba(120,120,120,.6)',backgroundColor:'transparent',pointRadius:0,fill:false});
   }
   $('#goalTrajTitle').textContent=(mode==='apps'?'Applications trajectory':title==='Goal trajectory'?'Goal trajectory':title);
   $('#goalTrajHint').innerHTML=hint;
   charts.goalTraj=new Chart($('#goalTrajChart'),{type:'line',data:{labels,datasets},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      scales:{x:{grid:{color:c2=>c2.index===lastM?GRIDBOUND:GRID}},
+      scales:{x:{grid:{color:c2=>c2.index===lastIdx?GRIDBOUND:GRID},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:13}},
         y:{ticks:{callback:v=>yMoney?'$'+Number(v).toLocaleString():Number(v).toLocaleString()},grid:{color:GRID}}},
       plugins:{legend:{position:'bottom'},
         tooltip:{callbacks:{label:cx=>cx.dataset.label+': '+(yMoney?fmt(cx.parsed.y):Math.round(cx.parsed.y)+' apps')}}}}});
@@ -1580,6 +1582,7 @@ segPick('#nbType','t',v=>{nbType=v;renderNewBusiness();});
 segPick('#cumMetric','m',v=>{cumMetric=v;renderCumulative();});
 segPick('#projMetric','m',v=>{projMetric=v;projDraw();});
 segPick('#goalTrajMode','t',v=>{goalTrajMode=v;renderGoalTraj();});
+segPick('#goalTrajGrain','t',v=>{goalTrajGrain=v;renderGoalTraj();});
 $('#cmpDim').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cmp.dim=b.dataset.d;buildMetricChips();renderComparison();});
 $('#cmpType').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;cmp.type=b.dataset.t;buildMetricChips();renderComparison();});
 $('#cmpMetrics').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
