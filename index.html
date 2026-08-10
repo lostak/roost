@@ -309,6 +309,11 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
           <p class="hint">New business and residual per period (bars). Net paid is a year-to-date running total on the right axis that resets each January. Vertical gridlines mark quarter boundaries.</p>
           <div class="chart-wrap"><canvas id="overviewChart"></canvas></div>
         </div>
+        <div class="card chart-card">
+          <h3>Lifetime income</h3>
+          <p class="hint">Every dollar you've been paid, accumulating across your whole history &mdash; a running total of net that never resets. Follows the timeframe above.</p>
+          <div class="chart-wrap"><canvas id="lifetimeChart"></canvas></div>
+        </div>
         <div class="card chart-card tablecard">
           <h3>Yearly statistics</h3>
           <table id="yearTable"></table>
@@ -1007,6 +1012,7 @@ function render(){
   renderDigest();
   renderKpis();
   renderOverviewTrend();
+  renderLifetime();
   renderYearTable();
   renderNewBusiness();
   renderResidual();
@@ -1093,6 +1099,14 @@ function renderOverviewTrend(){
   if(ytdMode){opts.scales.yNet={position:'right',grid:{display:false},
     ticks:{callback:v=>'$'+Number(v).toLocaleString()},title:{display:true,text:'Net paid (YTD)'}};}
   charts.year=new Chart($('#overviewChart'),{type:t==='bar'?'bar':'line',data:{labels,datasets},options:opts});
+}
+function renderLifetime(){
+  if(charts.lifetime)charts.lifetime.destroy();
+  const buckets=bucketSeries(GRAIN);
+  let run=0; const cum=buckets.map(b=>{run+=b.net;return Math.round(run*100)/100;});
+  charts.lifetime=new Chart($('#lifetimeChart'),{type:'line',data:{labels:buckets.map(b=>b.label),
+    datasets:[{label:'Lifetime net (cumulative)',data:cum,borderColor:COLORS.net,backgroundColor:hexA(COLORS.net,.16),
+      tension:.25,pointRadius:2,fill:true,money:true}]},options:timeAxis(buckets,{money:true})});
 }
 
 function renderNewBusiness(){
@@ -2157,7 +2171,7 @@ function renderPolicies(yl){
 
 // ---- selectors / wiring ----
 function syncGrainSegs(){document.querySelectorAll('.grainSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===GRAIN));}
-function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderNewBusiness();renderResidual();renderCarriers();renderProducts();renderDownline();renderGoals();
+function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderLifetime();renderNewBusiness();renderResidual();renderCarriers();renderProducts();renderDownline();renderGoals();
   try{localStorage.setItem('grain',g);}catch(e){}}
 function segPick(container,attr,cb){$(container).addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;
