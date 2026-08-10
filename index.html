@@ -903,6 +903,17 @@ const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statement
 let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null, goalTrajMode='pace', goalTrajGrain='month', _goalCtx=null;
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
+// Anchor tooltips to the TOP of the hovered bar/point (not the moving cursor), site-wide.
+if(window.Chart&&Chart.Tooltip){
+  Chart.Tooltip.positioners.topBar=function(items){
+    if(!items||!items.length)return false;
+    let x=0,minY=Infinity;
+    for(const it of items){const p=it.element.tooltipPosition();x+=p.x;if(p.y<minY)minY=p.y;}
+    return {x:x/items.length, y:minY};
+  };
+  Chart.defaults.plugins.tooltip.position='topBar';
+  Chart.defaults.plugins.tooltip.caretPadding=8;
+}
 function themeColors(){
   const dark=document.body.classList.contains('dark');
   GRID=dark?'rgba(255,255,255,.10)':'#e0e8e8';
