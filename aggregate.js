@@ -757,10 +757,40 @@ function buildSummary(allRecords, config) {
     .sort((a, b) => (a.date < b.date ? -1 : 1));
   const products = { by_family: byFamily, series: productSeries };
 
+  // ================= book value & forward residual cash-flow =================
+  // In-force valuation: annualized residual times an industry multiple range. Forward
+  // cash-flow: the current residual run-rate held flat, plus the step-up when THIS year's
+  // new Medicare Advantage members begin paying residual next January.
+  const monthlyResidual = round2(residualAnnual / 12);
+  const famMA = byFamily.find(f => f.key === 'Medicare Advantage');
+  const matureMAMonthly = (famMA && famMA.active > 0) ? famMA.residual / famMA.active / 12 : 0;
+  const newMAThisYear = pols.filter(p => p.family === 'Medicare Advantage' && p.status === 'Yes'
+    && p.firstAdvance && p.firstAdvance.slice(0, 4) === String(curYear)).length;
+  const maStepUp = round2(newMAThisYear * matureMAMonthly);
+  const [ly, lm] = (latestDate || (curYear + '-01-01')).split('-').map(Number);
+  const cashflow = [];
+  for (let i = 1; i <= 12; i++) {
+    const mIdx = (lm - 1) + i, y = ly + Math.floor(mIdx / 12), mo = ((mIdx % 12) + 12) % 12;
+    const stepup = y > ly ? maStepUp : 0;               // new MA members begin paying next January
+    cashflow.push({ label: MONTHS[mo] + " '" + String(y).slice(2), year: y, month: mo + 1,
+      base: monthlyResidual, stepup: round2(stepup), amount: round2(monthlyResidual + stepup) });
+  }
+  const value = {
+    residual_annual: residualAnnual,
+    inforce_policies: active,
+    monthly_residual: monthlyResidual,
+    new_ma_this_year: newMAThisYear,
+    ma_step_up_monthly: maStepUp,
+    book_value: { mult_low: 2, mult_mid: 2.5, mult_high: 3,
+      low: round2(residualAnnual * 2), mid: round2(residualAnnual * 2.5), high: round2(residualAnnual * 3) },
+    cashflow,
+    cashflow_total: round2(cashflow.reduce((s, m) => s + m.amount, 0)),
+  };
+
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
-    retention, products,
+    retention, products, value,
     statement_count: records.length,
     years, series,
     residual_by_carrier: residualByCarrier,

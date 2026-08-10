@@ -218,6 +218,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
     <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
     <a data-view="products"><span class="ic">&#9638;</span><span class="lbl">By Product</span></a>
     <a data-view="retention"><span class="ic">&#9851;</span><span class="lbl">Retention</span></a>
+    <a data-view="value"><span class="ic">&#9878;</span><span class="lbl">Book Value</span></a>
     <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
     <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
     <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
@@ -542,6 +543,21 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         </div>
       </section>
 
+      <!-- BOOK VALUE -->
+      <section class="view" id="view-value">
+        <h2 class="section">Book value &amp; forward cash flow</h2>
+        <div class="banner">What you're building. Your in-force residual is an asset &mdash; agencies buy and sell books at a multiple of annual renewals. The cash-flow calendar shows the recurring residual you can expect over the next 12 months if the book holds, including the step-up in January when this year's new Medicare Advantage members begin paying.</div>
+        <div class="kpis" id="valKpis"></div>
+        <div class="card chart-card">
+          <h3>Expected residual, next 12 months</h3>
+          <p class="hint">Current residual run-rate held flat (teal), plus the January step-up as this year's new Medicare Advantage members start paying (gold). Assumes the book holds &mdash; lapses would lower it.</p>
+          <div class="chart-wrap"><canvas id="valCashChart"></canvas></div>
+        </div>
+        <div class="card">
+          <p class="hint" id="valNote" style="margin:4px 2px"></p>
+        </div>
+      </section>
+
       <!-- PROJECTIONS -->
       <section class="view" id="view-projections">
         <h2 class="section">Projections &amp; insights</h2>
@@ -828,6 +844,7 @@ function render(){
   renderCarriers();
   renderProducts();
   renderRetention();
+  renderValue();
   renderDownline();
   buildMetricChips();
   renderComparison();
@@ -1629,6 +1646,31 @@ function goalInsights(x){
   if(x.ytdCB<0) todo.push(card('Watch chargebacks',`Chargebacks are running <b>${fmt0(x.ytdCB)}</b> this year. Each lapse claws back paid commission and drops the residual — retention protects the goal.`,'focus'));
   $('#goalWorking').innerHTML=work.join('');
   $('#goalToDo').innerHTML=todo.join('');
+}
+
+// ================= BOOK VALUE & CASH FLOW =================
+function renderValue(){
+  if(charts.valCash){charts.valCash.destroy();delete charts.valCash;}
+  const V=DATA.value; if(!V){return;}
+  const bv=V.book_value||{};
+  const kp=[
+    {l:'Book value (est.)',v:fmt0(bv.mid||0),s:`${fmt0(bv.low||0)}–${fmt0(bv.high||0)} at ${bv.mult_low}–${bv.mult_high}× renewals`,gold:true},
+    {l:'Annualized residual',v:fmt0(V.residual_annual||0),s:'current recurring run-rate'},
+    {l:'In-force policies',v:String(V.inforce_policies||0),s:'still paying residual'},
+    {l:'Next 12 mo residual',v:fmt0(V.cashflow_total||0),s:'if the book holds'}
+  ];
+  $('#valKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const cf=V.cashflow||[];
+  charts.valCash=new Chart($('#valCashChart'),{type:'bar',data:{labels:cf.map(m=>m.label),datasets:[
+    {label:'Current run-rate',data:cf.map(m=>m.base),backgroundColor:COLORS.resid},
+    {label:'New MA step-up',data:cf.map(m=>m.stepup),backgroundColor:COLORS.nb}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
+    plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
+  $('#valNote').innerHTML=`Valued at <b>${fmt0(bv.mid||0)}</b> (midpoint of ${bv.mult_low}–${bv.mult_high}× your ${fmt0(V.residual_annual||0)} annualized residual). `
+    +`Your <b>${V.new_ma_this_year||0}</b> new Medicare Advantage members written this year begin paying residual in January, adding about <b>${fmt0(V.ma_step_up_monthly||0)}/month</b> (~${fmt0((V.ma_step_up_monthly||0)*12)}/yr) to the recurring book. `
+    +`This is an estimate of the recurring stream only — it excludes new business you'll write and assumes current policies persist.`;
 }
 
 // ================= BY PRODUCT =================
