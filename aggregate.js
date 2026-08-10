@@ -975,7 +975,22 @@ function buildSummary(allRecords, config) {
   // that are you (config.profile.self_names) count toward you, not against. Downline share is
   // the downline agents' listed cuts; combined = your share + downline share.
   const selfSet = new Set((((config.profile || {}).self_names) || []).map(normName).filter(Boolean));
-  const convExclude = new Set((((config.profile || {}).convention_exclude) || []).map(String)); // replacements / family / ineligible
+  const convExclude = new Set((((config.profile || {}).convention_exclude) || []).map(String)); // you force-excluded
+  const convInclude = new Set((((config.profile || {}).convention_include) || []).map(String)); // you force-counted (override auto)
+  // Auto-detect replacements: a new policy in the SAME product family for the SAME client, when
+  // that client already had an earlier policy of that family, is a replacement (e.g. MA plan A
+  // 2025 -> MA plan B 2026). Build a client+family index of every policy's earliest date.
+  const normClient = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const polHist = {};
+  for (const r of records) for (const it of (r.items || [])) {
+    if (!it.policy) continue;
+    const h = (polHist[it.policy] ||= { client: normClient(it.client), family: productFamily(it.product), first: r.date });
+    if (r.date < h.first) h.first = r.date;
+    if (!h.client && it.client) h.client = normClient(it.client);
+  }
+  const cfIndex = {};
+  for (const [pol, h] of Object.entries(polHist)) { if (!h.client) continue; (cfIndex[h.client + '|' + h.family] ||= []).push({ policy: pol, first: h.first }); }
+  const effExcludedSet = new Set();
   const convPols = [], convFamMap = {};
   const convPSeries = {}, convCSeries = {};       // personal series, combined (personal + downline) series
   let convPts = 0, convMA = 0, convApps = 0, convFyc = 0, convDPts = 0, convPApps = 0;
@@ -993,7 +1008,12 @@ function buildSummary(allRecords, config) {
     const selfShare = hasDownline ? 0 : Math.max(0, Math.min(100, 100 - otherListed)) / 100;   // your cut, if you wrote it
     const dlShare = ags.reduce((s, a) => s + ((isDL[normName(a.name)] && !selfSet.has(normName(a.name))) ? (a.level || 0) : 0), 0) / 100;
     const pPts = cp.pts * selfShare, dPts = cp.pts * dlShare;
-    const excluded = convExclude.has(String(policy));   // you marked it a replacement / family / ineligible
+    // auto-detect replacement: earlier policy, same client + family
+    const autoReplacement = (cfIndex[normClient(d.client) + '|' + fam] || [])
+      .some(x => x.policy !== policy && x.first < d.date);
+    // effective exclusion: force-excluded, or auto-replacement unless you force-counted it
+    const excluded = convExclude.has(String(policy)) || (autoReplacement && !convInclude.has(String(policy)));
+    if (excluded) effExcludedSet.add(String(policy));
     if (!excluded) {
       convApps++; if (selfShare > 0) convPApps++;
       convPts += pPts; if (cp.ma) convMA += pPts; convDPts += dPts;
@@ -1006,7 +1026,7 @@ function buildSummary(allRecords, config) {
     const annualized = fam === 'Annuity' ? round2(num(d.premium)) : round2(num(d.premium) * 12);
     convPols.push({ date: d.date, policy, client: d.client, carrier: d.carrier, product: d.product, family: fam,
       premium: round2(num(d.premium)), annualized, basis: cp.basis, self_share: Math.round(selfShare * 100),
-      points: round2(pPts), ma: cp.ma, excluded });
+      points: round2(pPts), ma: cp.ma, excluded, auto_replacement: autoReplacement });
   }
   convPols.sort((a, b) => b.points - a.points);
   // first-year commission (dollars) actually paid to YOU on eligible business in the window —
@@ -1015,7 +1035,7 @@ function buildSummary(allRecords, config) {
     if (r.date < PAY_START || r.date > PAY_END) continue;
     for (const it of (r.items || [])) {
       if (it.section !== 'advances' || !it.policy || !CONV_ELIGIBLE.has(productFamily(it.product))) continue;
-      if (convExclude.has(String(it.policy))) continue;
+      if (effExcludedSet.has(String(it.policy))) continue;
       const hasDownline = (it.agents || []).some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
       if (!hasDownline) convFyc += it.payable;
     }
@@ -1067,7 +1087,8 @@ function buildSummary(allRecords, config) {
     alt: { new_contract_personal: 260000, fyc_levels_1_7: 150000 },
     self_names: (((config.profile || {}).self_names) || []),
     candidates: convCandidates,
-    excluded: [...convExclude],
+    force_exclude: [...convExclude], force_include: [...convInclude],
+    auto_replacements: convPols.filter(p => p.auto_replacement).length,
     personal_points: round2(convPts), personal_apps: convPApps,
     personal_series: Object.values(convPSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
     downline_points: round2(convDPts),

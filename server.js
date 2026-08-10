@@ -383,10 +383,12 @@ function handleProfile(req, res) {
         if (isFinite(d) && d >= 0 && d <= 180) profile.convention_pay_lag_days = Math.round(d);
         else delete profile.convention_pay_lag_days;
       }
-      if ('convention_exclude' in o) {
-        const arr = Array.isArray(o.convention_exclude) ? o.convention_exclude : [];
-        const clean = [...new Set(arr.map(x => String(x).trim()).filter(Boolean))];
-        if (clean.length) profile.convention_exclude = clean; else delete profile.convention_exclude;
+      for (const key of ['convention_exclude', 'convention_include']) {
+        if (key in o) {
+          const arr = Array.isArray(o[key]) ? o[key] : [];
+          const clean = [...new Set(arr.map(x => String(x).trim()).filter(Boolean))];
+          if (clean.length) profile[key] = clean; else delete profile[key];
+        }
       }
       cfg.profile = profile;
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));

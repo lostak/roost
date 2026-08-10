@@ -770,7 +770,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
         <div class="card chart-card tablecard">
           <h3>Qualifying policies</h3>
-          <p class="hint">Check <b>Exclude</b> for anything that doesn't count &mdash; 1035 exchanges / replacements of existing ASB policies, family-member policies, or other ineligible business. Excluded policies drop out of your credit immediately and save to your profile.</p>
+          <p class="hint">Policies tagged <b style="color:var(--gold)">repl</b> are auto-detected replacements &mdash; the same client already had an earlier policy in that family (e.g. MA plan A &rarr; plan B) &mdash; and are excluded by default. Uncheck one to count it anyway, or check any other policy to exclude it (family member / ineligible). Changes save to your profile.</p>
           <table id="convPolTable"></table>
         </div>
       </section>
@@ -2078,20 +2078,23 @@ async function saveConventionLevel(){
     else $('#convLevelMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';
   }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to persist).';}
 }
-async function toggleConventionExclude(policy,exclude){
-  const cur=new Set((DATA.convention&&DATA.convention.excluded)||[]);
-  if(exclude)cur.add(policy); else cur.delete(policy);
-  const list=[...cur];
-  const local=loadLocalProfile(); local.convention_exclude=list;
+async function toggleConventionExclude(policy,wantExcluded,auto){
+  const inc=new Set((DATA.convention&&DATA.convention.force_include)||[]);
+  const exc=new Set((DATA.convention&&DATA.convention.force_exclude)||[]);
+  inc.delete(policy); exc.delete(policy);
+  if(wantExcluded){ if(!auto)exc.add(policy); }   // auto-replacements already exclude; only force non-auto ones
+  else { if(auto)inc.add(policy); }               // override an auto-replacement back in
+  const incL=[...inc], excL=[...exc];
+  const local=loadLocalProfile(); local.convention_include=incL; local.convention_exclude=excL;
   try{localStorage.setItem('roostProfile',JSON.stringify(local));}catch(e){}
   try{
-    const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({convention_exclude:list})});
+    const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({convention_include:incL,convention_exclude:excL})});
     const txt=await r.text();let j=null;try{j=JSON.parse(txt);}catch(e){}
     if(r.ok&&j&&j.status==='ok')await loadData(true);
   }catch(e){}
 }
 document.addEventListener('change',e=>{if(e.target.classList&&e.target.classList.contains('convExcl'))
-  toggleConventionExclude(decodeURIComponent(e.target.dataset.policy),e.target.checked);});
+  toggleConventionExclude(decodeURIComponent(e.target.dataset.policy),e.target.checked,e.target.dataset.auto==='1');});
 async function saveConventionLag(){
   const days=Math.max(0,Math.min(180,Math.round(Number($('#convLag').value)||0)));
   const local=loadLocalProfile(); local.convention_pay_lag_days=days;
@@ -2243,10 +2246,10 @@ function renderConvention(){
     +'<tbody>'+bf.map(f=>`<tr><td>${f.family}${f.ma?' <span class="hint">(MA)</span>':''}</td><td>${f.policies}</td>
       <td><b>${num0(f.points)}</b></td><td>${V.points?Math.round(f.points/V.points*100):0}%</td></tr>`).join('')+'</tbody>';
   $('#convPolTable').innerHTML=thead(['Issued','Client','Carrier','Product','Line','Premium','Annualized','Points','Exclude'])
-    +'<tbody>'+(V.policies||[]).map(p=>`<tr${p.excluded?' style="opacity:.45"':''}><td>${p.date}</td><td>${p.client||'&mdash;'}</td>
+    +'<tbody>'+(V.policies||[]).map(p=>`<tr${p.excluded?' style="opacity:.5"':''}><td>${p.date}</td><td>${p.client||'&mdash;'}</td>
       <td><span class="chip">${p.carrier}</span></td><td>${(p.product||'').slice(0,24)}</td><td>${p.family}</td>
       <td>${fmt(p.premium)}</td><td>${fmt(p.annualized)}</td><td><b>${p.excluded?'&mdash;':num0(p.points)}</b></td>
-      <td style="text-align:center"><input type="checkbox" class="convExcl" data-policy="${encodeURIComponent(p.policy||'')}"${p.excluded?' checked':''} title="Exclude (1035 replacement, family member, or ineligible)"></td></tr>`).join('')+'</tbody>';
+      <td style="text-align:center;white-space:nowrap">${p.auto_replacement?'<span class="hint" title="Same client already had an earlier policy in this family" style="color:var(--gold)">repl&nbsp;</span>':''}<input type="checkbox" class="convExcl" data-policy="${encodeURIComponent(p.policy||'')}" data-auto="${p.auto_replacement?1:0}"${p.excluded?' checked':''} title="Exclude (1035 replacement, family member, or ineligible)"></td></tr>`).join('')+'</tbody>';
 }
 
 // ================= AUDIT & RECONCILIATION =================
