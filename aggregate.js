@@ -1008,15 +1008,23 @@ function buildSummary(allRecords, config) {
   const CAND_LLC = /\b(LLC|INC|BROKERAGE|FINANCIAL|RETIREMENT|INSURANCE|AGENCY|GROUP|SOLUTIONS|SERVICES|ADVISORS|LTD|CORP|ENTERPRISES)\b/i;
   const CAND_HOUSE = /AMERICAN SENIOR BENEFITS|\bASB\b|INTEREST|BONUS|OVERRIDE|ADJUSTMENT|EARNINGS|COMPENSATION/i;
   const soloStats = {};
+  let policyLineTotal = 0;
   for (const r of records) for (const it of (r.items || [])) {
+    if (it.section !== 'advances' || !it.policy) continue;
+    policyLineTotal++;
     const ags = it.agents || []; if (ags.length !== 1) continue;   // solo = single writing agent
     const a = ags[0], nm = (a.name || '').trim();
     if (!nm || CAND_HOUSE.test(nm) || !CAND_LLC.test(nm)) continue;
-    const st = (soloStats[nm] ||= { name: nm, solo100: 0, count: 0 });
-    st.count++; if ((a.level || 0) >= 100) st.solo100++;
+    const st = (soloStats[nm] ||= { name: nm, solo100: 0 });
+    if ((a.level || 0) >= 100) st.solo100++;
   }
+  // An LLC paid 100% solo is either a downline's LLC or your own. If it were YOURS, essentially
+  // all your business would run through it -> high coverage marks it "likely you"; occasional
+  // 100%-solo marks it "likely a downline's LLC".
   const convCandidates = Object.values(soloStats).filter(s => s.solo100 > 0)
-    .map(s => ({ name: s.name, count: s.solo100, note: 'LLC paid 100% solo' }))
+    .map(s => { const cov = policyLineTotal ? s.solo100 / policyLineTotal : 0;
+      return { name: s.name, count: s.solo100, coverage: round2(cov),
+        note: cov >= 0.4 ? 'likely your own LLC — most business runs through it' : 'likely a downline\'s LLC' }; })
     .sort((a, b) => b.count - a.count).slice(0, 20);
   const winDays = Math.round((Date.parse(CONV_END + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1;
   const convAsOf = (latestDate > CONV_START ? latestDate : CONV_START);
