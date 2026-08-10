@@ -27,7 +27,7 @@ const CLIENTS_DIR = path.join(ROOT, 'Clients'); // ../Commissions/Clients
 const PORT = process.env.PORT || 5000;
 // Bump when parser.js output shape changes so cached records are re-parsed.
 // (v5: expanded carrier detection.)
-const PARSE_VERSION = 5;
+const PARSE_VERSION = 6;
 
 // ---- user configuration (downline roster, MA thresholds) ----
 function loadConfig() {

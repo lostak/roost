@@ -37,7 +37,8 @@ function isAgentContinuation(line){
 const CARRIERS = [
   ['UNITEDOFOMAHA','United of Omaha'],['HUMANA','Humana'],['DEVOTED','Devoted'],
   ['KAISER','Kaiser'],['UHC','UnitedHealthcare'],['AIG','AIG'],['GTL','GTL'],['GTA','GTL'],
-  ['CLI','Cigna (Loyal)'],['UNL','United National Life'],['FGL','F&G Life'],
+  ['CLI','Aetna'], // CLI-prefixed policies (Recovery Care, Cancer/Heart/Stroke, etc.) are Aetna
+  ['UNL','United National Life'],['FGL','F&G Life'],
   ['MONUMENTAL','Monumental'],['FEX','Monumental'],['MUTUAL','Mutual of Omaha'],
   ['BANKERS','Bankers'],['AETNA','Aetna'],['WELLCARE','WellCare'],['ANTHEM','Anthem'],
   ['CIGNA','Cigna'],['GERBER','Gerber'],['CLEARSPRING','ClearSpring'],['ATHENE','Athene'],
