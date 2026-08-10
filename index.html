@@ -233,6 +233,10 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 
       <!-- OVERVIEW -->
       <section class="view active" id="view-overview">
+        <div class="card" id="digestCard" style="margin-bottom:24px;border-left:4px solid var(--primary)">
+          <h3 style="margin:0 0 6px">&#128203; This week</h3>
+          <div id="digest" class="hint" style="font-size:14px;line-height:1.7"></div>
+        </div>
         <div class="kpis" id="kpis"></div>
         <div class="card chart-card">
           <div class="controls" style="margin-bottom:10px">
@@ -912,6 +916,7 @@ function render(){
   const d=DATA, years=d.years, yl=d.all_years;
   $('#meta').innerHTML=`${d.statement_count} statements &middot; ${yl[0]}&ndash;${yl[yl.length-1]}<br>updated ${d.generated.replace('T',' ')}`;
   syncGrainSegs();
+  renderDigest();
   renderKpis();
   renderOverviewTrend();
   renderYearTable();
@@ -1728,6 +1733,36 @@ function goalInsights(x){
   $('#goalWorking').innerHTML=work.join('');
   $('#goalToDo').innerHTML=todo.join('');
 }
+
+// ================= THIS-WEEK DIGEST =================
+function renderDigest(){
+  const el=$('#digest'); if(!el)return;
+  const ser=(DATA.series||[]); if(!ser.length){el.textContent='No statements yet.';return;}
+  const last=ser[ser.length-1];
+  const parts=[];
+  parts.push(`Latest statement <b>${last.date}</b>: paid <b>${fmt(last.net)}</b> `
+    +`(${fmt(last.advances)} new business, ${fmt(last.residual)} residual`
+    +`${last.chargebacks?`, <span class="neg">${fmt(last.chargebacks)}</span> chargebacks`:''})`
+    +`${last.enrollments?` from <b>${last.enrollments}</b> new enrollment${last.enrollments===1?'':'s'}`:''}.`);
+  const R=DATA.retention&&DATA.retention.totals;
+  if(R&&R.at_risk_count) parts.push(`<b>${R.at_risk_count}</b> Medicare Advantage polic${R.at_risk_count===1?'y':'ies'} (${fmt0(R.at_risk_dollars)}) are in the rapid-disenrollment window &mdash; worth a retention touch. <a href="#" onclick="gotoView('retention');return false;">See Retention &rarr;</a>`);
+  // goal pace (uses saved goal incl. on-device)
+  const gy=(DATA.goals&&DATA.goals.current_year), gcfg=Object.assign({},(DATA.goals&&DATA.goals.config)||{},(typeof loadLocalGoals==='function'?loadLocalGoals():{}));
+  const goal=gy&&gcfg[gy]&&Number(gcfg[gy].net);
+  if(goal){
+    const rows=ser.filter(s=>s.year===gy); const ytd=rows.reduce((a,r)=>a+r.net,0);
+    const asOf=rows.length?rows[rows.length-1].date:(gy+'-01-01');
+    const st=Date.UTC(gy,0,1), yd=(Date.UTC(gy+1,0,1)-st)/864e5;
+    const [yy,mm,dd]=asOf.split('-').map(Number); const frac=Math.min(((Date.UTC(yy,mm-1,dd)-st)/864e5+1)/yd,1);
+    const need=goal*frac, delta=ytd-need;
+    parts.push(`Goal pace: <b>${fmt0(ytd)}</b> of <b>${fmt0(goal)}</b> (${Math.round(ytd/goal*100)}%), `
+      +(delta>=0?`<b style="color:var(--primary)">${fmt0(delta)} ahead</b>`:`<b class="neg">${fmt0(-delta)} behind</b>`)+` pace. <a href="#" onclick="gotoView('goals');return false;">See Goals &rarr;</a>`);
+  } else {
+    parts.push(`No annual goal set yet. <a href="#" onclick="gotoView('goals');return false;">Set one &rarr;</a>`);
+  }
+  el.innerHTML=parts.map(p=>'&bull; '+p).join('<br>');
+}
+function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
 
 // ================= EXPENSES & TRUE PROFIT =================
 const EXP_CATS=[['leads','Leads'],['marketing','Marketing'],['eo','E&O / licensing'],['crm','CRM / software'],['staff','Staff / VA'],['other','Other']];
