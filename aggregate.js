@@ -921,7 +921,7 @@ function buildSummary(allRecords, config) {
   for (const r of records) for (const it of (r.items || [])) {
     if (it.section === 'advances' && it.policy) {
       const cur = convFirst[it.policy];
-      if (!cur || r.date < cur.date) convFirst[it.policy] = { date: r.date, premium: it.premium, product: it.product, carrier: it.carrier, client: it.client };
+      if (!cur || r.date < cur.date) convFirst[it.policy] = { date: r.date, premium: it.premium, product: it.product, carrier: it.carrier, client: it.client, agents: it.agents };
     }
   }
   const convPointsFor = (fam, premium, carrier, product) => {
@@ -962,16 +962,26 @@ function buildSummary(allRecords, config) {
     { level: 10, personal: null, downline: 5800000 },
   ];
   const convPols = [], convFamMap = {}, convSeriesMap = {};
+  const convPSeries = {}, convDSeries = {};       // cumulative-points series, personal vs downline
   let convPts = 0, convMA = 0, convApps = 0, convFyc = 0;
+  let convPPts = 0, convDPts = 0, convPApps = 0, convDApps = 0;
   for (const [policy, d] of Object.entries(convFirst)) {
     if (d.date < CONV_START || d.date > CONV_END) continue;
     const fam = productFamily(d.product);
     if (!CONV_ELIGIBLE.has(fam)) continue;              // Part D, unclassified -> not eligible
     const cp = convPointsFor(fam, d.premium, d.carrier, d.product);
+    // personal vs downline production: a policy is downline-produced when a downline agent
+    // is on it and you hold no writing share (listed levels sum to >= 100); otherwise personal.
+    const ags = d.agents || [];
+    const lvlSum = ags.reduce((s, a) => s + (a.level || 0), 0);
+    const isDownlineProd = ags.some(a => isDL[normName(a.name)]) && lvlSum >= 100;
     convApps++; convPts += cp.pts; if (cp.ma) convMA += cp.pts;
+    if (isDownlineProd) { convDPts += cp.pts; convDApps++; (convDSeries[d.date] ||= { date: d.date, points: 0 }).points += cp.pts; }
+    else { convPPts += cp.pts; convPApps++; (convPSeries[d.date] ||= { date: d.date, points: 0 }).points += cp.pts; }
     const annualized = fam === 'Annuity' ? round2(num(d.premium)) : round2(num(d.premium) * 12);
     convPols.push({ date: d.date, client: d.client, carrier: d.carrier, product: d.product, family: fam,
-      premium: round2(num(d.premium)), annualized, basis: cp.basis, points: round2(cp.pts), ma: cp.ma });
+      premium: round2(num(d.premium)), annualized, basis: cp.basis, points: round2(cp.pts), ma: cp.ma,
+      source: isDownlineProd ? 'downline' : 'personal' });
     const fm = (convFamMap[fam] ||= { family: fam, policies: 0, points: 0, ma: cp.ma });
     fm.policies++; fm.points += cp.pts;
     const sm = (convSeriesMap[d.date] ||= { date: d.date, points: 0, apps: 0 });
@@ -1005,6 +1015,10 @@ function buildSummary(allRecords, config) {
     level: convLevel, levels: CONV_LEVELS,
     fyc: round2(convFyc),
     alt: { new_contract_personal: 260000, fyc_levels_1_7: 150000 },
+    personal_points: round2(convPPts), personal_apps: convPApps,
+    personal_series: Object.values(convPSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
+    downline_points: round2(convDPts), downline_apps: convDApps,
+    downline_series: Object.values(convDSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
   };
 
   return {

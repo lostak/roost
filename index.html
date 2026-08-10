@@ -736,15 +736,20 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
         <div class="grid2">
           <div class="card chart-card">
-            <h3>Points accumulating over the window</h3>
-            <p class="hint">Cumulative convention points earned since Feb 1, through your latest statement.</p>
-            <div class="chart-wrap"><canvas id="convCumChart"></canvas></div>
+            <h3>Personal production toward qualifying</h3>
+            <p class="hint">Cumulative points from business <b>you personally wrote</b>, against your level's personal-production target (dashed).</p>
+            <div class="chart-wrap"><canvas id="convPersonalChart"></canvas></div>
           </div>
           <div class="card chart-card">
-            <h3>Points by line of business</h3>
-            <p class="hint">Where your credit comes from &mdash; gold is Medicare Advantage, which can be at most half your total.</p>
-            <div class="chart-wrap"><canvas id="convFamChart"></canvas></div>
+            <h3>Downline production toward qualifying</h3>
+            <p class="hint">Cumulative points from <b>downline-written</b> business as seen on your statements, against your level's downline target (dashed). The full downline figure is tracked with ASB.</p>
+            <div class="chart-wrap"><canvas id="convDownlineChart"></canvas></div>
           </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Points by line of business</h3>
+          <p class="hint">Where your credit comes from &mdash; gold is Medicare Advantage, which can be at most half your total.</p>
+          <div class="chart-wrap"><canvas id="convFamChart"></canvas></div>
         </div>
         <div class="card chart-card tablecard">
           <h3>By product family</h3>
@@ -2060,9 +2065,10 @@ async function saveConventionLevel(){
   }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to persist).';}
 }
 function renderConvention(){
-  ['convCum','convFam'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  ['convPersonal','convDownline','convFam'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
   const V=DATA.convention; if(!V){return;}
   const num0=n=>Math.round(n).toLocaleString();
+  const pPts=V.personal_points!=null?V.personal_points:V.points, dPts=V.downline_points||0;
   const local=loadLocalProfile();
   const lv=(local.convention_level!=null)?local.convention_level:(V.level!=null?V.level:'');
   const sel=$('#convLevel');
@@ -2071,36 +2077,44 @@ function renderConvention(){
   const lt=(V.levels||[]).find(l=>l.level===lv);
   const bar=(pct,color)=>`<div style="height:12px;border-radius:8px;background:var(--surface-3);overflow:hidden;margin:5px 0 2px"><div style="height:100%;width:${Math.max(0,Math.min(100,Math.round(pct*100)))}%;background:${color};transition:width .3s"></div></div>`;
   const GREEN='#2e7d5b', GOLD='#c0872f';
-  if(!lt){
+  if(!V.levels){
+    $('#convTarget').innerHTML='<p class="hint">&#9888; Convention level targets aren\'t loaded yet &mdash; <b>restart Roost</b> (close the console window and relaunch) so the server picks up the latest update, then pick your level here.</p>';
+  }else if(!lt){
     $('#convTarget').innerHTML='<p class="hint">Select your contract level above to see the production you need to qualify. It saves to your profile (roost/config.json), so you only set it once.</p>';
   }else{
     let h='';
     if(lt.personal){
-      const done=V.points>=lt.personal, pct=V.points/lt.personal;
+      const done=pPts>=lt.personal, pct=pPts/lt.personal;
       h+=`<div style="display:flex;justify-content:space-between;flex-wrap:wrap"><b>Personal production &mdash; Level ${lv}</b>`
-        +`<span>${num0(V.points)} / ${num0(lt.personal)} pts ${done?'<span style="color:'+GREEN+';font-weight:700">✓ qualified</span>':''}</span></div>`
+        +`<span>${num0(pPts)} / ${num0(lt.personal)} pts ${done?'<span style="color:'+GREEN+';font-weight:700">✓ qualified</span>':''}</span></div>`
         +bar(pct,done?GREEN:COLORS.resid)
-        +`<div class="hint">${done?'You\'ve reached the personal-production target for level '+lv+'.':num0(lt.personal-V.points)+' points to go on the personal path.'}</div>`;
+        +`<div class="hint">${done?'You\'ve reached the personal-production target for level '+lv+'.':num0(lt.personal-pPts)+' points to go on the personal path.'}</div>`;
     }else{
       h+=`<div class="hint">Level ${lv} qualifies on <b>downline production</b> only &mdash; there's no personal-production target at this level.</div>`;
     }
     if(lt.downline){
-      h+=`<div style="margin-top:12px"><b>Downline path:</b> ${num0(lt.downline)} points. <span class="hint">Downline production can't be fully derived from your personal statements &mdash; track this with ASB.</span></div>`;
+      const done=dPts>=lt.downline, pct=dPts/lt.downline;
+      h+=`<div style="margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap"><b>Downline production &mdash; Level ${lv}</b>`
+        +`<span>${num0(dPts)} / ${num0(lt.downline)} pts ${done?'<span style="color:'+GREEN+';font-weight:700">✓</span>':''}</span></div>`
+        +bar(pct,done?GREEN:COLORS.nb)
+        +`<div class="hint">From downline business on your statements. Your true downline block is larger &mdash; confirm the official figure with ASB.</div>`;
     }
     h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--outline-var)"><b>Other ways to qualify</b>`;
     if(lv<=7){const done=V.fyc>=V.alt.fyc_levels_1_7;
       h+=`<div style="margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>$150,000+ first-year commission (levels 1&ndash;7)</span><span>${fmt0(V.fyc)} / ${fmt0(V.alt.fyc_levels_1_7)} ${done?'<span style="color:'+GREEN+'">✓</span>':''}</span></div>`+bar(V.fyc/V.alt.fyc_levels_1_7,done?GREEN:GOLD);}
-    {const done=V.points>=V.alt.new_contract_personal;
-      h+=`<div style="margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>260,000+ personal (if contracted on/after Oct 1, 2025)</span><span>${num0(V.points)} / ${num0(V.alt.new_contract_personal)} pts ${done?'<span style="color:'+GREEN+'">✓</span>':''}</span></div>`+bar(V.points/V.alt.new_contract_personal,done?GREEN:COLORS.resid);}
+    {const done=pPts>=V.alt.new_contract_personal;
+      h+=`<div style="margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>260,000+ personal (if contracted on/after Oct 1, 2025)</span><span>${num0(pPts)} / ${num0(V.alt.new_contract_personal)} pts ${done?'<span style="color:'+GREEN+'">✓</span>':''}</span></div>`+bar(pPts/V.alt.new_contract_personal,done?GREEN:COLORS.resid);}
     h+='</div>';
     $('#convTarget').innerHTML=h;
   }
   const kp=[];
-  if(lt&&lt.personal){const done=V.points>=lt.personal;
-    kp.push({l:`Level ${lv} — personal target`,v:Math.round(V.points/lt.personal*100)+'%',
-      s:done?`qualified · ${num0(V.points)} pts`:`${num0(lt.personal-V.points)} pts to go`,gold:true});
+  if(lt&&lt.personal){const done=pPts>=lt.personal;
+    kp.push({l:`Level ${lv} — personal target`,v:Math.round(pPts/lt.personal*100)+'%',
+      s:done?`qualified · ${num0(pPts)} pts`:`${num0(lt.personal-pPts)} pts to go`,gold:true});
+  }else if(lt&&lt.downline){
+    kp.push({l:`Level ${lv} — downline target`,v:Math.round(dPts/lt.downline*100)+'%',s:`${num0(dPts)} of ${num0(lt.downline)} pts (partial)`,gold:true});
   }else{
-    kp.push({l:'Convention points',v:num0(V.points),s:lt?`level ${lv}: downline path only`:'pick your level to set a target',gold:true});
+    kp.push({l:'Convention points',v:num0(V.points),s:'pick your level to set a target',gold:true});
   }
   kp.push(
     {l:'Applications',v:`${V.apps} / ${V.apps_needed}`,s:V.apps>=V.apps_needed?'minimum met':`${V.apps_needed-V.apps} more needed`},
@@ -2119,14 +2133,21 @@ function renderConvention(){
   rows.push(`${dot} E&amp;O coverage in place and under contract at convention`);
   rows.push(`${dot} Excludes replacements of ASB-endorsed policies and policies on family members (not auto-detected here)`);
   $('#convChecklist').innerHTML=rows.map(r=>`<div>${r}</div>`).join('');
-  // cumulative points
-  const ser=V.series||[]; let run=0; const cum=ser.map(s=>{run+=s.points;return Math.round(run);});
-  charts.convCum=new Chart($('#convCumChart'),{type:'line',data:{labels:ser.map(s=>s.date),
-    datasets:[{label:'Cumulative points',data:cum,borderColor:COLORS.resid,backgroundColor:hexA(COLORS.resid,.16),tension:.2,pointRadius:2,fill:true}]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}},
-        y:{ticks:{callback:v=>Number(v).toLocaleString()},grid:{color:GRID}}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>num0(c.parsed.y)+' pts'}}}}});
+  // two production graphs: personal and downline, each vs its level target
+  function convProg(id,series,target,color){
+    const ser=series||[]; let run=0; const cum=ser.map(s=>{run+=s.points;return Math.round(run);});
+    let labels=ser.map(s=>s.date); if(!labels.length){labels=['—'];cum.push(0);}
+    const ds=[{label:'Cumulative points',data:cum,borderColor:color,backgroundColor:hexA(color,.16),tension:.2,pointRadius:2,fill:true}];
+    if(target)ds.push({label:'Level target ('+num0(target)+')',data:labels.map(()=>target),borderColor:'#c0872f',borderDash:[6,4],pointRadius:0,fill:false});
+    const maxY=Math.max(cum[cum.length-1]||0,target||0)*1.1;
+    return new Chart($(id),{type:'line',data:{labels,datasets:ds},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+        scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:7}},
+          y:{beginAtZero:true,suggestedMax:maxY,ticks:{callback:v=>Number(v).toLocaleString()},grid:{color:GRID}}},
+        plugins:{legend:{display:!!target,position:'bottom'},tooltip:{callbacks:{label:c=>num0(c.parsed.y)+' pts'}}}}});
+  }
+  charts.convPersonal=convProg('#convPersonalChart',V.personal_series,lt?lt.personal:null,COLORS.resid);
+  charts.convDownline=convProg('#convDownlineChart',V.downline_series,lt?lt.downline:null,COLORS.nb);
   // by family (MA gold, others teal)
   const bf=V.by_family||[];
   charts.convFam=new Chart($('#convFamChart'),{type:'bar',data:{labels:bf.map(f=>f.family),
