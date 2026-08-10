@@ -265,6 +265,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
         <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
         <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
+        <a data-view="convention"><span class="ic">&#127942;</span><span class="lbl">Convention</span></a>
       </div>
     </div>
     <div class="navgroup" data-group="analysis">
@@ -716,6 +717,37 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
       </section>
 
+      <!-- CONVENTION -->
+      <section class="view" id="view-convention">
+        <h2 class="section">Convention tracker &mdash; ASB 2027 incentive trip</h2>
+        <div class="banner">Qualification runs <b>Feb 1, 2026 &ndash; Jan 31, 2027</b> (Nassau, Bahamas, Jun 10&ndash;14, 2027). Points are earned on new, issued annualized premium: Med Supp 125% (AARP/UHC flat 1,500), Medicare Advantage 2,000/policy, annuities 15% of premium, life &amp; LTC / supplemental health 250%. Part D and under-65 medical don't count. You also need <b>25+ issued applications</b> and at least <b>50% of credit from non-MA</b> lines. These are Roost's estimates from your statements &mdash; ASB's official tally governs.</div>
+        <div class="kpis" id="convKpis"></div>
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="margin-top:0">Qualification checklist</h3>
+          <div id="convChecklist" style="font-size:14px;line-height:1.9"></div>
+        </div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>Points accumulating over the window</h3>
+            <p class="hint">Cumulative convention points earned since Feb 1, through your latest statement.</p>
+            <div class="chart-wrap"><canvas id="convCumChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3>Points by line of business</h3>
+            <p class="hint">Where your credit comes from &mdash; gold is Medicare Advantage, which can be at most half your total.</p>
+            <div class="chart-wrap"><canvas id="convFamChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>By product family</h3>
+          <table id="convFamTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Qualifying policies</h3>
+          <table id="convPolTable"></table>
+        </div>
+      </section>
+
       <!-- GOALS -->
       <section class="view" id="view-goals">
         <h2 class="section">Annual goal &amp; pace</h2>
@@ -1065,6 +1097,7 @@ function render(){
   renderProjections();
   renderGoals();
   renderExpenses();
+  renderConvention();
   renderClients();
   renderAudit();
   renderPolicies(yl);
@@ -2000,6 +2033,51 @@ function openClient(name){
 }
 document.addEventListener('click',e=>{const tr=e.target.closest('#cliTable tbody tr[data-client]');
   if(tr)openClient(decodeURIComponent(tr.dataset.client));});
+
+// ================= CONVENTION TRACKER =================
+function renderConvention(){
+  ['convCum','convFam'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const V=DATA.convention; if(!V){return;}
+  const num0=n=>Math.round(n).toLocaleString();
+  const kp=[
+    {l:'Convention points',v:num0(V.points),s:'estimated, this window',gold:true},
+    {l:'Applications',v:`${V.apps} / ${V.apps_needed}`,s:V.apps>=V.apps_needed?'minimum met':`${V.apps_needed-V.apps} more needed`},
+    {l:'Non-MA credit',v:(V.nonma_share!=null?Math.round(V.nonma_share*100):0)+'%',s:V.nonma_rule_met?'meets the 50% rule':'must reach 50%'},
+    {l:'Window remaining',v:V.days_left+' days',s:`${Math.round(V.elapsed_frac*100)}% elapsed · ends ${V.window.end}`}
+  ];
+  $('#convKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  // checklist
+  const ok='<span style="color:#2e7d5b;font-weight:700">&#10003;</span>', no='<span class="neg" style="font-weight:700">&#10007;</span>', warn='<span style="color:var(--amber);font-weight:700">&#9888;</span>', dot='<span class="hint">&#9675;</span>';
+  const rows=[];
+  rows.push(`${V.apps>=V.apps_needed?ok:no} <b>${V.apps} of ${V.apps_needed}</b> issued applications`);
+  rows.push(`${V.nonma_rule_met?ok:no} At least 50% of credit from non-MA lines &mdash; you're at <b>${V.nonma_share!=null?Math.round(V.nonma_share*100):0}%</b> (${num0(V.points_nonma)} non-MA of ${num0(V.points)})`);
+  rows.push(`${warn} Persistency at/above company average &mdash; your book is at <b>${V.persistency!=null?Math.round(V.persistency*100)+'%':'—'}</b>; confirm the company threshold with ASB`);
+  rows.push(`${dot} All qualifying policies inforce &amp; processed through ASB's one-check system by <b>Jan 31, 2027</b>`);
+  rows.push(`${dot} E&amp;O coverage in place and under contract at convention`);
+  rows.push(`${dot} Excludes replacements of ASB-endorsed policies and policies on family members (not auto-detected here)`);
+  $('#convChecklist').innerHTML=rows.map(r=>`<div>${r}</div>`).join('');
+  // cumulative points
+  const ser=V.series||[]; let run=0; const cum=ser.map(s=>{run+=s.points;return Math.round(run);});
+  charts.convCum=new Chart($('#convCumChart'),{type:'line',data:{labels:ser.map(s=>s.date),
+    datasets:[{label:'Cumulative points',data:cum,borderColor:COLORS.resid,backgroundColor:hexA(COLORS.resid,.16),tension:.2,pointRadius:2,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}},
+        y:{ticks:{callback:v=>Number(v).toLocaleString()},grid:{color:GRID}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>num0(c.parsed.y)+' pts'}}}}});
+  // by family (MA gold, others teal)
+  const bf=V.by_family||[];
+  charts.convFam=new Chart($('#convFamChart'),{type:'bar',data:{labels:bf.map(f=>f.family),
+    datasets:[{label:'Points',data:bf.map(f=>f.points),backgroundColor:bf.map(f=>f.ma?'#c0872f':COLORS.resid)}]},
+    options:{...baropts(false,true),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>num0(c.parsed.x)+' pts'}}}}});
+  $('#convFamTable').innerHTML=thead(['Product family','Policies','Points','Share'])
+    +'<tbody>'+bf.map(f=>`<tr><td>${f.family}${f.ma?' <span class="hint">(MA)</span>':''}</td><td>${f.policies}</td>
+      <td><b>${num0(f.points)}</b></td><td>${V.points?Math.round(f.points/V.points*100):0}%</td></tr>`).join('')+'</tbody>';
+  $('#convPolTable').innerHTML=thead(['Issued','Client','Carrier','Product','Line','Premium','Annualized','Basis','Points'])
+    +'<tbody>'+(V.policies||[]).map(p=>`<tr><td>${p.date}</td><td>${p.client||'&mdash;'}</td>
+      <td><span class="chip">${p.carrier}</span></td><td>${(p.product||'').slice(0,24)}</td><td>${p.family}</td>
+      <td>${fmt(p.premium)}</td><td>${fmt(p.annualized)}</td><td class="hint">${p.basis}</td><td><b>${num0(p.points)}</b></td></tr>`).join('')+'</tbody>';
+}
 
 // ================= AUDIT & RECONCILIATION =================
 function renderAudit(){

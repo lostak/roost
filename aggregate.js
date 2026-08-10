@@ -908,10 +908,75 @@ function buildSummary(allRecords, config) {
     next_year_income_full: round2(activeMA * perMemberAnnual),  // if every member renews
   };
 
+  // ================= convention (ASB incentive-trip) qualification =================
+  // Points on new, ISSUED annualized premium over the qualification window, per the
+  // official rules. Product credit: MedSupp 125% of annualized premium (AARP/UHC flat
+  // 1,500); Medicare Advantage flat 2,000/policy; annuities 15% of premium; life and
+  // LTC/other supplemental health 250% of annualized premium. Part D and <65 medical
+  // don't count. Also tracked: >=25 issued apps and >=50% of credit from non-MA lines.
+  const CONV_START = '2026-02-01', CONV_END = '2027-01-31';
+  const CONV_ELIGIBLE = new Set(['Medicare Advantage', 'Med Supp', 'Annuity',
+    'Life / Final Expense', 'Hospital / Supplemental', 'Dental / Vision']);
+  const convFirst = {};
+  for (const r of records) for (const it of (r.items || [])) {
+    if (it.section === 'advances' && it.policy) {
+      const cur = convFirst[it.policy];
+      if (!cur || r.date < cur.date) convFirst[it.policy] = { date: r.date, premium: it.premium, product: it.product, carrier: it.carrier, client: it.client };
+    }
+  }
+  const convPointsFor = (fam, premium, carrier, product) => {
+    const pm = num(premium);
+    const tag = `${carrier || ''} ${product || ''}`;
+    if (fam === 'Medicare Advantage') return { pts: 2000, ma: true, basis: '2,000 / policy' };
+    if (fam === 'Med Supp') {
+      if (/UNITEDHEALTH|\bUHC\b|AARP/i.test(tag)) return { pts: 1500, ma: false, basis: 'AARP/UHC flat 1,500' };
+      return { pts: round2(pm * 12 * 1.25), ma: false, basis: '125% of annualized premium' };
+    }
+    if (fam === 'Annuity') return { pts: round2(pm * 0.15), ma: false, basis: '15% of premium' };
+    if (fam === 'Life / Final Expense') return { pts: round2(pm * 12 * 2.5), ma: false, basis: '250% of annualized premium' };
+    if (fam === 'Hospital / Supplemental') return { pts: round2(pm * 12 * 2.5), ma: false, basis: '250% of annualized premium' };
+    if (fam === 'Dental / Vision') return { pts: round2(pm * 12 * 2.5), ma: false, basis: '250% (supplemental health)' };
+    return { pts: 0, ma: false, basis: 'does not count' };
+  };
+  const convPols = [], convFamMap = {}, convSeriesMap = {};
+  let convPts = 0, convMA = 0, convApps = 0;
+  for (const [policy, d] of Object.entries(convFirst)) {
+    if (d.date < CONV_START || d.date > CONV_END) continue;
+    const fam = productFamily(d.product);
+    if (!CONV_ELIGIBLE.has(fam)) continue;              // Part D, unclassified -> not eligible
+    const cp = convPointsFor(fam, d.premium, d.carrier, d.product);
+    convApps++; convPts += cp.pts; if (cp.ma) convMA += cp.pts;
+    const annualized = fam === 'Annuity' ? round2(num(d.premium)) : round2(num(d.premium) * 12);
+    convPols.push({ date: d.date, client: d.client, carrier: d.carrier, product: d.product, family: fam,
+      premium: round2(num(d.premium)), annualized, basis: cp.basis, points: round2(cp.pts), ma: cp.ma });
+    const fm = (convFamMap[fam] ||= { family: fam, policies: 0, points: 0, ma: cp.ma });
+    fm.policies++; fm.points += cp.pts;
+    const sm = (convSeriesMap[d.date] ||= { date: d.date, points: 0, apps: 0 });
+    sm.points += cp.pts; sm.apps++;
+  }
+  convPols.sort((a, b) => b.points - a.points);
+  const convNonMA = round2(convPts - convMA);
+  const winDays = Math.round((Date.parse(CONV_END + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1;
+  const convAsOf = (latestDate > CONV_START ? latestDate : CONV_START);
+  const convElapsed = Math.min(Math.max(Math.round((Date.parse(convAsOf + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1, 0), winDays);
+  const convention = {
+    window: { start: CONV_START, end: CONV_END },
+    as_of: latestDate,
+    points: round2(convPts), points_ma: round2(convMA), points_nonma: convNonMA,
+    apps: convApps, apps_needed: 25,
+    nonma_share: convPts ? round2(convNonMA / convPts) : null,
+    nonma_rule_met: convNonMA >= convPts * 0.5,
+    by_family: Object.values(convFamMap).map(f => ({ ...f, points: round2(f.points) })).sort((a, b) => b.points - a.points),
+    series: Object.values(convSeriesMap).sort((a, b) => (a.date < b.date ? -1 : 1)),
+    policies: convPols.slice(0, 500),
+    persistency: (retention && retention.totals) ? retention.totals.persistency : null,
+    elapsed_frac: round2(convElapsed / winDays), days_left: Math.max(0, winDays - convElapsed),
+  };
+
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
-    retention, products, value, clients, audit,
+    retention, products, value, clients, audit, convention,
     statement_count: records.length,
     years, series,
     residual_by_carrier: residualByCarrier,
