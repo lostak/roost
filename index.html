@@ -2173,7 +2173,7 @@ function renderConvention(){
     const ser=series||[]; let run=0; const cum=ser.map(s=>{run+=s.points;return Math.round(run);});
     let labels=ser.map(s=>s.date); if(!labels.length){labels=['—'];cum.push(0);}
     const ds=[{label:'Cumulative points',data:cum,borderColor:color,backgroundColor:hexA(color,.16),tension:.2,pointRadius:2,fill:true}];
-    if(target)ds.push({label:'Level target ('+num0(target)+')',data:labels.map(()=>target),borderColor:'#c0872f',borderDash:[6,4],pointRadius:0,fill:false});
+    if(target)ds.push({label:'Level target ('+num0(target)+')',data:labels.map(()=>target),borderColor:'#d64545',borderWidth:2.5,borderDash:[8,5],pointRadius:0,fill:false});
     const maxY=Math.max(cum[cum.length-1]||0,target||0)*1.1;
     return new Chart($(id),{type:'line',data:{labels,datasets:ds},
       options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
