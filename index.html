@@ -720,7 +720,15 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
       <!-- CONVENTION -->
       <section class="view" id="view-convention">
         <h2 class="section">Convention tracker &mdash; ASB 2027 incentive trip</h2>
-        <div class="banner">Qualification runs <b>Feb 1, 2026 &ndash; Jan 31, 2027</b> (Nassau, Bahamas, Jun 10&ndash;14, 2027). Points are earned on new, issued annualized premium: Med Supp 125% (AARP/UHC flat 1,500), Medicare Advantage 2,000/policy, annuities 15% of premium, life &amp; LTC / supplemental health 250%. Part D and under-65 medical don't count. You also need <b>25+ issued applications</b> and at least <b>50% of credit from non-MA</b> lines. These are Roost's estimates from your statements &mdash; ASB's official tally governs.</div>
+        <div class="banner">Qualification runs <b>Feb 1, 2026 &ndash; Jan 31, 2027</b> (Nassau, Bahamas, Jun 10&ndash;14, 2027). Points are earned on new, issued annualized premium: Med Supp 125% (AARP/UHC flat 1,500), Medicare Advantage 2,000/policy, annuities 15% of premium, life &amp; LTC / supplemental health 250%. Part D and under-65 medical don't count. You also need <b>25+ issued applications</b> and at least <b>50% of credit from non-MA</b> lines. Each level qualifies on <b>downline OR personal</b> production. These are Roost's estimates from your statements &mdash; ASB's official tally governs.</div>
+        <div class="card" style="margin-bottom:24px">
+          <div class="controls" style="gap:14px;flex-wrap:wrap">
+            <span class="lbl-inline">My contract level</span>
+            <select id="convLevel" class="sel"></select>
+            <span class="hint" id="convLevelMsg" style="align-self:center"></span>
+          </div>
+          <div id="convTarget" style="margin-top:14px"></div>
+        </div>
         <div class="kpis" id="convKpis"></div>
         <div class="card" style="margin-bottom:24px">
           <h3 style="margin-top:0">Qualification checklist</h3>
@@ -2035,16 +2043,70 @@ document.addEventListener('click',e=>{const tr=e.target.closest('#cliTable tbody
   if(tr)openClient(decodeURIComponent(tr.dataset.client));});
 
 // ================= CONVENTION TRACKER =================
+function loadLocalProfile(){try{return JSON.parse(localStorage.getItem('roostProfile')||'{}')||{};}catch(e){return {};}}
+async function saveConventionLevel(){
+  const lv=Number($('#convLevel').value);
+  const local=loadLocalProfile();
+  if(isFinite(lv)&&lv>=1)local.convention_level=lv; else delete local.convention_level;
+  try{localStorage.setItem('roostProfile',JSON.stringify(local));}catch(e){}
+  DATA.convention.level=(local.convention_level!=null)?local.convention_level:null;
+  renderConvention();
+  $('#convLevelMsg').textContent='Saving…';
+  try{
+    const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({convention_level:isFinite(lv)?lv:''})});
+    const txt=await r.text(); let j=null; try{j=JSON.parse(txt);}catch(e){}
+    if(r.ok&&j&&j.status==='ok'){$('#convLevelMsg').textContent='Saved to your profile.';setTimeout(()=>{$('#convLevelMsg').textContent='';},1800);}
+    else $('#convLevelMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';
+  }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to persist).';}
+}
 function renderConvention(){
   ['convCum','convFam'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
   const V=DATA.convention; if(!V){return;}
   const num0=n=>Math.round(n).toLocaleString();
-  const kp=[
-    {l:'Convention points',v:num0(V.points),s:'estimated, this window',gold:true},
+  const local=loadLocalProfile();
+  const lv=(local.convention_level!=null)?local.convention_level:(V.level!=null?V.level:'');
+  const sel=$('#convLevel');
+  sel.innerHTML='<option value="">Select your level…</option>'+(V.levels||[]).map(l=>`<option value="${l.level}"${l.level===lv?' selected':''}>Level ${l.level}</option>`).join('');
+  sel.onchange=saveConventionLevel;
+  const lt=(V.levels||[]).find(l=>l.level===lv);
+  const bar=(pct,color)=>`<div style="height:12px;border-radius:8px;background:var(--surface-3);overflow:hidden;margin:5px 0 2px"><div style="height:100%;width:${Math.max(0,Math.min(100,Math.round(pct*100)))}%;background:${color};transition:width .3s"></div></div>`;
+  const GREEN='#2e7d5b', GOLD='#c0872f';
+  if(!lt){
+    $('#convTarget').innerHTML='<p class="hint">Select your contract level above to see the production you need to qualify. It saves to your profile (roost/config.json), so you only set it once.</p>';
+  }else{
+    let h='';
+    if(lt.personal){
+      const done=V.points>=lt.personal, pct=V.points/lt.personal;
+      h+=`<div style="display:flex;justify-content:space-between;flex-wrap:wrap"><b>Personal production &mdash; Level ${lv}</b>`
+        +`<span>${num0(V.points)} / ${num0(lt.personal)} pts ${done?'<span style="color:'+GREEN+';font-weight:700">✓ qualified</span>':''}</span></div>`
+        +bar(pct,done?GREEN:COLORS.resid)
+        +`<div class="hint">${done?'You\'ve reached the personal-production target for level '+lv+'.':num0(lt.personal-V.points)+' points to go on the personal path.'}</div>`;
+    }else{
+      h+=`<div class="hint">Level ${lv} qualifies on <b>downline production</b> only &mdash; there's no personal-production target at this level.</div>`;
+    }
+    if(lt.downline){
+      h+=`<div style="margin-top:12px"><b>Downline path:</b> ${num0(lt.downline)} points. <span class="hint">Downline production can't be fully derived from your personal statements &mdash; track this with ASB.</span></div>`;
+    }
+    h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--outline-var)"><b>Other ways to qualify</b>`;
+    if(lv<=7){const done=V.fyc>=V.alt.fyc_levels_1_7;
+      h+=`<div style="margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>$150,000+ first-year commission (levels 1&ndash;7)</span><span>${fmt0(V.fyc)} / ${fmt0(V.alt.fyc_levels_1_7)} ${done?'<span style="color:'+GREEN+'">✓</span>':''}</span></div>`+bar(V.fyc/V.alt.fyc_levels_1_7,done?GREEN:GOLD);}
+    {const done=V.points>=V.alt.new_contract_personal;
+      h+=`<div style="margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>260,000+ personal (if contracted on/after Oct 1, 2025)</span><span>${num0(V.points)} / ${num0(V.alt.new_contract_personal)} pts ${done?'<span style="color:'+GREEN+'">✓</span>':''}</span></div>`+bar(V.points/V.alt.new_contract_personal,done?GREEN:COLORS.resid);}
+    h+='</div>';
+    $('#convTarget').innerHTML=h;
+  }
+  const kp=[];
+  if(lt&&lt.personal){const done=V.points>=lt.personal;
+    kp.push({l:`Level ${lv} — personal target`,v:Math.round(V.points/lt.personal*100)+'%',
+      s:done?`qualified · ${num0(V.points)} pts`:`${num0(lt.personal-V.points)} pts to go`,gold:true});
+  }else{
+    kp.push({l:'Convention points',v:num0(V.points),s:lt?`level ${lv}: downline path only`:'pick your level to set a target',gold:true});
+  }
+  kp.push(
     {l:'Applications',v:`${V.apps} / ${V.apps_needed}`,s:V.apps>=V.apps_needed?'minimum met':`${V.apps_needed-V.apps} more needed`},
     {l:'Non-MA credit',v:(V.nonma_share!=null?Math.round(V.nonma_share*100):0)+'%',s:V.nonma_rule_met?'meets the 50% rule':'must reach 50%'},
     {l:'Window remaining',v:V.days_left+' days',s:`${Math.round(V.elapsed_frac*100)}% elapsed · ends ${V.window.end}`}
-  ];
+  );
   $('#convKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
   // checklist

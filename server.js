@@ -356,6 +356,32 @@ function handleExpenses(req, res) {
   });
 }
 
+// ---- user profile (things that shouldn't be re-entered each launch: convention level, ...) ----
+// Persists into config.json under profile { convention_level, ... }. Goals and expenses
+// already persist in the same file, so config.json is the single saved profile.
+function handleProfile(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cfg = loadConfig();
+      const profile = (cfg.profile && typeof cfg.profile === 'object') ? cfg.profile : {};
+      if ('convention_level' in o) {
+        const lv = Number(o.convention_level);
+        if (isFinite(lv) && lv >= 1 && lv <= 10) profile.convention_level = lv;
+        else delete profile.convention_level;
+      }
+      cfg.profile = profile;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', profile });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 const server = http.createServer((req, res) => {
   try {
     const url = req.url.split('?')[0];
@@ -376,6 +402,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/expenses' && req.method === 'POST') {
       return handleExpenses(req, res);
+    }
+    if (url === '/api/profile' && req.method === 'POST') {
+      return handleProfile(req, res);
     }
     if (url === '/api/data') {
       const records = loadStatements();

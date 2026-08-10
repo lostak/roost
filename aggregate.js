@@ -938,8 +938,31 @@ function buildSummary(allRecords, config) {
     if (fam === 'Dental / Vision') return { pts: round2(pm * 12 * 2.5), ma: false, basis: '250% (supplemental health)' };
     return { pts: 0, ma: false, basis: 'does not count' };
   };
+  // Level -> qualifying production (in convention points). Each level qualifies on downline
+  // OR personal production (per the corrected reading). Levels 7+ list only a downline
+  // number; levels above 9 aren't published (shown as >= level 9).
+  const CONV_LEVELS = [
+    { level: 1, personal: 275000, downline: null },
+    { level: 2, personal: 310000, downline: 1670000 },
+    { level: 2.5, personal: 310000, downline: 1700000 },
+    { level: 3, personal: 360000, downline: 1700000 },
+    { level: 3.5, personal: 360000, downline: 1750000 },
+    { level: 4, personal: 410000, downline: 1800000 },
+    { level: 4.5, personal: 410000, downline: 1900000 },
+    { level: 5, personal: 525000, downline: 2100000 },
+    { level: 5.5, personal: 525000, downline: 2500000 },
+    { level: 6, personal: 650000, downline: 2800000 },
+    { level: 6.5, personal: 650000, downline: 3000000 },
+    { level: 7, personal: null, downline: 3300000 },
+    { level: 7.5, personal: null, downline: 3300000 },
+    { level: 8, personal: null, downline: 3300000 },
+    { level: 8.5, personal: null, downline: 3300000 },
+    { level: 9, personal: null, downline: 5800000 },
+    { level: 9.5, personal: null, downline: 5800000 },
+    { level: 10, personal: null, downline: 5800000 },
+  ];
   const convPols = [], convFamMap = {}, convSeriesMap = {};
-  let convPts = 0, convMA = 0, convApps = 0;
+  let convPts = 0, convMA = 0, convApps = 0, convFyc = 0;
   for (const [policy, d] of Object.entries(convFirst)) {
     if (d.date < CONV_START || d.date > CONV_END) continue;
     const fam = productFamily(d.product);
@@ -955,7 +978,15 @@ function buildSummary(allRecords, config) {
     sm.points += cp.pts; sm.apps++;
   }
   convPols.sort((a, b) => b.points - a.points);
+  // first-year commission (dollars) on eligible business in the window — an alternate path
+  for (const r of records) {
+    if (r.date < CONV_START || r.date > CONV_END) continue;
+    for (const it of (r.items || [])) {
+      if (it.section === 'advances' && it.policy && CONV_ELIGIBLE.has(productFamily(it.product))) convFyc += it.payable;
+    }
+  }
   const convNonMA = round2(convPts - convMA);
+  const convLevel = (config.profile && config.profile.convention_level != null) ? Number(config.profile.convention_level) : null;
   const winDays = Math.round((Date.parse(CONV_END + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1;
   const convAsOf = (latestDate > CONV_START ? latestDate : CONV_START);
   const convElapsed = Math.min(Math.max(Math.round((Date.parse(convAsOf + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1, 0), winDays);
@@ -971,6 +1002,9 @@ function buildSummary(allRecords, config) {
     policies: convPols.slice(0, 500),
     persistency: (retention && retention.totals) ? retention.totals.persistency : null,
     elapsed_frac: round2(convElapsed / winDays), days_left: Math.max(0, winDays - convElapsed),
+    level: convLevel, levels: CONV_LEVELS,
+    fyc: round2(convFyc),
+    alt: { new_contract_personal: 260000, fyc_levels_1_7: 150000 },
   };
 
   return {
