@@ -793,6 +793,55 @@ function buildSummary(allRecords, config) {
     households: households.slice(0, 300),
   };
 
+  // ================= audit & reconciliation =================
+  // Trust checks: does the summed net match the printed year-to-date? Are there
+  // impossible YTD reversals (off-sequence statements), missing weeks, or residual
+  // payments that dropped well below a policy's own norm (possible carrier error)?
+  const nonPending = records.filter(r => !r.pending).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const byYr = {}; for (const r of nonPending) (byYr[r.year] ||= []).push(r);
+  const ytdDrops = [], cadenceGaps = [];
+  for (const y of Object.keys(byYr)) {
+    const rs = byYr[y];
+    for (let i = 1; i < rs.length; i++) {
+      if (rs[i].ytd_total != null && rs[i - 1].ytd_total != null && rs[i].ytd_total < rs[i - 1].ytd_total - 1)
+        ytdDrops.push({ date: rs[i].date, ytd: round2(rs[i].ytd_total),
+          prev_date: rs[i - 1].date, prev_ytd: round2(rs[i - 1].ytd_total),
+          drop: round2(rs[i - 1].ytd_total - rs[i].ytd_total) });
+      const days = Math.round((Date.parse(rs[i].date) - Date.parse(rs[i - 1].date)) / 86400000);
+      if (days > 14) cadenceGaps.push({ from: rs[i - 1].date, to: rs[i].date, days });
+    }
+  }
+  const reconciliation = allYears.map(y => {
+    const rs = byYr[y] || [];
+    const summed = round2(rs.reduce((s, r) => s + num(r.pay_period_net), 0));
+    const printed = round2(rs.reduce((m, r) => (r.ytd_total != null && r.ytd_total > m ? r.ytd_total : m), 0));
+    return { year: y, summed_net: summed, printed_ytd: printed, diff: round2(summed - printed),
+      pct: printed ? round2((summed - printed) / printed) : null };
+  });
+  // residual "dip" watch: a policy whose latest residual is well under its own median (excl.
+  // Medicare Advantage, whose initial->monthly transition would false-positive).
+  const payByPol = {};
+  for (const r of nonPending) for (const it of (r.items || [])) {
+    if (it.section === 'commission' && it.policy && it.payable > 0 && productFamily(it.product) !== 'Medicare Advantage')
+      (payByPol[it.policy] ||= { client: it.client, carrier: it.carrier, product: it.product, pays: [] })
+        .pays.push({ date: r.date, amt: it.payable });
+  }
+  const underpaid = [];
+  for (const [policy, d] of Object.entries(payByPol)) {
+    if (d.pays.length < 4) continue;
+    const amts = d.pays.map(p => p.amt).sort((a, b) => a - b);
+    const med = amts[Math.floor(amts.length / 2)];
+    const last = d.pays[d.pays.length - 1];
+    if (med > 5 && last.amt < med * 0.5)
+      underpaid.push({ policy, client: d.client, carrier: d.carrier, product: d.product,
+        median: round2(med), latest: round2(last.amt), latest_date: last.date, shortfall: round2(med - last.amt) });
+  }
+  underpaid.sort((a, b) => b.shortfall - a.shortfall);
+  const audit = {
+    ytd_drops: ytdDrops, cadence_gaps: cadenceGaps, reconciliation, underpaid: underpaid.slice(0, 100),
+    counts: { ytd_drops: ytdDrops.length, cadence_gaps: cadenceGaps.length, underpaid: underpaid.length },
+  };
+
   // ================= book value & forward residual cash-flow =================
   // In-force valuation: annualized residual times an industry multiple range. Forward
   // cash-flow: the current residual run-rate held flat, plus the step-up when THIS year's
@@ -826,7 +875,7 @@ function buildSummary(allRecords, config) {
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
-    retention, products, value, clients,
+    retention, products, value, clients, audit,
     statement_count: records.length,
     years, series,
     residual_by_carrier: residualByCarrier,

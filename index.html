@@ -223,6 +223,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
     <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
     <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
     <a data-view="clients"><span class="ic">&#9787;</span><span class="lbl">Clients</span></a>
+    <a data-view="audit"><span class="ic">&#9888;</span><span class="lbl">Audit</span></a>
     <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
   </nav>
   <main class="main">
@@ -690,6 +691,33 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         </div>
       </section>
 
+      <!-- AUDIT -->
+      <section class="view" id="view-audit">
+        <h2 class="section">Audit &amp; reconciliation</h2>
+        <div class="banner">Trust checks on the numbers. Does your summed net match the printed year-to-date on the statement? Are there impossible YTD reversals (a sign of an off-sequence or duplicated statement), missing weeks, or residual payments that fell well below a policy's own norm &mdash; where a carrier may have shorted you?</div>
+        <div class="kpis" id="audKpis"></div>
+        <div class="card chart-card tablecard">
+          <h3>Year-to-date reconciliation</h3>
+          <p class="hint">Your summed pay-period net vs. the highest printed YTD on that year's statements. A gap means a statement carries income on a separate stream, or an off-sequence statement is throwing the running total.</p>
+          <table id="audReconTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>&#9888; Off-sequence statements (YTD went backwards)</h3>
+          <p class="hint">A printed year-to-date can't decrease. These statements are out of sequence or on a different stream &mdash; worth reconciling with the carrier.</p>
+          <table id="audDropTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Missing weeks</h3>
+          <p class="hint">Gaps over two weeks between statements &mdash; usually a no-pay week, but confirm none went missing.</p>
+          <table id="audGapTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Underpayment watch</h3>
+          <p class="hint">Residual policies whose most recent payment fell below half their own median &mdash; could be a wind-down, a rate change, or a carrier error to chase. (Medicare Advantage excluded.)</p>
+          <table id="audUnderTable"></table>
+        </div>
+      </section>
+
       <!-- CLIENTS -->
       <section class="view" id="view-clients">
         <h2 class="section">Clients &amp; households</h2>
@@ -868,6 +896,7 @@ function render(){
   renderProjections();
   renderGoals();
   renderClients();
+  renderAudit();
   renderPolicies(yl);
   renderReclassNotes();
 }
@@ -1664,6 +1693,38 @@ function goalInsights(x){
   if(x.ytdCB<0) todo.push(card('Watch chargebacks',`Chargebacks are running <b>${fmt0(x.ytdCB)}</b> this year. Each lapse claws back paid commission and drops the residual — retention protects the goal.`,'focus'));
   $('#goalWorking').innerHTML=work.join('');
   $('#goalToDo').innerHTML=todo.join('');
+}
+
+// ================= AUDIT & RECONCILIATION =================
+function renderAudit(){
+  const A=DATA.audit||{reconciliation:[],ytd_drops:[],cadence_gaps:[],underpaid:[],counts:{}};
+  const cur=A.reconciliation[A.reconciliation.length-1]||{};
+  const kp=[
+    {l:'Reconciliation gap',v:fmt0(cur.diff||0),s:`${cur.year||''}: summed net vs printed YTD`,gold:true},
+    {l:'Off-sequence statements',v:String((A.ytd_drops||[]).length),s:'YTD reversals to reconcile'},
+    {l:'Missing weeks',v:String((A.cadence_gaps||[]).length),s:'gaps over 2 weeks'},
+    {l:'Underpayment watch',v:String((A.underpaid||[]).length),s:'residuals below their norm'}
+  ];
+  $('#audKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  $('#audReconTable').innerHTML=thead(['Year','Summed net','Printed YTD','Difference'])
+    +'<tbody>'+(A.reconciliation||[]).map(r=>`<tr><td>${r.year}</td><td>${fmt(r.summed_net)}</td>
+      <td>${fmt(r.printed_ytd)}</td><td class="${cls(r.diff)}">${fmt(r.diff)}</td></tr>`).join('')+'</tbody>';
+  $('#audDropTable').innerHTML=(A.ytd_drops&&A.ytd_drops.length)
+    ? thead(['Statement','Printed YTD','Prior statement','Prior YTD','Drop'])
+      +'<tbody>'+A.ytd_drops.map(d=>`<tr><td>${d.date}</td><td>${fmt(d.ytd)}</td><td>${d.prev_date}</td>
+        <td>${fmt(d.prev_ytd)}</td><td class="neg">${fmt(-d.drop)}</td></tr>`).join('')+'</tbody>'
+    : '<tbody><tr><td class="hint">No YTD reversals — the printed running totals are consistent.</td></tr></tbody>';
+  $('#audGapTable').innerHTML=(A.cadence_gaps&&A.cadence_gaps.length)
+    ? thead(['After','Next statement','Days apart'])
+      +'<tbody>'+A.cadence_gaps.map(g=>`<tr><td>${g.from}</td><td>${g.to}</td><td>${g.days}</td></tr>`).join('')+'</tbody>'
+    : '<tbody><tr><td class="hint">No unusual gaps in statement cadence.</td></tr></tbody>';
+  $('#audUnderTable').innerHTML=(A.underpaid&&A.underpaid.length)
+    ? thead(['Client','Carrier','Product','Typical (median)','Latest','As of','Shortfall'])
+      +'<tbody>'+A.underpaid.map(u=>`<tr><td>${u.client}</td><td><span class="chip">${u.carrier}</span></td>
+        <td>${(u.product||'').slice(0,26)}</td><td>${fmt(u.median)}</td><td>${fmt(u.latest)}</td>
+        <td>${u.latest_date}</td><td class="neg">${fmt(-u.shortfall)}</td></tr>`).join('')+'</tbody>'
+    : '<tbody><tr><td class="hint">No residual payments materially below their norm.</td></tr></tbody>';
 }
 
 // ================= CLIENTS & HOUSEHOLDS =================
