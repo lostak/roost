@@ -996,11 +996,14 @@ function buildSummary(allRecords, config) {
     fm.policies++; fm.points += pPts;
   }
   convPols.sort((a, b) => b.points - a.points);
-  // first-year commission (dollars) on eligible business in the window — an alternate path
+  // first-year commission (dollars) actually paid to YOU on eligible business in the window —
+  // excludes overrides on policies your downline wrote (that's not your first-year commission).
   for (const r of records) {
     if (r.date < CONV_START || r.date > CONV_END) continue;
     for (const it of (r.items || [])) {
-      if (it.section === 'advances' && it.policy && CONV_ELIGIBLE.has(productFamily(it.product))) convFyc += it.payable;
+      if (it.section !== 'advances' || !it.policy || !CONV_ELIGIBLE.has(productFamily(it.product))) continue;
+      const hasDownline = (it.agents || []).some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
+      if (!hasDownline) convFyc += it.payable;
     }
   }
   const convNonMA = round2(convPts - convMA);
