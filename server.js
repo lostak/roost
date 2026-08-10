@@ -329,6 +329,33 @@ function handleGoals(req, res) {
   });
 }
 
+// ---- expenses (business costs per year, for true-net / ROI / cost-per-acquisition) ----
+// Persists into config.json as expenses { "<year>": { leads, marketing, eo, crm, staff, other } }.
+function handleExpenses(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cfg = loadConfig();
+      const all = (cfg.expenses && typeof cfg.expenses === 'object') ? cfg.expenses : {};
+      const year = String(parseInt(o.year, 10));
+      if (!/^\d{4}$/.test(year)) throw new Error('invalid year');
+      const KEYS = ['leads', 'marketing', 'eo', 'crm', 'staff', 'other'];
+      const src = (o.expenses && typeof o.expenses === 'object') ? o.expenses : {};
+      const clean = {}; let any = false;
+      for (const k of KEYS) { const n = Number(src[k]); if (isFinite(n) && n > 0) { clean[k] = Math.round(n); any = true; } }
+      if (any) all[year] = clean; else delete all[year];
+      cfg.expenses = all;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', expenses: all });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 const server = http.createServer((req, res) => {
   try {
     const url = req.url.split('?')[0];
@@ -346,6 +373,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/goals' && req.method === 'POST') {
       return handleGoals(req, res);
+    }
+    if (url === '/api/expenses' && req.method === 'POST') {
+      return handleExpenses(req, res);
     }
     if (url === '/api/data') {
       const records = loadStatements();

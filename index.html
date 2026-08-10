@@ -222,6 +222,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
     <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
     <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
     <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
+    <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
     <a data-view="clients"><span class="ic">&#9787;</span><span class="lbl">Clients</span></a>
     <a data-view="audit"><span class="ic">&#9888;</span><span class="lbl">Audit</span></a>
     <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
@@ -695,6 +696,34 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         </div>
       </section>
 
+      <!-- EXPENSES -->
+      <section class="view" id="view-expenses">
+        <h2 class="section">Expenses &amp; true profit</h2>
+        <div class="banner">Commissions aren't profit until you subtract what it costs to write them. Log your business expenses for the year &mdash; leads, marketing, E&amp;O, CRM/software, staff &mdash; and Roost shows your true net, your return on every dollar spent, and your cost per enrollment.</div>
+        <div class="card" style="margin-bottom:24px">
+          <div class="controls" style="gap:14px;flex-wrap:wrap;margin-bottom:14px">
+            <span class="lbl-inline">Year</span>
+            <select id="expYear" class="sel"></select>
+            <button class="btn tonal" id="expSave" onclick="saveExpenses()"><span>&#128190;</span> Save expenses</button>
+            <span class="hint" id="expSaveMsg" style="align-self:center"></span>
+          </div>
+          <div class="sliders" style="grid-template-columns:1fr 1fr 1fr">
+            <div class="sl"><label>Leads $</label><input type="number" class="numbox" id="exp_leads" min="0" step="100" style="width:100%"></div>
+            <div class="sl"><label>Marketing $</label><input type="number" class="numbox" id="exp_marketing" min="0" step="100" style="width:100%"></div>
+            <div class="sl"><label>E&amp;O / licensing $</label><input type="number" class="numbox" id="exp_eo" min="0" step="50" style="width:100%"></div>
+            <div class="sl"><label>CRM / software $</label><input type="number" class="numbox" id="exp_crm" min="0" step="50" style="width:100%"></div>
+            <div class="sl"><label>Staff / VA $</label><input type="number" class="numbox" id="exp_staff" min="0" step="100" style="width:100%"></div>
+            <div class="sl"><label>Other $</label><input type="number" class="numbox" id="exp_other" min="0" step="50" style="width:100%"></div>
+          </div>
+        </div>
+        <div class="kpis" id="expKpis"></div>
+        <div class="card chart-card">
+          <h3>Where the money goes</h3>
+          <p class="hint">Your commission net for the year against each expense category.</p>
+          <div class="chart-wrap"><canvas id="expChart"></canvas></div>
+        </div>
+      </section>
+
       <!-- AUDIT -->
       <section class="view" id="view-audit">
         <h2 class="section">Audit &amp; reconciliation</h2>
@@ -899,6 +928,7 @@ function render(){
   renderComparison();
   renderProjections();
   renderGoals();
+  renderExpenses();
   renderClients();
   renderAudit();
   renderPolicies(yl);
@@ -1697,6 +1727,59 @@ function goalInsights(x){
   if(x.ytdCB<0) todo.push(card('Watch chargebacks',`Chargebacks are running <b>${fmt0(x.ytdCB)}</b> this year. Each lapse claws back paid commission and drops the residual — retention protects the goal.`,'focus'));
   $('#goalWorking').innerHTML=work.join('');
   $('#goalToDo').innerHTML=todo.join('');
+}
+
+// ================= EXPENSES & TRUE PROFIT =================
+const EXP_CATS=[['leads','Leads'],['marketing','Marketing'],['eo','E&O / licensing'],['crm','CRM / software'],['staff','Staff / VA'],['other','Other']];
+let EXP_YEAR=null;
+function loadLocalExpenses(){try{return JSON.parse(localStorage.getItem('roostExpenses')||'{}')||{};}catch(e){return {};}}
+async function saveExpenses(){
+  const year=Number($('#expYear').value);
+  const exp={}; EXP_CATS.forEach(([k])=>{const n=Number($('#exp_'+k).value); if(isFinite(n)&&n>0)exp[k]=Math.round(n);});
+  const local=loadLocalExpenses(); local[year]=exp;
+  try{localStorage.setItem('roostExpenses',JSON.stringify(local));}catch(e){}
+  DATA.expenses.config=Object.assign({},DATA.expenses.config,local);
+  renderExpenses();
+  $('#expSaveMsg').textContent='Saving…';
+  try{
+    const r=await fetch('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({year,expenses:exp})});
+    const txt=await r.text(); let j=null; try{j=JSON.parse(txt);}catch(e){}
+    if(r.ok&&j&&j.status==='ok'){$('#expSaveMsg').textContent='Saved.';setTimeout(()=>{$('#expSaveMsg').textContent='';},1800);}
+    else{$('#expSaveMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';}
+  }catch(e){$('#expSaveMsg').textContent='Saved on this device (server unreachable — restart Roost to persist).';}
+}
+function renderExpenses(){
+  if(charts.exp){charts.exp.destroy();delete charts.exp;}
+  const E=DATA.expenses||{config:{},current_year:(DATA.all_years||[]).slice(-1)[0]};
+  const years=DATA.all_years||[];
+  if(EXP_YEAR==null||!years.includes(EXP_YEAR)) EXP_YEAR=E.current_year;
+  const sel=$('#expYear');
+  sel.innerHTML=years.map(y=>`<option value="${y}"${y===EXP_YEAR?' selected':''}>${y}</option>`).join('');
+  sel.onchange=()=>{EXP_YEAR=Number(sel.value);renderExpenses();};
+  const year=EXP_YEAR;
+  const cfg=Object.assign({},E.config,loadLocalExpenses());
+  const exp=cfg[year]||{};
+  EXP_CATS.forEach(([k])=>{const el=$('#exp_'+k); if(document.activeElement!==el) el.value=exp[k]?exp[k]:'';});
+  const totalExp=EXP_CATS.reduce((s,[k])=>s+(Number(exp[k])||0),0);
+  const yr=(DATA.years||[]).find(y=>y.year===year)||{net:0};
+  const grossNet=yr.net||0;
+  const enroll=(DATA.series||[]).filter(s=>s.year===year).reduce((s,r)=>s+(r.enrollments||0),0);
+  const trueNet=grossNet-totalExp;
+  const retPer=totalExp>0?grossNet/totalExp:null;
+  const cpa=enroll>0?totalExp/enroll:null;
+  const margin=grossNet>0?trueNet/grossNet:null;
+  const kp=[
+    {l:'True net profit',v:fmt0(trueNet),s:`${fmt0(grossNet)} commissions − ${fmt0(totalExp)} costs`,gold:true},
+    {l:'Total expenses',v:fmt0(totalExp),s:margin!=null?`${Math.round((1-margin)*100)}% of commissions`:''},
+    {l:'Return per $1 spent',v:retPer!=null?('$'+retPer.toFixed(2)):'—',s:'commission earned per expense dollar'},
+    {l:'Cost per enrollment',v:cpa!=null?fmt0(cpa):'—',s:`${enroll} enrollments this year`}
+  ];
+  $('#expKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const labels=['Net (kept)',...EXP_CATS.filter(([k])=>Number(exp[k])>0).map(([,l])=>l)];
+  const data=[Math.max(0,trueNet),...EXP_CATS.filter(([k])=>Number(exp[k])>0).map(([k])=>Number(exp[k]))];
+  const cols=['#2e7d5b',...EXP_CATS.filter(([k])=>Number(exp[k])>0).map((_,i)=>PALETTE[i%PALETTE.length])];
+  charts.exp=new Chart($('#expChart'),{type:'bar',data:{labels,datasets:[{label:year+' $',data,backgroundColor:cols}]},options:baropts(false,false)});
 }
 
 // ================= AUDIT & RECONCILIATION =================

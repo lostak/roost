@@ -907,6 +907,10 @@ function buildSummary(allRecords, config) {
       config: (config.goals && typeof config.goals === 'object') ? config.goals : {},
       current_year: allYears[allYears.length - 1] || new Date().getFullYear(),
     },
+    expenses: {
+      config: (config.expenses && typeof config.expenses === 'object') ? config.expenses : {},
+      current_year: allYears[allYears.length - 1] || new Date().getFullYear(),
+    },
     pending: {
       count: pendingRecs.length,
       latest_date: latestPending ? latestPending.date : null,
