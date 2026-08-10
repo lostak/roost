@@ -975,6 +975,7 @@ function buildSummary(allRecords, config) {
   // that are you (config.profile.self_names) count toward you, not against. Downline share is
   // the downline agents' listed cuts; combined = your share + downline share.
   const selfSet = new Set((((config.profile || {}).self_names) || []).map(normName).filter(Boolean));
+  const convExclude = new Set((((config.profile || {}).convention_exclude) || []).map(String)); // replacements / family / ineligible
   const convPols = [], convFamMap = {};
   const convPSeries = {}, convCSeries = {};       // personal series, combined (personal + downline) series
   let convPts = 0, convMA = 0, convApps = 0, convFyc = 0, convDPts = 0, convPApps = 0;
@@ -992,17 +993,20 @@ function buildSummary(allRecords, config) {
     const selfShare = hasDownline ? 0 : Math.max(0, Math.min(100, 100 - otherListed)) / 100;   // your cut, if you wrote it
     const dlShare = ags.reduce((s, a) => s + ((isDL[normName(a.name)] && !selfSet.has(normName(a.name))) ? (a.level || 0) : 0), 0) / 100;
     const pPts = cp.pts * selfShare, dPts = cp.pts * dlShare;
-    convApps++; if (selfShare > 0) convPApps++;
-    convPts += pPts; if (cp.ma) convMA += pPts; convDPts += dPts;
-    if (pPts > 0) (convPSeries[d.date] ||= { date: d.date, points: 0 }).points += pPts;
-    const combined = pPts + dPts;
-    if (combined > 0) (convCSeries[d.date] ||= { date: d.date, points: 0 }).points += combined;
+    const excluded = convExclude.has(String(policy));   // you marked it a replacement / family / ineligible
+    if (!excluded) {
+      convApps++; if (selfShare > 0) convPApps++;
+      convPts += pPts; if (cp.ma) convMA += pPts; convDPts += dPts;
+      if (pPts > 0) (convPSeries[d.date] ||= { date: d.date, points: 0 }).points += pPts;
+      const combined = pPts + dPts;
+      if (combined > 0) (convCSeries[d.date] ||= { date: d.date, points: 0 }).points += combined;
+      const fm = (convFamMap[fam] ||= { family: fam, policies: 0, points: 0, ma: cp.ma });
+      fm.policies++; fm.points += pPts;
+    }
     const annualized = fam === 'Annuity' ? round2(num(d.premium)) : round2(num(d.premium) * 12);
-    convPols.push({ date: d.date, client: d.client, carrier: d.carrier, product: d.product, family: fam,
+    convPols.push({ date: d.date, policy, client: d.client, carrier: d.carrier, product: d.product, family: fam,
       premium: round2(num(d.premium)), annualized, basis: cp.basis, self_share: Math.round(selfShare * 100),
-      points: round2(pPts), ma: cp.ma });
-    const fm = (convFamMap[fam] ||= { family: fam, policies: 0, points: 0, ma: cp.ma });
-    fm.policies++; fm.points += pPts;
+      points: round2(pPts), ma: cp.ma, excluded });
   }
   convPols.sort((a, b) => b.points - a.points);
   // first-year commission (dollars) actually paid to YOU on eligible business in the window —
@@ -1011,6 +1015,7 @@ function buildSummary(allRecords, config) {
     if (r.date < PAY_START || r.date > PAY_END) continue;
     for (const it of (r.items || [])) {
       if (it.section !== 'advances' || !it.policy || !CONV_ELIGIBLE.has(productFamily(it.product))) continue;
+      if (convExclude.has(String(it.policy))) continue;
       const hasDownline = (it.agents || []).some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
       if (!hasDownline) convFyc += it.payable;
     }
@@ -1062,6 +1067,7 @@ function buildSummary(allRecords, config) {
     alt: { new_contract_personal: 260000, fyc_levels_1_7: 150000 },
     self_names: (((config.profile || {}).self_names) || []),
     candidates: convCandidates,
+    excluded: [...convExclude],
     personal_points: round2(convPts), personal_apps: convPApps,
     personal_series: Object.values(convPSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
     downline_points: round2(convDPts),

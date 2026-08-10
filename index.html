@@ -770,6 +770,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
         <div class="card chart-card tablecard">
           <h3>Qualifying policies</h3>
+          <p class="hint">Check <b>Exclude</b> for anything that doesn't count &mdash; 1035 exchanges / replacements of existing ASB policies, family-member policies, or other ineligible business. Excluded policies drop out of your credit immediately and save to your profile.</p>
           <table id="convPolTable"></table>
         </div>
       </section>
@@ -2077,6 +2078,20 @@ async function saveConventionLevel(){
     else $('#convLevelMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';
   }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to persist).';}
 }
+async function toggleConventionExclude(policy,exclude){
+  const cur=new Set((DATA.convention&&DATA.convention.excluded)||[]);
+  if(exclude)cur.add(policy); else cur.delete(policy);
+  const list=[...cur];
+  const local=loadLocalProfile(); local.convention_exclude=list;
+  try{localStorage.setItem('roostProfile',JSON.stringify(local));}catch(e){}
+  try{
+    const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({convention_exclude:list})});
+    const txt=await r.text();let j=null;try{j=JSON.parse(txt);}catch(e){}
+    if(r.ok&&j&&j.status==='ok')await loadData(true);
+  }catch(e){}
+}
+document.addEventListener('change',e=>{if(e.target.classList&&e.target.classList.contains('convExcl'))
+  toggleConventionExclude(decodeURIComponent(e.target.dataset.policy),e.target.checked);});
 async function saveConventionLag(){
   const days=Math.max(0,Math.min(180,Math.round(Number($('#convLag').value)||0)));
   const local=loadLocalProfile(); local.convention_pay_lag_days=days;
@@ -2227,10 +2242,11 @@ function renderConvention(){
   $('#convFamTable').innerHTML=thead(['Product family','Policies','Points','Share'])
     +'<tbody>'+bf.map(f=>`<tr><td>${f.family}${f.ma?' <span class="hint">(MA)</span>':''}</td><td>${f.policies}</td>
       <td><b>${num0(f.points)}</b></td><td>${V.points?Math.round(f.points/V.points*100):0}%</td></tr>`).join('')+'</tbody>';
-  $('#convPolTable').innerHTML=thead(['Issued','Client','Carrier','Product','Line','Premium','Annualized','Basis','Points'])
-    +'<tbody>'+(V.policies||[]).map(p=>`<tr><td>${p.date}</td><td>${p.client||'&mdash;'}</td>
+  $('#convPolTable').innerHTML=thead(['Issued','Client','Carrier','Product','Line','Premium','Annualized','Points','Exclude'])
+    +'<tbody>'+(V.policies||[]).map(p=>`<tr${p.excluded?' style="opacity:.45"':''}><td>${p.date}</td><td>${p.client||'&mdash;'}</td>
       <td><span class="chip">${p.carrier}</span></td><td>${(p.product||'').slice(0,24)}</td><td>${p.family}</td>
-      <td>${fmt(p.premium)}</td><td>${fmt(p.annualized)}</td><td class="hint">${p.basis}</td><td><b>${num0(p.points)}</b></td></tr>`).join('')+'</tbody>';
+      <td>${fmt(p.premium)}</td><td>${fmt(p.annualized)}</td><td><b>${p.excluded?'&mdash;':num0(p.points)}</b></td>
+      <td style="text-align:center"><input type="checkbox" class="convExcl" data-policy="${encodeURIComponent(p.policy||'')}"${p.excluded?' checked':''} title="Exclude (1035 replacement, family member, or ineligible)"></td></tr>`).join('')+'</tbody>';
 }
 
 // ================= AUDIT & RECONCILIATION =================
