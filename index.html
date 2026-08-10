@@ -1330,19 +1330,24 @@ function dayInfo(dateStr,year){
   const elapsed=Math.min(Math.max((cur-start)/86400000+1,0),yearDays);
   return {yearDays,elapsed,frac:elapsed/yearDays,weeksLeft:Math.max(0,(yearDays-elapsed)/7)};
 }
+function loadLocalGoals(){try{return JSON.parse(localStorage.getItem('roostGoals')||'{}')||{};}catch(e){return {};}}
 async function saveGoal(){
   const year=Number($('#goalYear').value), net=Number($('#goalInput').value);
+  // 1) store on-device immediately so tracking works right away
+  const local=loadLocalGoals();
+  if(isFinite(net)&&net>0) local[year]={net:Math.round(net)}; else delete local[year];
+  try{localStorage.setItem('roostGoals',JSON.stringify(local));}catch(e){}
+  DATA.goals.config=Object.assign({},DATA.goals.config,local);
+  renderGoals();
+  // 2) also persist to config.json on the server (needs the updated server running)
   $('#goalSaveMsg').textContent='Saving…';
   try{
     const r=await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({year,net:isFinite(net)?net:''})});
-    const j=await r.json();
-    if(j.status!=='ok')throw new Error(j.message||'error');
-    DATA.goals.config=j.goals;
-    $('#goalSaveMsg').textContent='Saved.';
-    setTimeout(()=>{$('#goalSaveMsg').textContent='';},1800);
-    renderGoals();
-  }catch(e){$('#goalSaveMsg').textContent='Could not save: '+e.message;}
+    const txt=await r.text(); let j=null; try{j=JSON.parse(txt);}catch(e){}
+    if(r.ok&&j&&j.status==='ok'){$('#goalSaveMsg').textContent='Saved.';setTimeout(()=>{$('#goalSaveMsg').textContent='';},1800);}
+    else{$('#goalSaveMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';}
+  }catch(e){$('#goalSaveMsg').textContent='Saved on this device (server unreachable — restart Roost to persist).';}
 }
 function renderGoals(){
   ['goalPace','goalCum','goalDriver'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
@@ -1353,7 +1358,8 @@ function renderGoals(){
   sel.innerHTML=years.map(y=>`<option value="${y}"${y===GOAL_YEAR?' selected':''}>${y}</option>`).join('');
   sel.onchange=()=>{GOAL_YEAR=Number(sel.value);renderGoals();};
   const year=GOAL_YEAR;
-  const goal=(G.config[year]&&Number(G.config[year].net))||0;
+  const cfgGoals=Object.assign({},G.config,loadLocalGoals()); // on-device overrides until server persists
+  const goal=(cfgGoals[year]&&Number(cfgGoals[year].net))||0;
   if(document.activeElement!==$('#goalInput')) $('#goalInput').value=goal?goal:'';
 
   const rows=(DATA.series||[]).filter(s=>s.year===year).sort((a,b)=>a.date<b.date?-1:1);
