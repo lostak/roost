@@ -1457,7 +1457,7 @@ function renderGoalTraj(){
   if(charts.goalTraj){charts.goalTraj.destroy();delete charts.goalTraj;}
   const c=_goalCtx; if(!c)return;
   const {year,goal,rows,ytdNet,ytdNew,ytdRes,ytdEnr,di,asOf,gap}=c;
-  const mode=goalTrajMode;
+  const mode=goalTrajMode, g=goalTrajGrain;
   const N={week:52,month:12,quarter:4}[g]||12;
   const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const start=Date.UTC(year,0,1), yearDays=(Date.UTC(year+1,0,1)-start)/864e5;
