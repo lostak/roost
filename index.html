@@ -727,6 +727,16 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
             <select id="convLevel" class="sel"></select>
             <span class="hint" id="convLevelMsg" style="align-self:center"></span>
           </div>
+          <div style="margin-top:16px">
+            <div class="lbl-inline">Names / LLCs I'm paid under <span class="hint">&mdash; check only your own</span></div>
+            <div id="convSelfBox" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px 18px"></div>
+            <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <input id="convSelfExtra" class="sel" style="width:230px" placeholder="Add another name / LLC">
+              <button class="btn tonal" id="convSelfSave" onclick="saveConventionSelf()"><span>&#128190;</span> Save my names</button>
+              <span class="hint" id="convSelfMsg"></span>
+            </div>
+          </div>
+          <p class="hint" style="margin:12px 2px 0">Only <b>your</b> share of each policy counts &mdash; the percentage paid to you (100% minus the other agents' cuts). Anything under a name you check counts toward you.</p>
           <div id="convTarget" style="margin-top:14px"></div>
         </div>
         <div class="kpis" id="convKpis"></div>
@@ -741,8 +751,8 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
             <div class="chart-wrap"><canvas id="convPersonalChart"></canvas></div>
           </div>
           <div class="card chart-card">
-            <h3>Downline production toward qualifying</h3>
-            <p class="hint">Cumulative points from <b>downline-written</b> business as seen on your statements, against your level's downline target (dashed). The full downline figure is tracked with ASB.</p>
+            <h3>Combined production toward qualifying</h3>
+            <p class="hint">Your share <b>plus downline</b> production, against your level's combined (downline) target (dashed).</p>
             <div class="chart-wrap"><canvas id="convDownlineChart"></canvas></div>
           </div>
         </div>
@@ -2064,16 +2074,41 @@ async function saveConventionLevel(){
     else $('#convLevelMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';
   }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to persist).';}
 }
+async function saveConventionSelf(){
+  const box=$('#convSelfBox');
+  const checked=[...box.querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value);
+  const extra=($('#convSelfExtra').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const names=[...new Set([...checked,...extra])];
+  const local=loadLocalProfile(); local.self_names=names;
+  try{localStorage.setItem('roostProfile',JSON.stringify(local));}catch(e){}
+  $('#convSelfMsg').textContent='Saving & recalculating…';
+  try{
+    const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({self_names:names})});
+    const txt=await r.text(); let j=null; try{j=JSON.parse(txt);}catch(e){}
+    if(r.ok&&j&&j.status==='ok'){$('#convSelfMsg').textContent='Saved. Recalculating…'; await loadData(true); $('#convSelfExtra').value='';}
+    else $('#convSelfMsg').textContent='Saved on this device. Restart Roost so points recalculate with your names.';
+  }catch(e){$('#convSelfMsg').textContent='Saved on this device (restart Roost to recalculate).';}
+}
 function renderConvention(){
   ['convPersonal','convDownline','convFam'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
   const V=DATA.convention; if(!V){return;}
   const num0=n=>Math.round(n).toLocaleString();
   const pPts=V.personal_points!=null?V.personal_points:V.points, dPts=V.downline_points||0;
+  const combinedPts=V.combined_points!=null?V.combined_points:(pPts+dPts);
   const local=loadLocalProfile();
   const lv=(local.convention_level!=null)?local.convention_level:(V.level!=null?V.level:'');
   const sel=$('#convLevel');
   sel.innerHTML='<option value="">Select your level…</option>'+(V.levels||[]).map(l=>`<option value="${l.level}"${l.level===lv?' selected':''}>Level ${l.level}</option>`).join('');
   sel.onchange=saveConventionLevel;
+  // self-identity checkboxes
+  const norm=x=>(x||'').toUpperCase().replace(/[^A-Z]/g,'');
+  const selfNames=(local.self_names!=null?local.self_names:(V.self_names||[]));
+  const selfSet=new Set(selfNames.map(norm));
+  const box=$('#convSelfBox');
+  if(box)box.innerHTML=(V.candidates||[]).length
+    ? (V.candidates||[]).map(c=>`<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" value="${c.name.replace(/"/g,'&quot;')}"${selfSet.has(norm(c.name))?' checked':''}> ${c.name} <span class="hint">(${c.note})</span></label>`).join('')
+    : '<span class="hint">No candidate entities detected. Type your name/LLC below.</span>';
   const lt=(V.levels||[]).find(l=>l.level===lv);
   const bar=(pct,color)=>`<div style="height:12px;border-radius:8px;background:var(--surface-3);overflow:hidden;margin:5px 0 2px"><div style="height:100%;width:${Math.max(0,Math.min(100,Math.round(pct*100)))}%;background:${color};transition:width .3s"></div></div>`;
   const GREEN='#2e7d5b', GOLD='#c0872f';
@@ -2093,11 +2128,11 @@ function renderConvention(){
       h+=`<div class="hint">Level ${lv} qualifies on <b>downline production</b> only &mdash; there's no personal-production target at this level.</div>`;
     }
     if(lt.downline){
-      const done=dPts>=lt.downline, pct=dPts/lt.downline;
-      h+=`<div style="margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap"><b>Downline production &mdash; Level ${lv}</b>`
-        +`<span>${num0(dPts)} / ${num0(lt.downline)} pts ${done?'<span style="color:'+GREEN+';font-weight:700">✓</span>':''}</span></div>`
+      const done=combinedPts>=lt.downline, pct=combinedPts/lt.downline;
+      h+=`<div style="margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap"><b>Combined (personal + downline) &mdash; Level ${lv}</b>`
+        +`<span>${num0(combinedPts)} / ${num0(lt.downline)} pts ${done?'<span style="color:'+GREEN+';font-weight:700">✓</span>':''}</span></div>`
         +bar(pct,done?GREEN:COLORS.nb)
-        +`<div class="hint">From downline business on your statements. Your true downline block is larger &mdash; confirm the official figure with ASB.</div>`;
+        +`<div class="hint">Your share plus downline production. Your true downline block is larger than what shows on your statements &mdash; confirm the official figure with ASB.</div>`;
     }
     h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--outline-var)"><b>Other ways to qualify</b>`;
     if(lv<=7){const done=V.fyc>=V.alt.fyc_levels_1_7;
@@ -2112,7 +2147,7 @@ function renderConvention(){
     kp.push({l:`Level ${lv} — personal target`,v:Math.round(pPts/lt.personal*100)+'%',
       s:done?`qualified · ${num0(pPts)} pts`:`${num0(lt.personal-pPts)} pts to go`,gold:true});
   }else if(lt&&lt.downline){
-    kp.push({l:`Level ${lv} — downline target`,v:Math.round(dPts/lt.downline*100)+'%',s:`${num0(dPts)} of ${num0(lt.downline)} pts (partial)`,gold:true});
+    kp.push({l:`Level ${lv} — combined target`,v:Math.round(combinedPts/lt.downline*100)+'%',s:`${num0(combinedPts)} of ${num0(lt.downline)} pts (partial)`,gold:true});
   }else{
     kp.push({l:'Convention points',v:num0(V.points),s:'pick your level to set a target',gold:true});
   }
@@ -2147,7 +2182,7 @@ function renderConvention(){
         plugins:{legend:{display:!!target,position:'bottom'},tooltip:{callbacks:{label:c=>num0(c.parsed.y)+' pts'}}}}});
   }
   charts.convPersonal=convProg('#convPersonalChart',V.personal_series,lt?lt.personal:null,COLORS.resid);
-  charts.convDownline=convProg('#convDownlineChart',V.downline_series,lt?lt.downline:null,COLORS.nb);
+  charts.convDownline=convProg('#convDownlineChart',V.combined_series,lt?lt.downline:null,COLORS.nb);
   // by family (MA gold, others teal)
   const bf=V.by_family||[];
   charts.convFam=new Chart($('#convFamChart'),{type:'bar',data:{labels:bf.map(f=>f.family),

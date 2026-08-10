@@ -373,6 +373,11 @@ function handleProfile(req, res) {
         if (isFinite(lv) && lv >= 1 && lv <= 10) profile.convention_level = lv;
         else delete profile.convention_level;
       }
+      if ('self_names' in o) {
+        const arr = Array.isArray(o.self_names) ? o.self_names : String(o.self_names || '').split(',');
+        const clean = [...new Set(arr.map(x => String(x).trim()).filter(Boolean))];
+        if (clean.length) profile.self_names = clean; else delete profile.self_names;
+      }
       cfg.profile = profile;
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
       return sendJson(res, 200, { status: 'ok', profile });

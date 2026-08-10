@@ -961,31 +961,35 @@ function buildSummary(allRecords, config) {
     { level: 9.5, personal: null, downline: 5800000 },
     { level: 10, personal: null, downline: 5800000 },
   ];
-  const convPols = [], convFamMap = {}, convSeriesMap = {};
-  const convPSeries = {}, convDSeries = {};       // cumulative-points series, personal vs downline
-  let convPts = 0, convMA = 0, convApps = 0, convFyc = 0;
-  let convPPts = 0, convDPts = 0, convPApps = 0, convDApps = 0;
+  // Only the statement holder's SHARE counts, not the whole policy premium. Your share is
+  // the percentage paid to you = 100 minus the other writing agents' listed cuts. Names/LLCs
+  // that are you (config.profile.self_names) count toward you, not against. Downline share is
+  // the downline agents' listed cuts; combined = your share + downline share.
+  const selfSet = new Set((((config.profile || {}).self_names) || []).map(normName).filter(Boolean));
+  const convPols = [], convFamMap = {};
+  const convPSeries = {}, convCSeries = {};       // personal series, combined (personal + downline) series
+  let convPts = 0, convMA = 0, convApps = 0, convFyc = 0, convDPts = 0, convPApps = 0;
   for (const [policy, d] of Object.entries(convFirst)) {
     if (d.date < CONV_START || d.date > CONV_END) continue;
     const fam = productFamily(d.product);
     if (!CONV_ELIGIBLE.has(fam)) continue;              // Part D, unclassified -> not eligible
     const cp = convPointsFor(fam, d.premium, d.carrier, d.product);
-    // personal vs downline production: a policy is downline-produced when a downline agent
-    // is on it and you hold no writing share (listed levels sum to >= 100); otherwise personal.
     const ags = d.agents || [];
-    const lvlSum = ags.reduce((s, a) => s + (a.level || 0), 0);
-    const isDownlineProd = ags.some(a => isDL[normName(a.name)]) && lvlSum >= 100;
-    convApps++; convPts += cp.pts; if (cp.ma) convMA += cp.pts;
-    if (isDownlineProd) { convDPts += cp.pts; convDApps++; (convDSeries[d.date] ||= { date: d.date, points: 0 }).points += cp.pts; }
-    else { convPPts += cp.pts; convPApps++; (convPSeries[d.date] ||= { date: d.date, points: 0 }).points += cp.pts; }
+    const otherListed = ags.reduce((s, a) => s + (selfSet.has(normName(a.name)) ? 0 : (a.level || 0)), 0);
+    const selfShare = Math.max(0, Math.min(100, 100 - otherListed)) / 100;   // your cut of this policy
+    const dlShare = ags.reduce((s, a) => s + ((isDL[normName(a.name)] && !selfSet.has(normName(a.name))) ? (a.level || 0) : 0), 0) / 100;
+    const pPts = cp.pts * selfShare, dPts = cp.pts * dlShare;
+    convApps++; if (selfShare > 0) convPApps++;
+    convPts += pPts; if (cp.ma) convMA += pPts; convDPts += dPts;
+    if (pPts > 0) (convPSeries[d.date] ||= { date: d.date, points: 0 }).points += pPts;
+    const combined = pPts + dPts;
+    if (combined > 0) (convCSeries[d.date] ||= { date: d.date, points: 0 }).points += combined;
     const annualized = fam === 'Annuity' ? round2(num(d.premium)) : round2(num(d.premium) * 12);
     convPols.push({ date: d.date, client: d.client, carrier: d.carrier, product: d.product, family: fam,
-      premium: round2(num(d.premium)), annualized, basis: cp.basis, points: round2(cp.pts), ma: cp.ma,
-      source: isDownlineProd ? 'downline' : 'personal' });
+      premium: round2(num(d.premium)), annualized, basis: cp.basis, self_share: Math.round(selfShare * 100),
+      points: round2(pPts), ma: cp.ma });
     const fm = (convFamMap[fam] ||= { family: fam, policies: 0, points: 0, ma: cp.ma });
-    fm.policies++; fm.points += cp.pts;
-    const sm = (convSeriesMap[d.date] ||= { date: d.date, points: 0, apps: 0 });
-    sm.points += cp.pts; sm.apps++;
+    fm.policies++; fm.points += pPts;
   }
   convPols.sort((a, b) => b.points - a.points);
   // first-year commission (dollars) on eligible business in the window — an alternate path
@@ -997,6 +1001,20 @@ function buildSummary(allRecords, config) {
   }
   const convNonMA = round2(convPts - convMA);
   const convLevel = (config.profile && config.profile.convention_level != null) ? Number(config.profile.convention_level) : null;
+  // candidate self-identities to pick from: entities (LLC/agency) and anyone ever paid 100%
+  // (a solo payee) — the shortlist that could plausibly be the user or their LLC.
+  const CAND_LLC = /\b(LLC|INC|BROKERAGE|FINANCIAL|RETIREMENT|INSURANCE|AGENCY|GROUP|SOLUTIONS|SERVICES|ADVISORS|LTD|CORP|ENTERPRISES)\b/i;
+  const CAND_HOUSE = /AMERICAN SENIOR BENEFITS|\bASB\b|INTEREST|BONUS|OVERRIDE|ADJUSTMENT|EARNINGS|COMPENSATION/i;
+  const agentStats = {};
+  for (const r of records) for (const it of (r.items || [])) for (const a of (it.agents || [])) {
+    const nm = (a.name || '').trim(); if (!nm || CAND_HOUSE.test(nm)) continue;
+    const st = (agentStats[nm] ||= { name: nm, count: 0, maxLevel: 0 });
+    st.count++; if ((a.level || 0) > st.maxLevel) st.maxLevel = (a.level || 0);
+  }
+  const convCandidates = Object.values(agentStats)
+    .filter(s => CAND_LLC.test(s.name) || s.maxLevel >= 100)
+    .map(s => ({ name: s.name, count: s.count, note: CAND_LLC.test(s.name) ? 'entity / LLC' : 'paid 100% (solo)' }))
+    .sort((a, b) => b.count - a.count).slice(0, 20);
   const winDays = Math.round((Date.parse(CONV_END + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1;
   const convAsOf = (latestDate > CONV_START ? latestDate : CONV_START);
   const convElapsed = Math.min(Math.max(Math.round((Date.parse(convAsOf + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1, 0), winDays);
@@ -1004,21 +1022,23 @@ function buildSummary(allRecords, config) {
     window: { start: CONV_START, end: CONV_END },
     as_of: latestDate,
     points: round2(convPts), points_ma: round2(convMA), points_nonma: convNonMA,
-    apps: convApps, apps_needed: 25,
+    apps: convPApps, apps_needed: 25,
     nonma_share: convPts ? round2(convNonMA / convPts) : null,
     nonma_rule_met: convNonMA >= convPts * 0.5,
     by_family: Object.values(convFamMap).map(f => ({ ...f, points: round2(f.points) })).sort((a, b) => b.points - a.points),
-    series: Object.values(convSeriesMap).sort((a, b) => (a.date < b.date ? -1 : 1)),
     policies: convPols.slice(0, 500),
     persistency: (retention && retention.totals) ? retention.totals.persistency : null,
     elapsed_frac: round2(convElapsed / winDays), days_left: Math.max(0, winDays - convElapsed),
     level: convLevel, levels: CONV_LEVELS,
     fyc: round2(convFyc),
     alt: { new_contract_personal: 260000, fyc_levels_1_7: 150000 },
-    personal_points: round2(convPPts), personal_apps: convPApps,
+    self_names: (((config.profile || {}).self_names) || []),
+    candidates: convCandidates,
+    personal_points: round2(convPts), personal_apps: convPApps,
     personal_series: Object.values(convPSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
-    downline_points: round2(convDPts), downline_apps: convDApps,
-    downline_series: Object.values(convDSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
+    downline_points: round2(convDPts),
+    combined_points: round2(convPts + convDPts),
+    combined_series: Object.values(convCSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
   };
 
   return {
