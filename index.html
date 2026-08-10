@@ -222,6 +222,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
     <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
     <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
     <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
+    <a data-view="clients"><span class="ic">&#9787;</span><span class="lbl">Clients</span></a>
     <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
   </nav>
   <main class="main">
@@ -689,6 +690,22 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         </div>
       </section>
 
+      <!-- CLIENTS -->
+      <section class="view" id="view-clients">
+        <h2 class="section">Clients &amp; households</h2>
+        <div class="banner">Your book by person, not by policy. See who's worth the most, who has room for another product (a Medicare client with no dental or hospital plan is an easy conversation), and which clients are likely the same household.</div>
+        <div class="kpis" id="cliKpis"></div>
+        <input class="searchbox" id="cliSearch" placeholder="Search client, carrier, product line&hellip;">
+        <div class="card tablecard">
+          <table id="cliTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Likely households (shared surname)</h3>
+          <p class="hint">Grouped by last name &mdash; a quick way to spot spouses and family you can review together.</p>
+          <table id="cliHouseTable"></table>
+        </div>
+      </section>
+
       <!-- POLICIES -->
       <section class="view" id="view-policies">
         <h2 class="section">Recurring residual policies</h2>
@@ -850,6 +867,7 @@ function render(){
   renderComparison();
   renderProjections();
   renderGoals();
+  renderClients();
   renderPolicies(yl);
   renderReclassNotes();
 }
@@ -1648,6 +1666,30 @@ function goalInsights(x){
   $('#goalToDo').innerHTML=todo.join('');
 }
 
+// ================= CLIENTS & HOUSEHOLDS =================
+function renderClients(){
+  const C=DATA.clients||{list:[],households:[],count:0};
+  const kp=[
+    {l:'Clients',v:String(C.count||0),s:'people in your book',gold:true},
+    {l:'Avg net / client',v:fmt0(C.avg_net||0),s:'earned to date'},
+    {l:'Cross-sell openings',v:String(C.cross_sell_count||0),s:'missing a common add-on line'},
+    {l:'Likely households',v:String(C.household_count||0),s:'shared surname, 2+ people'}
+  ];
+  $('#cliKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const q=($('#cliSearch').value||'').toLowerCase();
+  const rows=(C.list||[]).filter(c=>!q||(c.client+' '+c.families.join(' ')+' '+c.carriers.join(' ')).toLowerCase().includes(q));
+  $('#cliTable').innerHTML=thead(['Client','Policies','Lines of business','Net earned','Active','Lapsed','Cross-sell'])
+    +'<tbody>'+rows.slice(0,500).map(c=>`<tr>
+      <td>${c.client}</td><td>${c.policies}</td><td>${c.families.map(f=>`<span class="chip">${f}</span>`).join(' ')}</td>
+      <td class="${cls(c.net)}"><b>${fmt(c.net)}</b></td><td>${c.active}</td><td>${c.lapsed}</td>
+      <td>${c.cross_sell?`<span style="color:var(--primary)">${c.cross_sell}</span>`:'&mdash;'}</td></tr>`).join('')+'</tbody>';
+  $('#cliHouseTable').innerHTML=thead(['Surname','People','Policies','Combined net','Members'])
+    +'<tbody>'+(C.households||[]).map(h=>`<tr>
+      <td><b>${h.surname}</b></td><td>${h.clients}</td><td>${h.policies}</td><td><b>${fmt(h.net)}</b></td>
+      <td class="hint">${h.members.join('; ')}</td></tr>`).join('')+'</tbody>';
+}
+
 // ================= BOOK VALUE & CASH FLOW =================
 function renderValue(){
   if(charts.valCash){charts.valCash.destroy();delete charts.valCash;}
@@ -1799,7 +1841,7 @@ bindProj('#projConv','conversion',100);
 bindProj('#projRenew','renewal',100);
 bindProj('#projCB','chargeback',100);
 $('#projYears').addEventListener('input',()=>{proj.years=Number($('#projYears').value);projDraw();});
-document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);});
+document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);if(e.target.id==='cliSearch')renderClients();});
 
 // ---- generic click-to-sort for every table (sorts the rendered rows in place) ----
 function sortTableByHeader(th){

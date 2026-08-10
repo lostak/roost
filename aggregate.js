@@ -757,6 +757,42 @@ function buildSummary(allRecords, config) {
     .sort((a, b) => (a.date < b.date ? -1 : 1));
   const products = { by_family: byFamily, series: productSeries };
 
+  // ================= clients & households =================
+  // Roll policies up to the client, compute what each is worth, and flag cross-sell gaps
+  // (e.g. a Medicare client with no dental/vision or hospital-indemnity plan).
+  const clientMap = {};
+  for (const p of pols) {
+    const c = (clientMap[p.client] ||= { client: p.client, surname: (p.client.split(',')[0] || p.client).trim().toUpperCase(),
+      policies: 0, advances: 0, residual: 0, chargebacks: 0, net: 0, active: 0, lapsed: 0, fams: new Set(), carriers: new Set() });
+    c.policies++; c.advances += p.advances; c.residual += p.residual; c.chargebacks += p.chargebacks; c.net += p.net;
+    if (p.status === 'Yes') c.active++; else if (p.status === 'No') c.lapsed++;
+    c.fams.add(p.family); if (p.carrier) c.carriers.add(p.carrier);
+  }
+  const clientList = Object.values(clientMap).map(c => {
+    const medicare = c.fams.has('Medicare Advantage') || c.fams.has('Med Supp') || c.fams.has('Part D (PDP)');
+    const sug = [];
+    if (medicare && !c.fams.has('Dental / Vision')) sug.push('Dental/Vision');
+    if (medicare && !c.fams.has('Hospital / Supplemental')) sug.push('Hospital/cancer');
+    if (c.fams.has('Med Supp') && !c.fams.has('Part D (PDP)')) sug.push('Part D');
+    return { client: c.client, surname: c.surname, policies: c.policies, families: [...c.fams], carriers: [...c.carriers],
+      advances: round2(c.advances), residual: round2(c.residual), chargebacks: round2(c.chargebacks), net: round2(c.net),
+      active: c.active, lapsed: c.lapsed, cross_sell: sug.join(', ') };
+  }).sort((a, b) => b.net - a.net);
+  const hh = {};
+  for (const c of clientList) { const h = (hh[c.surname] ||= { surname: c.surname, members: [], net: 0, policies: 0 });
+    h.members.push(c.client); h.net += c.net; h.policies += c.policies; }
+  const households = Object.values(hh).filter(h => h.members.length > 1)
+    .map(h => ({ surname: h.surname, clients: h.members.length, members: h.members, policies: h.policies, net: round2(h.net) }))
+    .sort((a, b) => b.net - a.net);
+  const clients = {
+    count: clientList.length,
+    avg_net: clientList.length ? round2(clientList.reduce((s, c) => s + c.net, 0) / clientList.length) : 0,
+    cross_sell_count: clientList.filter(c => c.cross_sell).length,
+    household_count: households.length,
+    list: clientList.slice(0, 800),
+    households: households.slice(0, 300),
+  };
+
   // ================= book value & forward residual cash-flow =================
   // In-force valuation: annualized residual times an industry multiple range. Forward
   // cash-flow: the current residual run-rate held flat, plus the step-up when THIS year's
@@ -790,7 +826,7 @@ function buildSummary(allRecords, config) {
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
-    retention, products, value,
+    retention, products, value, clients,
     statement_count: records.length,
     years, series,
     residual_by_carrier: residualByCarrier,
