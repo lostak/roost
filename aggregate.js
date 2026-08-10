@@ -258,13 +258,17 @@ function buildSummary(allRecords, config) {
   // in or out, so you can correct the automatic result.
   const INC = (config.downline_include || []).map(normName).filter(Boolean);
   const EXC = (config.downline_exclude || []).map(normName).filter(Boolean);
-  const allAgents = {}, autoDL = {};
+  const allAgents = {}, autoDL = {}, agentSeen = {};
   for (const r of records) for (const it of (r.items || [])) {
     if (!secKey(it.section) || !isRealPolicy(it)) continue;
     for (const a of (it.agents || [])) {
       const k = normName(a.name); if (!k) continue;
       allAgents[k] = prettyName(a.name);
       if ((a.level || 0) >= 100) autoDL[k] = true;
+      const t = (agentSeen[k] ||= { first: r.date, last: r.date, since100: null });
+      if (r.date < t.first) t.first = r.date;
+      if (r.date > t.last) t.last = r.date;
+      if ((a.level || 0) >= 100 && (!t.since100 || r.date < t.since100)) t.since100 = r.date;
     }
   }
   const isDL = {};
@@ -274,24 +278,32 @@ function buildSummary(allRecords, config) {
     if (EXC.includes(k)) dl = false;
     if (dl) isDL[k] = true;
   }
-  // pass 2 — roll up each downline agent's real-policy production + your override on it
+  // pass 2 — attribute ONLY pure-override production to the downline.
+  // When you personally co-write a policy WITH a downline agent, your payable lumps your
+  // own split cut together with the override on their cut — the statement never separates
+  // the two. So a line only counts as downline-produced when YOU are not on the split.
+  // You are off the split when the listed writing-agent levels already sum to >= 100 (you
+  // hold no writing share of your own). Lines that sum to < 100 mean you hold the remaining
+  // share (you co-wrote it), so they are excluded from downline production.
   const agentMap = {}, dlSeriesMap = {}, dlCarriers = {};
   const dlTotals = { advances: 0, residual: 0, chargebacks: 0, count: 0 };
+  const excluded = { advances: 0, residual: 0, chargebacks: 0, count: 0 }; // co-written with you (lumped)
   const dlPolicies = [];
   for (const r of records) {
     for (const it of (r.items || [])) {
       const sk = secKey(it.section); if (!sk || !isRealPolicy(it) || !it.agents || !it.agents.length) continue;
       const onLine = it.agents.filter(a => isDL[normName(a.name)]);
       if (!onLine.length) continue;                        // no downline agent on this line
+      const lvlSum = it.agents.reduce((s, a) => s + (a.level || 0), 0);
+      if (lvlSum < 100) {                                  // you hold the remainder -> lumped, exclude
+        excluded[sk] += it.payable; excluded.count += 1; continue;
+      }
       const seen = new Set();
       for (const a of onLine) {
         const key = normName(a.name); if (seen.has(key)) continue; seen.add(key);
         const m = (agentMap[key] ||= { name: prettyName(a.name), total: 0, advances: 0, residual: 0,
-          chargebacks: 0, count: 0, years: {}, carriers: {}, since: r.date, last_seen: r.date, since_100: null });
+          chargebacks: 0, count: 0, years: {}, carriers: {} });
         m[sk] += it.payable; m.total += it.payable; m.count += 1;
-        if ((a.level || 0) >= 100 && (!m.since_100 || r.date < m.since_100)) m.since_100 = r.date;
-        if (r.date < m.since) m.since = r.date;
-        if (r.date > m.last_seen) m.last_seen = r.date;
         m.years[r.year] = (m.years[r.year] || 0) + it.payable;
         m.carriers[it.carrier] = (m.carriers[it.carrier] || 0) + it.payable;
       }
@@ -300,12 +312,18 @@ function buildSummary(allRecords, config) {
       dlCarriers[it.carrier] = (dlCarriers[it.carrier] || 0) + it.payable;
       dlPolicies.push({ date: r.date, year: r.year, policy: it.policy, client: it.client,
         carrier: it.carrier, product: it.product, section: sk, amount: round2(it.payable),
-        agents: onLine.map(a => prettyName(a.name)).join(', ') });
+        agents: it.agents.map(a => prettyName(a.name) + ' (' + (a.level || 0) + ')').join(', ') });
     }
   }
-  const agentList = Object.values(agentMap).map(m => {
-    const row = { name: m.name, since: m.since, since_100: m.since_100, last_seen: m.last_seen,
-      manual: !autoDL[normName(m.name)],   // in the downline but never auto-flagged = manually added
+  // Roster keeps every flagged downline agent (even one with no pure-override yet), so the
+  // hierarchy / drag-and-drop config stays stable. Income comes from qualifying lines only;
+  // first/last-seen timing comes from all of their appearances (agentSeen, pass 1).
+  const agentList = Object.keys(isDL).map(k => {
+    const m = agentMap[k] || { name: allAgents[k], total: 0, advances: 0, residual: 0,
+      chargebacks: 0, count: 0, years: {}, carriers: {} };
+    const t = agentSeen[k] || { first: null, last: null, since100: null };
+    const row = { name: m.name || allAgents[k], since: t.first, since_100: t.since100, last_seen: t.last,
+      manual: !autoDL[k],   // in the downline but never auto-flagged = manually added
       count: m.count, total: round2(m.total), advances: round2(m.advances),
       residual: round2(m.residual), chargebacks: round2(m.chargebacks),
       top_carrier: (Object.entries(m.carriers).sort((a, b) => b[1] - a[1])[0] || ['', 0])[0] };
@@ -348,10 +366,17 @@ function buildSummary(allRecords, config) {
     descendants: roots.reduce((s, c) => s + 1 + c.descendants, 0) };
 
   const downline = {
-    rule: 'A writing agent is flagged as your downline when they ever appear at level (100).',
+    rule: 'Flagged as downline when an agent ever writes at level (100). Income counts only ' +
+      'pure-override policies — those where you are NOT on the split (listed writing-agent ' +
+      'levels sum to 100), because a policy you co-wrote lumps your own cut in with the override.',
     totals: { advances: round2(dlTotals.advances), residual: round2(dlTotals.residual),
       chargebacks: round2(dlTotals.chargebacks),
       net: round2(dlTotals.advances + dlTotals.residual + dlTotals.chargebacks), count: dlTotals.count },
+    // Production you co-wrote with a downline agent (levels < 100): the override can't be
+    // separated from your own split cut, so it's excluded above and reported here for context.
+    co_written: { advances: round2(excluded.advances), residual: round2(excluded.residual),
+      chargebacks: round2(excluded.chargebacks),
+      net: round2(excluded.advances + excluded.residual + excluded.chargebacks), count: excluded.count },
     by_carrier: Object.entries(dlCarriers).map(([carrier, v]) => ({ carrier, total: round2(v) }))
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total)),
     agents: agentList,

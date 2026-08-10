@@ -409,8 +409,9 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
       <!-- DOWNLINE -->
       <section class="view" id="view-downline">
         <h2 class="section">Downline &amp; override income</h2>
-        <div class="banner">Your downline is auto-detected from your commissions: any writing agent who ever appears at level <b>(100)</b> on one of your <b>actual client policies</b> is flagged as your downline (house/accounting lines like interest, bonuses and overrides don't count). All of their production is rolled up here. "Since" is when each agent first appeared &mdash; i.e. when they joined your downline.</div>
+        <div class="banner">Your downline is auto-detected from your commissions: any writing agent who ever appears at level <b>(100)</b> on one of your <b>actual client policies</b> is flagged as your downline (house/accounting lines like interest, bonuses and overrides don't count). Income here counts only <b>pure-override policies</b> &mdash; ones you did <b>not</b> personally co-write (the listed writing-agent levels already add up to 100). When you're on the split, the statement lumps your own cut in with the override, so that production can't be cleanly attributed and is left out. "Since" is when each agent first appeared.</div>
         <div class="kpis" id="dlKpis"></div>
+        <p class="hint" id="dlNote" style="margin:2px 2px 14px"></p>
         <div class="card chart-card">
           <h3>Downline hierarchy</h3>
           <p class="hint">You at the top, your downline beneath (all at the same level by default). <b>Drag</b> an agent onto another to nest them if they're actually on that agent's downline; drop on <b>You</b> to move them back to the top. Each shows their downline count and override income.</p>
@@ -969,14 +970,18 @@ function renderDownline(){
   const share=(dl.totals.net||0)/totalNet*100;
   const cur=d.years[d.years.length-1]||{};
   const curDl=(dl.series||[]).filter(p=>p.year===cur.year).reduce((s,p)=>s+p.net,0);
+  const t=dl.totals||{}, cw=dl.co_written||{net:0,count:0};
   const kp=[
-    {l:'Downline income (all-time)',v:fmt0(dl.totals.net||0),s:`${dl.totals.count||0} override line items`,gold:true},
-    {l:`${cur.year||''} downline income`,v:fmt0(curDl),s:'override earned this year'},
-    {l:'Share of your net',v:share.toFixed(1)+'%',s:'downline vs. total income'},
-    {l:'Downline agents',v:String(dl.agent_count||0),s:'flagged from solo production'}
+    {l:'Downline override (all-time)',v:fmt0(t.net||0),s:`${t.count||0} pure-override lines`,gold:true},
+    {l:'New business',v:fmt0(t.advances||0),s:'downline-written initials'},
+    {l:'Residual',v:fmt0(t.residual||0),s:'recurring override'},
+    {l:`${cur.year||''} override`,v:fmt0(curDl),s:'earned this year'},
+    {l:'Downline agents',v:String(dl.agent_count||0),s:`${share.toFixed(1)}% of your net`}
   ];
   $('#dlKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  $('#dlNote').innerHTML=(cw.count)?`Excluded as co-written with you: <b>${fmt0(cw.net||0)}</b> across ${cw.count} line${cw.count===1?'':'s'} `
+    +`(${fmt0(cw.advances||0)} new business, ${fmt0(cw.residual||0)} residual) — on those you were on the split, so the override can't be separated from your own cut.`:'';
 
   renderDownlineTree(dl.hierarchy);
   renderDownlineEditor(dl);
