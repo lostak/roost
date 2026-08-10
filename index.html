@@ -13,6 +13,7 @@
   --secondary:#4a6364; --tertiary:#4b607c; --surface:#f4faf9; --surface-1:#eef5f4;
   --surface-2:#e6f0ef; --surface-3:#dde9e8; --on-surface:#171d1d; --on-surface-var:#3f4948;
   --outline:#6f7979; --outline-var:#bec8c8; --error:#ba1a1a; --pos:#2e7d32; --neg:#c62828; --amber:#c98a00;
+  --sb:rgba(0,131,138,.38); --sb-h:rgba(0,131,138,.72);
   --shadow:0 1px 3px rgba(0,0,0,.14),0 1px 2px rgba(0,0,0,.10);
   --shadow-2:0 4px 12px rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.08);
 }
@@ -22,12 +23,22 @@ body.dark{
   --secondary:#a9cccc; --tertiary:#b4c5e6; --surface:#0f1514; --surface-1:#171e1d;
   --surface-2:#1e2827; --surface-3:#273130; --on-surface:#dfe6e5; --on-surface-var:#b3bebd;
   --outline:#8a9493; --outline-var:#3a4443; --error:#ffb4ab; --pos:#7fd48a; --neg:#f2a5a0; --amber:#e8b45c;
+  --sb:rgba(77,216,222,.30); --sb-h:rgba(77,216,222,.62);
   --shadow:0 1px 3px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.4);
   --shadow-2:0 6px 16px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.4);
 }
 body.dark .brand{color:#8ce8ec}
 body{transition:background .2s,color .2s}
 *{box-sizing:border-box}
+/* fresh, theme-aware scrollbars */
+*{scrollbar-width:thin;scrollbar-color:var(--sb) transparent}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--sb);border-radius:999px;border:3px solid transparent;
+  background-clip:padding-box;transition:background .15s}
+::-webkit-scrollbar-thumb:hover{background:var(--sb-h);border-width:2px}
+::-webkit-scrollbar-thumb:active{background:var(--sb-h);border-width:2px}
+::-webkit-scrollbar-corner{background:transparent}
 body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);color:var(--on-surface)}
 .appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
   padding:12px 24px;background:linear-gradient(90deg,var(--surface-2),var(--surface-1));box-shadow:var(--shadow)}
