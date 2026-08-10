@@ -96,6 +96,10 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .tablecard{overflow-x:auto}
 .searchbox{font-family:inherit;font-size:14px;padding:10px 16px;border:1px solid var(--outline-var);
   border-radius:24px;background:var(--surface);width:280px;margin-bottom:16px;color:var(--on-surface)}
+tr.rowlink{cursor:pointer;transition:background .12s}
+tr.rowlink:hover td{background:var(--surface-3)}
+.backlink{display:inline-block;cursor:pointer;color:var(--primary);font-size:14px;font-weight:600;text-decoration:none}
+.backlink:hover{text-decoration:underline}
 .numbox,.sel{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--outline-var);
   border-radius:10px;background:var(--surface);color:var(--on-surface)}
 .numbox{width:150px}
@@ -805,6 +809,18 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
           <h3>Likely households (shared surname)</h3>
           <p class="hint">Grouped by last name &mdash; a quick way to spot spouses and family you can review together.</p>
           <table id="cliHouseTable"></table>
+        </div>
+      </section>
+
+      <!-- CLIENT DETAIL -->
+      <section class="view" id="view-client">
+        <a class="backlink" onclick="gotoView('clients')">&larr; Back to clients</a>
+        <h2 class="section" id="cliDetailName" style="margin-top:8px"></h2>
+        <div class="kpis" id="cliDetailKpis"></div>
+        <div id="cliDetailCross"></div>
+        <div class="card tablecard">
+          <h3>Policies</h3>
+          <table id="cliDetailTable"></table>
         </div>
       </section>
 
@@ -1875,6 +1891,36 @@ function renderExpenses(){
   charts.exp=new Chart($('#expChart'),{type:'bar',data:{labels,datasets:[{label:year+' $',data,backgroundColor:cols}]},options:baropts(false,false)});
 }
 
+function openClient(name){
+  const c=(DATA.clients&&DATA.clients.list||[]).find(x=>x.client===name);
+  if(!c)return;
+  $('#cliDetailName').textContent=c.client;
+  const kp=[
+    {l:'Net earned',v:fmt0(c.net),s:'all-time from this client',gold:true},
+    {l:'Policies',v:String(c.policies),s:`${c.active} active · ${c.lapsed} lapsed`},
+    {l:'New business',v:fmt0(c.advances),s:'initial commissions'},
+    {l:'Residual',v:fmt0(c.residual),s:c.chargebacks?`${fmt0(c.chargebacks)} charged back`:'recurring'}
+  ];
+  $('#cliDetailKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  $('#cliDetailCross').innerHTML=c.cross_sell
+    ? `<div class="banner" style="margin-bottom:20px">&#128161; Cross-sell opening: this client has ${c.families.join(', ')} but no <b>${c.cross_sell}</b>. An easy review conversation.</div>`
+    : '';
+  const st=s=>s==='Yes'?'<span style="color:#2e7d5b">Active</span>':s==='No'?'<span class="neg">Lapsed</span>':'<span class="hint">'+s+'</span>';
+  $('#cliDetailTable').innerHTML=thead(['Policy','Carrier','Product','Line','New business','Residual','Chargebacks','Net','Status','First written','Last residual','Pmts','Writing agents'])
+    +'<tbody>'+(c.detail||[]).map(p=>`<tr>
+      <td class="mono">${p.policy}</td><td><span class="chip">${p.carrier}</span></td><td>${p.product||'&mdash;'}</td>
+      <td>${p.family}</td><td>${fmt(p.advances)}</td><td>${fmt(p.residual)}</td>
+      <td class="neg">${fmt(p.chargebacks)}</td><td class="${cls(p.net)}"><b>${fmt(p.net)}</b></td>
+      <td>${st(p.status)}</td><td>${p.first_written||'&mdash;'}</td><td>${p.last_residual||'&mdash;'}</td>
+      <td>${p.payments}</td><td class="hint">${p.agents||'&mdash;'}</td></tr>`).join('')+'</tbody>';
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  $('#view-client').classList.add('active');
+  window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{const tr=e.target.closest('#cliTable tbody tr[data-client]');
+  if(tr)openClient(decodeURIComponent(tr.dataset.client));});
+
 // ================= AUDIT & RECONCILIATION =================
 function renderAudit(){
   const A=DATA.audit||{reconciliation:[],ytd_drops:[],cadence_gaps:[],underpaid:[],counts:{}};
@@ -1921,8 +1967,8 @@ function renderClients(){
   const q=($('#cliSearch').value||'').toLowerCase();
   const rows=(C.list||[]).filter(c=>!q||(c.client+' '+c.families.join(' ')+' '+c.carriers.join(' ')).toLowerCase().includes(q));
   $('#cliTable').innerHTML=thead(['Client','Policies','Lines of business','Net earned','Active','Lapsed','Cross-sell'])
-    +'<tbody>'+rows.slice(0,500).map(c=>`<tr>
-      <td>${c.client}</td><td>${c.policies}</td><td>${c.families.map(f=>`<span class="chip">${f}</span>`).join(' ')}</td>
+    +'<tbody>'+rows.slice(0,500).map(c=>`<tr class="rowlink" data-client="${encodeURIComponent(c.client)}">
+      <td><b>${c.client}</b> <span class="hint">&rsaquo;</span></td><td>${c.policies}</td><td>${c.families.map(f=>`<span class="chip">${f}</span>`).join(' ')}</td>
       <td class="${cls(c.net)}"><b>${fmt(c.net)}</b></td><td>${c.active}</td><td>${c.lapsed}</td>
       <td>${c.cross_sell?`<span style="color:var(--primary)">${c.cross_sell}</span>`:'&mdash;'}</td></tr>`).join('')+'</tbody>';
   $('#cliHouseTable').innerHTML=thead(['Surname','People','Policies','Combined net','Members'])

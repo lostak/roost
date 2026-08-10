@@ -696,7 +696,8 @@ function buildSummary(allRecords, config) {
         advances: round2(p.advances), residual: round2(p.residual), chargebacks: round2(p.chargebacks),
         net: round2(p.advances + p.residual + p.chargebacks),
         status: p.residual_status, hasChargeback: p.hasChargeback,
-        firstAdvance: p.firstAdvance, lastResidual: p.lastResidual, payments: p.payments });
+        firstAdvance: p.firstAdvance, lastResidual: p.lastResidual, payments: p.payments,
+        agents: [...(p.agents || [])].join(', ') });
     }
   }
   const latestDate = records.reduce((a, r) => (!r.pending && r.date > a ? r.date : a), '0000-00-00');
@@ -768,15 +769,21 @@ function buildSummary(allRecords, config) {
     if (p.status === 'Yes') c.active++; else if (p.status === 'No') c.lapsed++;
     c.fams.add(p.family); if (p.carrier) c.carriers.add(p.carrier);
   }
+  const polsByClient = {};
+  for (const p of pols) (polsByClient[p.client] ||= []).push(p);
   const clientList = Object.values(clientMap).map(c => {
     const medicare = c.fams.has('Medicare Advantage') || c.fams.has('Med Supp') || c.fams.has('Part D (PDP)');
     const sug = [];
     if (medicare && !c.fams.has('Dental / Vision')) sug.push('Dental/Vision');
     if (medicare && !c.fams.has('Hospital / Supplemental')) sug.push('Hospital/cancer');
     if (c.fams.has('Med Supp') && !c.fams.has('Part D (PDP)')) sug.push('Part D');
+    const detail = (polsByClient[c.client] || []).map(p => ({ policy: p.policy, carrier: p.carrier, product: p.product,
+      family: p.family, advances: p.advances, residual: p.residual, chargebacks: p.chargebacks, net: p.net,
+      status: p.status, first_written: p.firstAdvance, last_residual: p.lastResidual, payments: p.payments, agents: p.agents }))
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
     return { client: c.client, surname: c.surname, policies: c.policies, families: [...c.fams], carriers: [...c.carriers],
       advances: round2(c.advances), residual: round2(c.residual), chargebacks: round2(c.chargebacks), net: round2(c.net),
-      active: c.active, lapsed: c.lapsed, cross_sell: sug.join(', ') };
+      active: c.active, lapsed: c.lapsed, cross_sell: sug.join(', '), detail };
   }).sort((a, b) => b.net - a.net);
   const hh = {};
   for (const c of clientList) { const h = (hh[c.surname] ||= { surname: c.surname, members: [], net: 0, policies: 0 });
