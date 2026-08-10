@@ -725,8 +725,11 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
           <div class="controls" style="gap:14px;flex-wrap:wrap">
             <span class="lbl-inline">My contract level</span>
             <select id="convLevel" class="sel"></select>
+            <span class="lbl-inline">Issue&rarr;payment lag (days)</span>
+            <input id="convLag" type="number" class="sel" style="width:80px" min="0" max="180" onchange="saveConventionLag()">
             <span class="hint" id="convLevelMsg" style="align-self:center"></span>
           </div>
+          <p class="hint" id="convLagNote" style="margin:8px 2px 0"></p>
           <div style="margin-top:16px">
             <div class="lbl-inline">Names / LLCs I'm paid under <span class="hint">&mdash; check only your own</span></div>
             <div id="convSelfBox" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px 18px"></div>
@@ -2074,6 +2077,18 @@ async function saveConventionLevel(){
     else $('#convLevelMsg').textContent='Saved on this device. Restart Roost to store it in config.json.';
   }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to persist).';}
 }
+async function saveConventionLag(){
+  const days=Math.max(0,Math.min(180,Math.round(Number($('#convLag').value)||0)));
+  const local=loadLocalProfile(); local.convention_pay_lag_days=days;
+  try{localStorage.setItem('roostProfile',JSON.stringify(local));}catch(e){}
+  $('#convLevelMsg').textContent='Recalculating…';
+  try{
+    const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({convention_pay_lag_days:days})});
+    const txt=await r.text();let j=null;try{j=JSON.parse(txt);}catch(e){}
+    if(r.ok&&j&&j.status==='ok'){$('#convLevelMsg').textContent='';await loadData(true);}
+    else $('#convLevelMsg').textContent='Saved on this device. Restart Roost to recalculate.';
+  }catch(e){$('#convLevelMsg').textContent='Saved on this device (restart Roost to recalculate).';}
+}
 async function saveConventionSelf(){
   const box=$('#convSelfBox');
   const checked=[...box.querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value);
@@ -2100,6 +2115,9 @@ function renderConvention(){
   const sel=$('#convLevel');
   sel.innerHTML='<option value="">Select your level…</option>'+(V.levels||[]).map(l=>`<option value="${l.level}"${l.level===lv?' selected':''}>Level ${l.level}</option>`).join('');
   sel.onchange=saveConventionLevel;
+  const lagEl=$('#convLag');
+  if(lagEl&&document.activeElement!==lagEl) lagEl.value=(local.convention_pay_lag_days!=null?local.convention_pay_lag_days:(V.pay_lag_days!=null?V.pay_lag_days:30));
+  if(V.pay_window)$('#convLagNote').innerHTML=`Counting policies first paid <b>${V.pay_window.start}</b> to <b>${V.pay_window.end}</b> (issue window ${V.window.start}&ndash;${V.window.end} shifted by the lag, since commissions pay after issue). Set the lag to your carriers' typical issue-to-payment delay.`;
   // self-identity checkboxes
   const norm=x=>(x||'').toUpperCase().replace(/[^A-Z]/g,'');
   const selfNames=(local.self_names!=null?local.self_names:(V.self_names||[]));

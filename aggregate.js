@@ -917,6 +917,15 @@ function buildSummary(allRecords, config) {
   const CONV_START = '2026-02-01', CONV_END = '2027-01-31';
   const CONV_ELIGIBLE = new Set(['Medicare Advantage', 'Med Supp', 'Annuity',
     'Life / Final Expense', 'Hospital / Supplemental', 'Dental / Vision']);
+  // The window is by ISSUE date, but statements only carry payment dates, and commission is
+  // paid a few weeks AFTER issue. So we shift the payment-date filter forward by a lag: a
+  // policy issued Feb 1 pays ~a month later, one issued Jan 31 next year pays ~a month after
+  // that. Shifting both boundaries drops early-Feb payments (prior-window issues) and captures
+  // in-window issues paid just after Jan 31. Lag is configurable (profile.convention_pay_lag_days).
+  const CONV_LAG = (config.profile && Number(config.profile.convention_pay_lag_days) >= 0)
+    ? Number(config.profile.convention_pay_lag_days) : 30;
+  const shiftDate = (iso, days) => new Date(Date.parse(iso + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10);
+  const PAY_START = shiftDate(CONV_START, CONV_LAG), PAY_END = shiftDate(CONV_END, CONV_LAG);
   const convFirst = {};
   for (const r of records) for (const it of (r.items || [])) {
     if (it.section === 'advances' && it.policy) {
@@ -970,7 +979,7 @@ function buildSummary(allRecords, config) {
   const convPSeries = {}, convCSeries = {};       // personal series, combined (personal + downline) series
   let convPts = 0, convMA = 0, convApps = 0, convFyc = 0, convDPts = 0, convPApps = 0;
   for (const [policy, d] of Object.entries(convFirst)) {
-    if (d.date < CONV_START || d.date > CONV_END) continue;
+    if (d.date < PAY_START || d.date > PAY_END) continue;   // payment date shifted to match the issue window
     const fam = productFamily(d.product);
     if (!CONV_ELIGIBLE.has(fam)) continue;              // Part D, unclassified -> not eligible
     const cp = convPointsFor(fam, d.premium, d.carrier, d.product);
@@ -999,7 +1008,7 @@ function buildSummary(allRecords, config) {
   // first-year commission (dollars) actually paid to YOU on eligible business in the window —
   // excludes overrides on policies your downline wrote (that's not your first-year commission).
   for (const r of records) {
-    if (r.date < CONV_START || r.date > CONV_END) continue;
+    if (r.date < PAY_START || r.date > PAY_END) continue;
     for (const it of (r.items || [])) {
       if (it.section !== 'advances' || !it.policy || !CONV_ELIGIBLE.has(productFamily(it.product))) continue;
       const hasDownline = (it.agents || []).some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
@@ -1038,6 +1047,7 @@ function buildSummary(allRecords, config) {
   const convElapsed = Math.min(Math.max(Math.round((Date.parse(convAsOf + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1, 0), winDays);
   const convention = {
     window: { start: CONV_START, end: CONV_END },
+    pay_lag_days: CONV_LAG, pay_window: { start: PAY_START, end: PAY_END },
     as_of: latestDate,
     points: round2(convPts), points_ma: round2(convMA), points_nonma: convNonMA,
     apps: convPApps, apps_needed: 25,

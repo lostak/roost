@@ -378,6 +378,11 @@ function handleProfile(req, res) {
         const clean = [...new Set(arr.map(x => String(x).trim()).filter(Boolean))];
         if (clean.length) profile.self_names = clean; else delete profile.self_names;
       }
+      if ('convention_pay_lag_days' in o) {
+        const d = Number(o.convention_pay_lag_days);
+        if (isFinite(d) && d >= 0 && d <= 180) profile.convention_pay_lag_days = Math.round(d);
+        else delete profile.convention_pay_lag_days;
+      }
       cfg.profile = profile;
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
       return sendJson(res, 200, { status: 'ok', profile });
