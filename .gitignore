@@ -11,3 +11,6 @@ Statements/
 
 # Generated per-client policy spreadsheets (client PII — regenerated from statements)
 Clients/
+
+# Convention rules/reference documents (read-only source material, not app code)
+Convention/
