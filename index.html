@@ -216,6 +216,8 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
     <a data-view="compare"><span class="ic">&#8646;</span><span class="lbl">Comparison</span></a>
     <a data-view="cumulative"><span class="ic">&#8599;</span><span class="lbl">Cumulative</span></a>
     <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
+    <a data-view="products"><span class="ic">&#9638;</span><span class="lbl">By Product</span></a>
+    <a data-view="retention"><span class="ic">&#9851;</span><span class="lbl">Retention</span></a>
     <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
     <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
     <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
@@ -466,6 +468,77 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
         <div class="card chart-card tablecard">
           <h3>Downline production detail (roster)</h3>
           <table id="dlPolTable"></table>
+        </div>
+      </section>
+
+      <!-- BY PRODUCT -->
+      <section class="view" id="view-products">
+        <h2 class="section">Profit by line of business</h2>
+        <div class="banner">Your production grouped into product families &mdash; they behave very differently: annuities and final expense pay big up front with little or no trail, Med Supp and Medicare Advantage build a recurring book, and each carries its own chargeback risk. This is where you see which lines actually make you money.</div>
+        <div class="kpis" id="prodKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>Net income by product family</h3>
+            <p class="hint">New business + residual, minus chargebacks, all-time.</p>
+            <div class="chart-wrap"><canvas id="prodNetChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3>New business vs. residual</h3>
+            <p class="hint">How front-loaded each line is. Tall new-business bars with short residual = you keep re-earning it; tall residual = it compounds.</p>
+            <div class="chart-wrap"><canvas id="prodMixChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Product mix over time</h3>
+          <div class="controls"><span class="lbl-inline">Timeframe:</span>
+            <div class="seg grainSeg">
+              <button data-g="week">Week</button>
+              <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+              <button data-g="year">Year</button>
+            </div>
+          </div>
+          <p class="hint">Income (new business + residual) by family per period, stacked.</p>
+          <div class="chart-wrap"><canvas id="prodTimeChart"></canvas></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Product detail</h3>
+          <table id="prodTable"></table>
+        </div>
+      </section>
+
+      <!-- RETENTION -->
+      <section class="view" id="view-retention">
+        <h2 class="section">Retention &amp; chargebacks</h2>
+        <div class="banner">Where you're <b>losing</b> money. A policy that lapses stops paying residual, and one that lapses early claws back commission you already banked. Persistency is the share of your residual-eligible policies still paying; the at-risk list flags Medicare Advantage inside the ~90-day rapid-disenrollment window, where a drop reverses the whole initial.</div>
+        <div class="kpis" id="retKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>Persistency by carrier</h3>
+            <p class="hint">Share of residual-eligible policies still paying. Higher = stickier business.</p>
+            <div class="chart-wrap"><canvas id="retPersistChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3>Money clawed back by carrier</h3>
+            <p class="hint">Chargebacks reverse commission you were already paid when a policy lapses.</p>
+            <div class="chart-wrap"><canvas id="retClawChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>&#9888; At-risk: Medicare Advantage in the rapid-disenrollment window</h3>
+          <p class="hint">Written within ~90 days &mdash; a disenrollment here reverses the entire initial commission shown.</p>
+          <table id="retRiskTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>By carrier</h3>
+          <table id="retCarrierTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>By product family</h3>
+          <table id="retFamilyTable"></table>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Biggest lapses &amp; chargebacks</h3>
+          <table id="retLapseTable"></table>
         </div>
       </section>
 
@@ -753,6 +826,8 @@ function render(){
   renderBonuses();
   renderCumulative();
   renderCarriers();
+  renderProducts();
+  renderRetention();
   renderDownline();
   buildMetricChips();
   renderComparison();
@@ -1556,6 +1631,92 @@ function goalInsights(x){
   $('#goalToDo').innerHTML=todo.join('');
 }
 
+// ================= BY PRODUCT =================
+function renderProducts(){
+  ['prodNet','prodMix','prodTime'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const d=DATA, P=(d.products&&d.products.by_family)||[], cs=(d.products&&d.products.series)||[];
+  const byNet=[...P].sort((a,b)=>b.net-a.net);
+  const topRes=[...P].sort((a,b)=>b.residual-a.residual)[0];
+  const worstCb=[...P].sort((a,b)=>a.chargebacks-b.chargebacks)[0];
+  const kp=[
+    {l:'Lines of business',v:String(P.length),s:'product families written',gold:true},
+    {l:'Top net line',v:byNet[0]?byNet[0].key:'—',s:byNet[0]?fmt0(byNet[0].net)+' net':''},
+    {l:'Biggest residual builder',v:topRes?topRes.key:'—',s:topRes?fmt0(topRes.residual)+' recurring':''},
+    {l:'Most charged back',v:worstCb?worstCb.key:'—',s:worstCb?fmt0(worstCb.chargebacks)+' reversed':''}
+  ];
+  $('#prodKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val" style="font-size:${k.v.length>10?'20px':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const fams=byNet.map(f=>f.key);
+  charts.prodNet=new Chart($('#prodNetChart'),{type:'bar',data:{labels:fams,
+    datasets:[{label:'Net',data:byNet.map(f=>f.net),backgroundColor:fams.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
+  charts.prodMix=new Chart($('#prodMixChart'),{type:'bar',data:{labels:fams,datasets:[
+    {label:'New business',data:byNet.map(f=>f.advances),backgroundColor:COLORS.nb},
+    {label:'Residual',data:byNet.map(f=>f.residual),backgroundColor:COLORS.resid}]},options:baropts(false,false)});
+  if(cs.length){
+    const map={},bmap={},ftot={};
+    for(const row of cs){const val=row.nb+row.res; if(!val)continue; const info=bucketInfo(row.date,GRAIN);
+      (map[row.family] ||= {}); map[row.family][info.key]=(map[row.family][info.key]||0)+val;
+      ftot[row.family]=(ftot[row.family]||0)+val;
+      bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};}
+    const families=Object.entries(ftot).sort((a,b)=>b[1]-a[1]).map(e=>e[0]).slice(0,8);
+    const buckets=Object.values(bmap).sort((a,b)=>a.sort<b.sort?-1:1); markQuarterStarts(buckets);
+    charts.prodTime=new Chart($('#prodTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
+      datasets:families.map((f,i)=>({label:f,data:buckets.map(b=>(map[f]||{})[b.key]||0),backgroundColor:PALETTE[i%PALETTE.length]}))},
+      options:timeAxis(buckets,{money:true,stacked:true})});
+  }
+  const pctP=v=>v==null?'—':Math.round(v*100)+'%';
+  $('#prodTable').innerHTML=thead(['Product family','Policies','New business','Residual','Chargebacks','Net','Avg net/policy','Persistency'])
+    +'<tbody>'+byNet.map(f=>`<tr><td>${f.key}</td><td>${f.policies}</td><td>${fmt(f.advances)}</td><td>${fmt(f.residual)}</td>
+      <td class="neg">${fmt(f.chargebacks)}</td><td><b>${fmt(f.net)}</b></td><td>${fmt(f.avg_net)}</td>
+      <td>${f.residual>0?pctP(f.persistency):'—'}</td></tr>`).join('')+'</tbody>';
+}
+
+// ================= RETENTION & CHARGEBACKS =================
+function pctColor(v){return v>=.7?'#2e7d5b':v>=.5?'#c0872f':'#b3261e';}
+function renderRetention(){
+  ['retPersist','retClaw'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+  const R=DATA.retention||{totals:{},by_carrier:[],by_family:[],at_risk:[],lapses:[]};
+  const t=R.totals||{}, pctP=v=>v==null?'—':Math.round(v*100)+'%';
+  const kp=[
+    {l:'Persistency',v:pctP(t.persistency),s:`${t.active||0} active of ${(t.active||0)+(t.lapsed||0)} residual-eligible`,gold:true},
+    {l:'Lapsed policies',v:String(t.lapsed||0),s:`${t.cb_policies||0} took a chargeback`},
+    {l:'Clawed back',v:fmt0(t.clawback||0),s:'commission reversed by lapses'},
+    {l:'At risk now',v:fmt0(t.at_risk_dollars||0),s:`${t.at_risk_count||0} MA in disenroll window`}
+  ];
+  $('#retKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const pctOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{label:c=>c.parsed.y+'%'}}},
+    scales:{x:{grid:{display:false},ticks:{maxRotation:50,minRotation:0}},
+      y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'},grid:{color:GRID}}}};
+  const bc=(R.by_carrier||[]).filter(c=>(c.active+c.lapsed)>0).sort((a,b)=>b.persistency-a.persistency).slice(0,12);
+  charts.retPersist=new Chart($('#retPersistChart'),{type:'bar',data:{labels:bc.map(c=>c.key),
+    datasets:[{label:'Persistency',data:bc.map(c=>Math.round(c.persistency*100)),backgroundColor:bc.map(c=>pctColor(c.persistency))}]},options:pctOpts});
+  const cbc=(R.by_carrier||[]).filter(c=>c.chargebacks<0).sort((a,b)=>a.chargebacks-b.chargebacks).slice(0,12);
+  charts.retClaw=new Chart($('#retClawChart'),{type:'bar',data:{labels:cbc.map(c=>c.key),
+    datasets:[{label:'Clawed back',data:cbc.map(c=>c.chargebacks),backgroundColor:'#b3261e'}]},options:baropts(false,false)});
+
+  $('#retRiskTable').innerHTML=(R.at_risk&&R.at_risk.length)
+    ? thead(['Client','Carrier','Product','At risk','Written','Days ago'])
+      +'<tbody>'+R.at_risk.map(x=>`<tr><td>${x.client}</td><td><span class="chip">${x.carrier}</span></td>
+        <td>${(x.product||'').slice(0,30)}</td><td class="neg">${fmt(x.at_risk)}</td><td>${x.written||''}</td><td>${x.days_ago}</td></tr>`).join('')+'</tbody>'
+    : '<tbody><tr><td class="hint">No Medicare Advantage policies currently inside the rapid-disenrollment window.</td></tr></tbody>';
+
+  const carRows=(R.by_carrier||[]);
+  $('#retCarrierTable').innerHTML=thead(['Carrier','Policies','Active','Lapsed','Persistency','Chargebacks','Net'])
+    +'<tbody>'+carRows.map(c=>`<tr><td>${c.key}</td><td>${c.policies}</td><td>${c.active}</td><td>${c.lapsed}</td>
+      <td>${(c.active+c.lapsed)?pctP(c.persistency):'—'}</td><td class="neg">${fmt(c.chargebacks)}</td><td><b>${fmt(c.net)}</b></td></tr>`).join('')+'</tbody>';
+  $('#retFamilyTable').innerHTML=thead(['Product family','Policies','Active','Lapsed','Persistency','Chargebacks','Net'])
+    +'<tbody>'+(R.by_family||[]).map(c=>`<tr><td>${c.key}</td><td>${c.policies}</td><td>${c.active}</td><td>${c.lapsed}</td>
+      <td>${(c.active+c.lapsed)?pctP(c.persistency):'—'}</td><td class="neg">${fmt(c.chargebacks)}</td><td><b>${fmt(c.net)}</b></td></tr>`).join('')+'</tbody>';
+  $('#retLapseTable').innerHTML=(R.lapses&&R.lapses.length)
+    ? thead(['Client','Carrier','Product','Family','Chargebacks','Net so far','Last residual'])
+      +'<tbody>'+R.lapses.map(x=>`<tr><td>${x.client}</td><td><span class="chip">${x.carrier}</span></td>
+        <td>${(x.product||'').slice(0,26)}</td><td>${x.family}</td><td class="neg">${fmt(x.chargebacks)}</td>
+        <td class="${cls(x.net)}">${fmt(x.net)}</td><td>${x.last_residual||'&mdash;'}</td></tr>`).join('')+'</tbody>'
+    : '<tbody><tr><td class="hint">No lapses or chargebacks recorded.</td></tr></tbody>';
+}
+
 function renderPolicies(yl){
   const q=($('#polSearch').value||'').toLowerCase();
   const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
@@ -1569,7 +1730,7 @@ function renderPolicies(yl){
 
 // ---- selectors / wiring ----
 function syncGrainSegs(){document.querySelectorAll('.grainSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===GRAIN));}
-function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderNewBusiness();renderResidual();renderCarriers();renderDownline();renderGoals();
+function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderNewBusiness();renderResidual();renderCarriers();renderProducts();renderDownline();renderGoals();
   try{localStorage.setItem('grain',g);}catch(e){}}
 function segPick(container,attr,cb){$(container).addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;

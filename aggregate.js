@@ -1,7 +1,22 @@
 'use strict';
 // ---- aggregation: parsed statement records -> dashboard JSON payload ----
+const { buildClientSummaries } = require('./clients.js');
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 const num = x => (x == null ? 0 : Number(x));
+
+// Classify a product string into a broad family so we can analyze economics by line
+// of business (they behave very differently: upfront vs. trail, chargeback risk, etc.).
+function productFamily(product) {
+  const p = (product || '').toUpperCase();
+  if (/MED\s?ADV|MEDADVANTAGE|\bMAPD\b|\bMA\b/.test(p)) return 'Medicare Advantage';
+  if (/MED\s?SUPP|MEDSUPP|MEDIGAP|SUPPLEMENT|SUPP\b/.test(p)) return 'Med Supp';
+  if (/\bPDP\b|PART\s?D|PRESCRIPTION|\bRX\b/.test(p)) return 'Part D (PDP)';
+  if (/HOSP|INDEMNITY|\bHIP\b|RECOVERY\s?CARE|CANC|\bCNC\b|HRT|STRK|STROKE|HEART|CRITICAL|ACCIDENT/.test(p)) return 'Hospital / Supplemental';
+  if (/DENTAL|VISION|\bDVH\b|D\/V\/H|HEARING/.test(p)) return 'Dental / Vision';
+  if (/ANNUIT|\bMYGA\b|\bFIA\b|\bSPIA\b|PERF\s?ELITE|ACCUMAX|ACCUMULATOR|TETON|PERFORM|RETIRE\s?PRO|AGILITY|EAGLE\s?SELECT|\bTARGET\b|\bASCENT\b/.test(p)) return 'Annuity';
+  if (/LIFE|FINAL\s?EXP|FINALEXP|WHOLE\s?LIFE|\bWL\b|\bTERM\b|LIVING\s?PROMISE|\bIUL\b|EXPENSE|\bSIWL\b|\bGIWL\b|IMM\s?BEN|IMMEDIATE\s?SOLUTIONS|SIMPLINOW|GOLDSOLFE|GREAT\s?ASSURANCE|LEGACY|\bFE\b|\bFDC\b/.test(p)) return 'Life / Final Expense';
+  return 'Other';
+}
 
 function dayOfYear(iso) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -668,9 +683,84 @@ function buildSummary(allRecords, config) {
       concentration, persistence_pct: persistPct, avg_payments: avgPmts, aep_share: aepShare,
       chargeback_rate: chargebackRate, retention_count: retCount, momentum } };
 
+  // ================= retention, chargebacks & product profitability =================
+  // Reuse the per-policy lifecycle logic (advance -> residual -> lapse/chargeback) so the
+  // "where am I losing money" views agree with the client spreadsheets.
+  const clientSummaries = buildClientSummaries(records);
+  const pols = [];
+  for (const client of Object.keys(clientSummaries)) {
+    for (const pol of Object.keys(clientSummaries[client])) {
+      const p = clientSummaries[client][pol];
+      pols.push({ client, policy: p.policy, carrier: p.carrier, product: p.product,
+        family: productFamily(p.product),
+        advances: round2(p.advances), residual: round2(p.residual), chargebacks: round2(p.chargebacks),
+        net: round2(p.advances + p.residual + p.chargebacks),
+        status: p.residual_status, hasChargeback: p.hasChargeback,
+        firstAdvance: p.firstAdvance, lastResidual: p.lastResidual, payments: p.payments });
+    }
+  }
+  const latestDate = records.reduce((a, r) => (!r.pending && r.date > a ? r.date : a), '0000-00-00');
+  const daysAgo = d => d ? Math.round((Date.parse(latestDate + 'T00:00:00Z') - Date.parse(d + 'T00:00:00Z')) / 86400000) : null;
+
+  const retGroup = keyFn => {
+    const g = {};
+    for (const p of pols) {
+      const k = keyFn(p) || 'Unknown';
+      const e = (g[k] ||= { key: k, policies: 0, active: 0, lapsed: 0, no_residual: 0,
+        advances: 0, residual: 0, chargebacks: 0, net: 0, cb_policies: 0 });
+      e.policies++; e.advances += p.advances; e.residual += p.residual; e.chargebacks += p.chargebacks; e.net += p.net;
+      if (p.status === 'Yes') e.active++; else if (p.status === 'No') e.lapsed++; else e.no_residual++;
+      if (p.hasChargeback) e.cb_policies++;
+    }
+    return Object.values(g).map(e => ({ ...e,
+      advances: round2(e.advances), residual: round2(e.residual), chargebacks: round2(e.chargebacks), net: round2(e.net),
+      persistency: (e.active + e.lapsed) ? round2(e.active / (e.active + e.lapsed)) : null,
+      avg_net: e.policies ? round2(e.net / e.policies) : 0 })).sort((a, b) => b.net - a.net);
+  };
+  const byCarrierRet = retGroup(p => p.carrier);
+  const byFamily = retGroup(p => p.family);
+  const active = pols.filter(p => p.status === 'Yes').length;
+  const lapsed = pols.filter(p => p.status === 'No').length;
+  const noRes = pols.filter(p => p.status === 'No Residual').length;
+  const clawback = round2(pols.reduce((s, p) => s + Math.min(0, p.chargebacks), 0)); // total money clawed back
+  const cbPolicies = pols.filter(p => p.hasChargeback).length;
+  // At-risk: Medicare Advantage written inside the ~90-day rapid-disenrollment window, where a
+  // disenrollment claws back the entire initial commission.
+  const atRisk = pols.filter(p => p.family === 'Medicare Advantage' && p.advances > 0
+      && daysAgo(p.firstAdvance) != null && daysAgo(p.firstAdvance) <= 90)
+    .map(p => ({ client: p.client, policy: p.policy, carrier: p.carrier, product: p.product,
+      at_risk: p.advances, written: p.firstAdvance, days_ago: daysAgo(p.firstAdvance) }))
+    .sort((a, b) => b.at_risk - a.at_risk);
+  const lapses = pols.filter(p => p.hasChargeback || p.status === 'No')
+    .map(p => ({ client: p.client, policy: p.policy, carrier: p.carrier, product: p.product, family: p.family,
+      chargebacks: p.chargebacks, net: p.net, last_residual: p.lastResidual }))
+    .sort((a, b) => a.chargebacks - b.chargebacks);
+  const retention = {
+    latest_date: latestDate,
+    totals: { policies: pols.length, active, lapsed, no_residual: noRes,
+      persistency: (active + lapsed) ? round2(active / (active + lapsed)) : null,
+      clawback, cb_policies: cbPolicies,
+      at_risk_count: atRisk.length, at_risk_dollars: round2(atRisk.reduce((s, x) => s + x.at_risk, 0)) },
+    by_carrier: byCarrierRet, by_family: byFamily,
+    at_risk: atRisk.slice(0, 200), lapses: lapses.slice(0, 200),
+  };
+  // per-(date, family) series for By Product time charts
+  const psMap = {};
+  for (const r of records) for (const it of r.items) {
+    if (it.section !== 'advances' && it.section !== 'commission') continue;
+    const fam = productFamily(it.product), k = r.date + '|' + fam;
+    const e = (psMap[k] ||= { date: r.date, family: fam, nb: 0, res: 0 });
+    if (it.section === 'advances') e.nb += it.payable; else e.res += it.payable;
+  }
+  const productSeries = Object.values(psMap)
+    .map(e => ({ date: e.date, family: e.family, nb: round2(e.nb), res: round2(e.res) }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+  const products = { by_family: byFamily, series: productSeries };
+
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
+    retention, products,
     statement_count: records.length,
     years, series,
     residual_by_carrier: residualByCarrier,
