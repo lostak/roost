@@ -1001,19 +1001,22 @@ function buildSummary(allRecords, config) {
   }
   const convNonMA = round2(convPts - convMA);
   const convLevel = (config.profile && config.profile.convention_level != null) ? Number(config.profile.convention_level) : null;
-  // candidate self-identities to pick from: entities (LLC/agency) and anyone ever paid 100%
-  // (a solo payee) — the shortlist that could plausibly be the user or their LLC.
+  // candidate self-identities: only LLCs/entities that have been paid SOLO at 100% (the sole
+  // writing agent at level 100) on at least one line. That's the only case an LLC could be
+  // your own payee identity (an individual paid through their LLC) or a downline's LLC. An
+  // LLC that only ever appears at a partial split is someone you override, not you.
   const CAND_LLC = /\b(LLC|INC|BROKERAGE|FINANCIAL|RETIREMENT|INSURANCE|AGENCY|GROUP|SOLUTIONS|SERVICES|ADVISORS|LTD|CORP|ENTERPRISES)\b/i;
   const CAND_HOUSE = /AMERICAN SENIOR BENEFITS|\bASB\b|INTEREST|BONUS|OVERRIDE|ADJUSTMENT|EARNINGS|COMPENSATION/i;
-  const agentStats = {};
-  for (const r of records) for (const it of (r.items || [])) for (const a of (it.agents || [])) {
-    const nm = (a.name || '').trim(); if (!nm || CAND_HOUSE.test(nm)) continue;
-    const st = (agentStats[nm] ||= { name: nm, count: 0, maxLevel: 0 });
-    st.count++; if ((a.level || 0) > st.maxLevel) st.maxLevel = (a.level || 0);
+  const soloStats = {};
+  for (const r of records) for (const it of (r.items || [])) {
+    const ags = it.agents || []; if (ags.length !== 1) continue;   // solo = single writing agent
+    const a = ags[0], nm = (a.name || '').trim();
+    if (!nm || CAND_HOUSE.test(nm) || !CAND_LLC.test(nm)) continue;
+    const st = (soloStats[nm] ||= { name: nm, solo100: 0, count: 0 });
+    st.count++; if ((a.level || 0) >= 100) st.solo100++;
   }
-  const convCandidates = Object.values(agentStats)
-    .filter(s => CAND_LLC.test(s.name) || s.maxLevel >= 100)
-    .map(s => ({ name: s.name, count: s.count, note: CAND_LLC.test(s.name) ? 'entity / LLC' : 'paid 100% (solo)' }))
+  const convCandidates = Object.values(soloStats).filter(s => s.solo100 > 0)
+    .map(s => ({ name: s.name, count: s.solo100, note: 'LLC paid 100% solo' }))
     .sort((a, b) => b.count - a.count).slice(0, 20);
   const winDays = Math.round((Date.parse(CONV_END + 'T00:00:00Z') - Date.parse(CONV_START + 'T00:00:00Z')) / 86400000) + 1;
   const convAsOf = (latestDate > CONV_START ? latestDate : CONV_START);

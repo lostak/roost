@@ -2108,7 +2108,7 @@ function renderConvention(){
   if(box)box.innerHTML=(V.candidates||[]).length
     ? (V.candidates||[]).map(c=>`<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" value="${c.name.replace(/"/g,'&quot;')}"${selfSet.has(norm(c.name))?' checked':''}> ${c.name} <span class="hint">(${c.note})</span></label>`).join('')
-    : '<span class="hint">No candidate entities detected. Type your name/LLC below.</span>';
+    : '<span class="hint">No LLCs paid solo at 100% were found &mdash; so your production is credited under your own name (the statement holder). Add an LLC below only if you\'re paid through one.</span>';
   const lt=(V.levels||[]).find(l=>l.level===lv);
   const bar=(pct,color)=>`<div style="height:12px;border-radius:8px;background:var(--surface-3);overflow:hidden;margin:5px 0 2px"><div style="height:100%;width:${Math.max(0,Math.min(100,Math.round(pct*100)))}%;background:${color};transition:width .3s"></div></div>`;
   const GREEN='#2e7d5b', GOLD='#c0872f';
