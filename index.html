@@ -108,6 +108,11 @@ tfoot td{font-weight:700;border-top:2px solid var(--outline-var);border-bottom:n
 .tablecard table{min-width:max-content}
 .searchbox{font-family:inherit;font-size:14px;padding:10px 16px;border:1px solid var(--outline-var);
   border-radius:24px;background:var(--surface);width:280px;margin-bottom:16px;color:var(--on-surface)}
+.pickchips{display:flex;flex-wrap:wrap;gap:8px}
+.pickchips button{font-family:inherit;font-size:13px;padding:5px 12px;border-radius:16px;cursor:pointer;
+  border:1px solid var(--outline-var);background:var(--surface);color:var(--on-surface-var);transition:all .12s}
+.pickchips button:hover{border-color:var(--primary)}
+.pickchips button.on{background:var(--primary-container);color:var(--on-primary-container);border-color:var(--primary-container);font-weight:600}
 tr.rowlink{cursor:pointer;transition:background .12s}
 tr.rowlink:hover td{background:var(--surface-3)}
 tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
@@ -452,6 +457,14 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
             <button data-g="year">Year</button>
           </div>
         </div>
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <span class="lbl-inline">Compare carriers</span>
+            <button class="btn ghost" style="padding:4px 12px;font-size:13px" onclick="carrierFilter.clear();renderCarriers()">All</button>
+            <span class="hint">click to pick a few to compare; none selected shows all</span>
+          </div>
+          <div id="carrierPick" class="pickchips"></div>
+        </div>
         <div class="card chart-card">
           <h3>Total income by carrier</h3>
           <p class="hint">New business + residual earned. At Year, carriers sit on the x-axis; at smaller timeframes the x-axis becomes time (like the overview) stacked by carrier.</p>
@@ -540,6 +553,14 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
       <section class="view" id="view-products">
         <h2 class="section">Profit by line of business</h2>
         <div class="banner">Your production grouped into product families &mdash; they behave very differently: annuities and final expense pay big up front with little or no trail, Med Supp and Medicare Advantage build a recurring book, and each carries its own chargeback risk. This is where you see which lines actually make you money.</div>
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <span class="lbl-inline">Compare product lines</span>
+            <button class="btn ghost" style="padding:4px 12px;font-size:13px" onclick="productFilter.clear();renderProducts()">All</button>
+            <span class="hint">click to pick a few to compare; none selected shows all</span>
+          </div>
+          <div id="prodPick" class="pickchips"></div>
+        </div>
         <div class="kpis" id="prodKpis"></div>
         <div class="grid2">
           <div class="card chart-card">
@@ -1016,7 +1037,7 @@ const METRICS={
   avg_per_statement:{label:'Avg / statement',color:'#bc5090',money:true},
 };
 const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
-let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null, goalTrajMode='pace', goalTrajGrain='month', _goalCtx=null;
+let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null, goalTrajMode='pace', goalTrajGrain='month', _goalCtx=null, carrierFilter=new Set(), productFilter=new Set();
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
 // Anchor tooltips to the TOP of the hovered bar/point (not the moving cursor), site-wide.
@@ -1356,12 +1377,23 @@ function renderCumulative(){
 
 function renderCarriers(){
   ['carrier','incomeCarrier','newbizCarrier'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
-  const d=DATA, yl=d.all_years, cs=d.carrier_series||[];
+  const d=DATA, yl=d.all_years;
+  // carrier picker: union of all carriers, ranked by total income
+  const ctotAll={};
+  (d.residual_by_carrier||[]).forEach(c=>ctotAll[c.carrier]=(ctotAll[c.carrier]||0)+c.total);
+  (d.new_by_carrier||[]).forEach(c=>ctotAll[c.carrier]=(ctotAll[c.carrier]||0)+c.total);
+  const allCarriers=Object.entries(ctotAll).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+  const pick=$('#carrierPick');
+  if(pick)pick.innerHTML=allCarriers.map(c=>`<button class="${carrierFilter.has(c)?'on':''}" data-carrier="${encodeURIComponent(c)}">${c}</button>`).join('');
+  const active=carrierFilter.size>0;
+  const keep=c=>!active||carrierFilter.has(c);
+  const cs=(d.carrier_series||[]).filter(r=>keep(r.carrier));
   const detailTable=(el,data)=>{ $(el).innerHTML=thead(['Carrier',...yl.map(String),'Total'])
-    +'<tbody>'+data.map(c=>`<tr><td>${c.carrier}</td>
+    +'<tbody>'+data.filter(c=>keep(c.carrier)).map(c=>`<tr><td>${c.carrier}</td>
       ${yl.map(y=>`<td>${fmt(c[String(y)]||0)}</td>`).join('')}<td><b>${fmt(c.total)}</b></td></tr>`).join('')+'</tbody>'; };
   detailTable('#carrierTable', d.residual_by_carrier);
   detailTable('#nbCarrierTable', d.new_by_carrier);
+  const CAP=active?Math.max(carrierFilter.size,1):null;
 
   // roll per-(date,carrier) income into carrier x time-bucket for the selected grain
   function build(field){
@@ -1386,11 +1418,11 @@ function renderCarriers(){
     // Fallback (server not restarted with carrier_series): carriers on x, all-time totals.
     if(!cs.length){
       let rows;
-      if(field==='res') rows=d.residual_by_carrier.slice(0,12).map(c=>({carrier:c.carrier,val:c.total}));
-      else if(field==='nb') rows=d.new_by_carrier.slice(0,12).map(c=>({carrier:c.carrier,val:c.total}));
-      else { const inc={}; d.new_by_carrier.forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
-        d.residual_by_carrier.forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
-        rows=Object.entries(inc).map(([carrier,o])=>({carrier,val:o.v})).sort((a,b)=>b.val-a.val).slice(0,12); }
+      if(field==='res') rows=d.residual_by_carrier.filter(c=>keep(c.carrier)).slice(0,CAP||12).map(c=>({carrier:c.carrier,val:c.total}));
+      else if(field==='nb') rows=d.new_by_carrier.filter(c=>keep(c.carrier)).slice(0,CAP||12).map(c=>({carrier:c.carrier,val:c.total}));
+      else { const inc={}; d.new_by_carrier.filter(c=>keep(c.carrier)).forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
+        d.residual_by_carrier.filter(c=>keep(c.carrier)).forEach(c=>{(inc[c.carrier] ||= {v:0}).v+=c.total;});
+        rows=Object.entries(inc).map(([carrier,o])=>({carrier,val:o.v})).sort((a,b)=>b.val-a.val).slice(0,CAP||12); }
       return new Chart($(id),{type:'bar',data:{labels:rows.map(r=>r.carrier),
         datasets:[{label:lbl,data:rows.map(r=>r.val),
           backgroundColor:rows.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
@@ -1398,13 +1430,13 @@ function renderCarriers(){
     const g=build(field);
     if(GRAIN==='year'){
       // carriers on x-axis, earned income on y-axis (one bar per carrier)
-      const carriers=g.carriers.slice(0,14);
+      const carriers=g.carriers.slice(0,CAP||14);
       return new Chart($(id),{type:'bar',data:{labels:carriers,
         datasets:[{label:lbl,data:carriers.map(c=>g.ctot[c]),
           backgroundColor:carriers.map((_,i)=>PALETTE[i%PALETTE.length])}]},options:baropts(false,false)});
     }
     // sub-year: timeframes on the x-axis (like the overview graphs), stacked by carrier
-    const carriers=g.carriers.slice(0,8);
+    const carriers=g.carriers.slice(0,CAP||8);
     return new Chart($(id),{type:'bar',data:{labels:g.buckets.map(b=>b.label),
       datasets:carriers.map((c,i)=>({label:c,data:g.buckets.map(b=>(g.map[c]||{})[b.key]||0),
         backgroundColor:PALETTE[i%PALETTE.length]}))},
@@ -2590,7 +2622,12 @@ function renderValue(){
 // ================= BY PRODUCT =================
 function renderProducts(){
   ['prodNet','prodMix','prodTime'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
-  const d=DATA, P=(d.products&&d.products.by_family)||[], cs=(d.products&&d.products.series)||[];
+  const d=DATA, Pall=(d.products&&d.products.by_family)||[];
+  const pick=$('#prodPick');
+  if(pick)pick.innerHTML=[...Pall].sort((a,b)=>b.net-a.net).map(f=>`<button class="${productFilter.has(f.key)?'on':''}" data-fam="${encodeURIComponent(f.key)}">${f.key}</button>`).join('');
+  const active=productFilter.size>0, keep=f=>!active||productFilter.has(f);
+  const P=Pall.filter(f=>keep(f.key));
+  const cs=((d.products&&d.products.series)||[]).filter(r=>keep(r.family));
   const byNet=[...P].sort((a,b)=>b.net-a.net);
   const topRes=[...P].sort((a,b)=>b.residual-a.residual)[0];
   const worstCb=[...P].sort((a,b)=>a.chargebacks-b.chargebacks)[0];
@@ -2614,7 +2651,7 @@ function renderProducts(){
       (map[row.family] ||= {}); map[row.family][info.key]=(map[row.family][info.key]||0)+val;
       ftot[row.family]=(ftot[row.family]||0)+val;
       bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};}
-    const families=Object.entries(ftot).sort((a,b)=>b[1]-a[1]).map(e=>e[0]).slice(0,8);
+    const families=Object.entries(ftot).sort((a,b)=>b[1]-a[1]).map(e=>e[0]).slice(0,active?productFilter.size:8);
     const buckets=Object.values(bmap).sort((a,b)=>a.sort<b.sort?-1:1); markQuarterStarts(buckets);
     charts.prodTime=new Chart($('#prodTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
       datasets:families.map((f,i)=>({label:f,data:buckets.map(b=>(map[f]||{})[b.key]||0),backgroundColor:PALETTE[i%PALETTE.length]}))},
@@ -2736,6 +2773,12 @@ function sortTableByHeader(th){
     if(i===idx){const s=document.createElement('span');s.className='sort-arrow';s.textContent=dir==='asc'?' ▴':' ▾';h.appendChild(s);}});
 }
 document.addEventListener('click',e=>{const th=e.target.closest('thead th'); if(th)sortTableByHeader(th);});
+document.addEventListener('click',e=>{
+  const cb=e.target.closest('#carrierPick button[data-carrier]');
+  if(cb){const c=decodeURIComponent(cb.dataset.carrier); carrierFilter.has(c)?carrierFilter.delete(c):carrierFilter.add(c); renderCarriers(); return;}
+  const pb=e.target.closest('#prodPick button[data-fam]');
+  if(pb){const f=decodeURIComponent(pb.dataset.fam); productFilter.has(f)?productFilter.delete(f):productFilter.add(f); renderProducts(); return;}
+});
 
 // ---- statement upload ----
 function openUpload(){ $('#uploadResults').innerHTML=''; $('#uploadModal').classList.add('open'); }
