@@ -265,6 +265,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
         <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
         <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
+        <a data-view="taxes"><span class="ic">&#167;</span><span class="lbl">Taxes</span></a>
         <a data-view="convention"><span class="ic">&#127942;</span><span class="lbl">Convention</span></a>
       </div>
     </div>
@@ -717,6 +718,55 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
       </section>
 
+      <!-- TAXES -->
+      <section class="view" id="view-taxes">
+        <h2 class="section">Tax estimate &mdash; self-employed (1099)</h2>
+        <div class="banner">A working estimate of what you'll owe as a 1099 insurance agent: self-employment tax, federal &amp; state income tax, the 20% QBI deduction, and how much to set aside from every commission check. Adjust the inputs; everything saves to your profile. <b>Estimate only &mdash; not tax advice. Confirm with your CPA.</b></div>
+        <div class="card" style="margin-bottom:24px">
+          <div class="sliders" style="grid-template-columns:1fr 1fr 1fr">
+            <div class="sl"><label>Filing status</label>
+              <select id="taxStatus" class="sel" style="width:100%">
+                <option value="single">Single</option><option value="mfj">Married filing jointly</option><option value="hoh">Head of household</option>
+              </select></div>
+            <div class="sl"><label>How you're paid</label>
+              <select id="taxEntity" class="sel" style="width:100%">
+                <option value="sole">Sole proprietor / single-member LLC (direct)</option>
+                <option value="scorp">Through an LLC/corp with S-corp election</option>
+              </select></div>
+            <div class="sl"><label>Tax year</label><input id="taxYear" class="numbox" style="width:100%" value="2025" disabled></div>
+            <div class="sl"><label>1099 net commission income $</label><input type="number" id="taxIncome" class="numbox" style="width:100%" step="1000"></div>
+            <div class="sl"><label>Business expenses $</label><input type="number" id="taxExpenses" class="numbox" style="width:100%" step="500"></div>
+            <div class="sl"><label>Other household income $ <span class="hint">(spouse W-2, etc.)</span></label><input type="number" id="taxOther" class="numbox" style="width:100%" step="1000"></div>
+            <div class="sl"><label>Retirement contribution $ <span class="hint">(SEP / Solo 401k)</span></label><input type="number" id="taxRetire" class="numbox" style="width:100%" step="500"></div>
+            <div class="sl"><label>State income tax rate %</label><input type="number" id="taxState" class="numbox" style="width:100%" step="0.1"></div>
+            <div class="sl" id="taxSalaryWrap" style="display:none"><label>Reasonable W-2 salary $ <span class="hint">(S-corp)</span></label><input type="number" id="taxSalary" class="numbox" style="width:100%" step="1000"></div>
+          </div>
+        </div>
+        <div class="kpis" id="taxKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card tablecard">
+            <h3>Where it goes</h3>
+            <table id="taxTable"></table>
+          </div>
+          <div class="card chart-card">
+            <h3>Tax breakdown</h3>
+            <div class="chart-wrap"><canvas id="taxChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card" id="taxScorpCard" style="margin-bottom:24px">
+          <h3 style="margin-top:0">S-corp check</h3>
+          <p class="hint" id="taxScorpNote"></p>
+        </div>
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="margin-top:0">Set-aside &amp; quarterly estimates</h3>
+          <p class="hint" id="taxSaveNote"></p>
+          <table id="taxQtrTable"></table>
+        </div>
+        <h2 class="section" style="margin-top:8px">Tax playbook for 1099 agents</h2>
+        <div class="grid2"><div class="ins-col" id="taxTips1"></div><div class="ins-col" id="taxTips2"></div></div>
+        <p class="hint" style="margin-top:18px">Figures use 2025 federal brackets, standard deduction, and Social Security wage base. Insurance agents are <b>not</b> a specified service trade for QBI, so the 20% deduction applies regardless of income. This is an estimate to guide savings and quarterly payments &mdash; your CPA's return is authoritative.</p>
+      </section>
+
       <!-- CONVENTION -->
       <section class="view" id="view-convention">
         <h2 class="section">Convention tracker &mdash; ASB 2027 incentive trip</h2>
@@ -1124,6 +1174,7 @@ function render(){
   renderProjections();
   renderGoals();
   renderExpenses();
+  renderTaxes();
   renderConvention();
   renderClients();
   renderAudit();
@@ -2060,6 +2111,132 @@ function openClient(name){
 }
 document.addEventListener('click',e=>{const tr=e.target.closest('#cliTable tbody tr[data-client]');
   if(tr)openClient(decodeURIComponent(tr.dataset.client));});
+
+// ================= TAXES (1099 self-employed estimate, 2025) =================
+const TAX2025={ std:{single:15000,mfj:30000,hoh:22500}, ssBase:176100,
+  addlMedThresh:{single:200000,mfj:250000,hoh:200000},
+  brackets:{ single:[[0,.10],[11925,.12],[48475,.22],[103350,.24],[197300,.32],[250525,.35],[626350,.37]],
+    mfj:[[0,.10],[23850,.12],[96950,.22],[206700,.24],[394600,.32],[501050,.35],[751600,.37]],
+    hoh:[[0,.10],[17000,.12],[64850,.22],[103350,.24],[197300,.32],[250500,.35],[626350,.37]] } };
+function bracketTax(t,status){const b=TAX2025.brackets[status]||TAX2025.brackets.single;let tax=0;
+  for(let i=0;i<b.length;i++){const lo=b[i][0],hi=i+1<b.length?b[i+1][0]:Infinity;if(t>lo)tax+=(Math.min(t,hi)-lo)*b[i][1];else break;}return tax;}
+function calcTax(inp){
+  const netProfit=Math.max(0,(inp.income||0)-(inp.expenses||0));
+  let seOrPayroll=0,halfSE=0,qbiIncome=0,indIncome=0,seWages=0;
+  if(inp.entity==='scorp'){
+    const sal=Math.max(0,Math.min(inp.salary||0,netProfit));
+    const payroll=Math.min(sal,TAX2025.ssBase)*0.124+sal*0.029;
+    const dist=Math.max(0,netProfit-sal-payroll/2);
+    seOrPayroll=payroll; qbiIncome=dist; indIncome=sal+dist; seWages=sal;
+  }else{
+    const seBase=netProfit*0.9235;
+    seOrPayroll=Math.min(seBase,TAX2025.ssBase)*0.124+seBase*0.029;
+    halfSE=seOrPayroll/2; qbiIncome=Math.max(0,netProfit-halfSE); indIncome=netProfit; seWages=seBase;
+  }
+  const agi=Math.max(0,indIncome-halfSE+(inp.other||0)-(inp.retire||0));
+  const std=TAX2025.std[inp.status]||TAX2025.std.single;
+  const tbq=Math.max(0,agi-std);
+  const qbi=Math.min(0.20*qbiIncome,0.20*tbq);
+  const taxable=Math.max(0,tbq-qbi);
+  const fed=bracketTax(taxable,inp.status);
+  const addlMed=Math.max(0,(seWages+(inp.other||0))-TAX2025.addlMedThresh[inp.status])*0.009;
+  const state=Math.max(0,agi-std)*((inp.stateRate||0)/100);
+  const total=seOrPayroll+fed+state+addlMed;
+  return {netProfit,seOrPayroll,halfSE,qbi,agi,taxable,fed,state,addlMed,total};
+}
+function loadLocalTax(){try{return JSON.parse(localStorage.getItem('roostTax')||'{}')||{};}catch(e){return {};}}
+function taxDefaults(){
+  const yrs=DATA.years||[],cur=yrs[yrs.length-1]||{},proj=DATA.projections||{};
+  const income=Math.round(proj.net_annual||cur.net||0);
+  const E=Object.assign({},(DATA.expenses&&DATA.expenses.config)||{},(typeof loadLocalExpenses==='function'?loadLocalExpenses():{}));
+  const eobj=E[(DATA.expenses&&DATA.expenses.current_year)]||{};
+  const expenses=Object.values(eobj).reduce((s,v)=>s+(Number(v)||0),0);
+  return {income,expenses};
+}
+let _taxInit=false;
+function renderTaxes(){
+  if(!DATA)return;
+  const saved=Object.assign({},(DATA.tax&&DATA.tax.config)||{},loadLocalTax());
+  const def=taxDefaults();
+  if(!_taxInit){
+    $('#taxStatus').value=saved.status||'single';
+    $('#taxEntity').value=saved.entity||'sole';
+    $('#taxIncome').value=saved.income!=null?saved.income:def.income;
+    $('#taxExpenses').value=saved.expenses!=null?saved.expenses:def.expenses;
+    $('#taxOther').value=saved.other!=null?saved.other:0;
+    $('#taxRetire').value=saved.retire!=null?saved.retire:0;
+    $('#taxState').value=saved.stateRate!=null?saved.stateRate:4.4;
+    const np=Math.max(0,(Number($('#taxIncome').value)||0)-(Number($('#taxExpenses').value)||0));
+    $('#taxSalary').value=saved.salary!=null?saved.salary:Math.round(np*0.4);
+    ['taxStatus','taxEntity','taxIncome','taxExpenses','taxOther','taxRetire','taxState','taxSalary'].forEach(id=>{
+      $('#'+id).addEventListener('input',taxCompute); $('#'+id).addEventListener('change',taxCompute);});
+    _taxInit=true;
+  }
+  taxCompute();
+}
+function taxCompute(){
+  if(charts.tax){charts.tax.destroy();delete charts.tax;}
+  const inp={status:$('#taxStatus').value, entity:$('#taxEntity').value,
+    income:Number($('#taxIncome').value)||0, expenses:Number($('#taxExpenses').value)||0,
+    other:Number($('#taxOther').value)||0, retire:Number($('#taxRetire').value)||0,
+    stateRate:Number($('#taxState').value)||0, salary:Number($('#taxSalary').value)||0};
+  $('#taxSalaryWrap').style.display=inp.entity==='scorp'?'':'none';
+  try{localStorage.setItem('roostTax',JSON.stringify(inp));}catch(e){}
+  fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tax:inp})}).catch(()=>{});
+  const r=calcTax(inp);
+  const eff=r.netProfit?Math.round(r.total/r.netProfit*100):0;
+  const setAside=Math.min(50,Math.ceil((r.total/Math.max(1,r.netProfit))*100)+1);
+  const kp=[
+    {l:'Estimated total tax',v:fmt0(r.total),s:`${eff}% of net profit`,gold:true},
+    {l:'Set aside',v:setAside+'%',s:'of every commission check'},
+    {l:'Quarterly estimate',v:fmt0(r.total/4),s:'per quarter (4×)'},
+    {l:'After-tax income',v:fmt0(r.netProfit-r.total+ (inp.entity==="scorp"?0:0)),s:'kept from your book'}
+  ];
+  $('#taxKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const rows=[[inp.entity==='scorp'?'Payroll tax (FICA on salary)':'Self-employment tax',r.seOrPayroll],
+    ['Federal income tax',r.fed],['State income tax',r.state]];
+  if(r.addlMed>0)rows.push(['Additional Medicare 0.9%',r.addlMed]);
+  $('#taxTable').innerHTML=thead(['Component','Amount'])+'<tbody>'
+    +rows.map(x=>`<tr><td>${x[0]}</td><td>${fmt(x[1])}</td></tr>`).join('')
+    +`<tr><td><b>Total estimated tax</b></td><td><b>${fmt(r.total)}</b></td></tr>`
+    +`<tr><td class="hint">QBI deduction applied</td><td class="hint">${fmt(r.qbi)} off taxable</td></tr>`
+    +`<tr><td class="hint">Net business profit</td><td class="hint">${fmt(r.netProfit)}</td></tr>`
+    +'</tbody>';
+  const takehome=Math.max(0,r.netProfit-r.total);
+  charts.tax=new Chart($('#taxChart'),{type:'doughnut',data:{labels:['Take-home',(inp.entity==='scorp'?'Payroll':'SE')+' tax','Federal','State'],
+    datasets:[{data:[Math.round(takehome),Math.round(r.seOrPayroll),Math.round(r.fed),Math.round(r.state+r.addlMed)],
+    backgroundColor:['#2e7d5b',COLORS.resid,COLORS.nb,'#b3261e']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)}}}}});
+  // S-corp comparison
+  const other=calcTax(Object.assign({},inp,{entity:inp.entity==='scorp'?'sole':'scorp',
+    salary:inp.entity==='scorp'?0:Math.round(r.netProfit*0.4)}));
+  if(inp.entity==='scorp'){
+    const save=other.total-r.total;
+    $('#taxScorpNote').innerHTML=save>0?`Electing S-corp is saving you about <b>${fmt0(save)}/yr</b> vs. filing as a sole proprietor, by taking ${fmt0(r.netProfit-(Number($('#taxSalary').value)||0))} as distributions free of the 15.3% SE tax. Make sure your <b>${fmt0(Number($('#taxSalary').value)||0)}</b> salary is defensibly "reasonable" for your role.`
+      :`At this income the S-corp isn't saving much over a sole prop once payroll/admin costs (~$1,500&ndash;2,500/yr) are considered.`;
+  }else{
+    const save=r.total-other.total;
+    $('#taxScorpNote').innerHTML=save>1500?`You could save roughly <b>${fmt0(save)}/yr</b> by electing <b>S-corp</b> status: pay yourself a reasonable W-2 salary (~${fmt0(Math.round(r.netProfit*0.4))}) and take the rest as distributions, which skip the 15.3% self-employment tax. It's usually worth it once net profit clears ~$80k, net of ~$1,500&ndash;2,500/yr in payroll/admin. Talk to your CPA.`
+      :`At this net profit, staying a sole proprietor is simplest &mdash; an S-corp's payroll/admin cost (~$1,500&ndash;2,500/yr) would outweigh the SE-tax savings (~${fmt0(Math.max(0,save))}).`;
+  }
+  // set-aside + quarterly
+  const wk=r.total/52;
+  $('#taxSaveNote').innerHTML=`Set aside about <b>${setAside}%</b> of every commission deposit &mdash; roughly <b>${fmt0(wk)}/week</b> at your pace &mdash; into a separate tax account. Pay federal + state <b>quarterly estimates</b> to avoid underpayment penalties (safe harbor: pay 100% of last year's tax, or 110% if your AGI topped $150k).`;
+  $('#taxQtrTable').innerHTML=thead(['Quarter','Covers','Due','Estimated payment'])
+    +'<tbody>'+[['Q1','Jan&ndash;Mar','Apr 15'],['Q2','Apr&ndash;May','Jun 16'],['Q3','Jun&ndash;Aug','Sep 15'],['Q4','Sep&ndash;Dec','Jan 15']].map(q=>`<tr><td>${q[0]}</td><td>${q[1]}</td><td>${q[2]}</td><td>${fmt(r.total/4)}</td></tr>`).join('')+'</tbody>';
+  const card=(t,b)=>`<div class="ins good"><div class="ins-t">${t}</div><div class="ins-b">${b}</div></div>`;
+  $('#taxTips1').innerHTML='<h3>&#9989; Do this</h3>'
+    +card('Bank your taxes weekly',`Move ${setAside}% of every deposit to a separate savings account the day it lands. You'll never scramble at deadline.`)
+    +card('Pay quarterly estimates',`Federal (Form 1040-ES) and state, four times a year (Apr 15, Jun 15, Sep 15, Jan 15). Missing them triggers penalties even if you pay in April.`)
+    +card('Deduct everything ordinary & necessary',`Leads, marketing, E&O, licensing/CE, phone, CRM/software, mileage at the IRS standard rate, home office, 50% of business meals. Every $1,000 deducted saves you roughly $300&ndash;400 in combined SE + income tax.`)
+    +card('Self-employed health insurance',`Your health premiums are deductible above the line &mdash; don't leave that on the table.`);
+  $('#taxTips2').innerHTML='<h3>&#128161; Optimize</h3>'
+    +card('You get the 20% QBI deduction',`Insurance agents aren't a "specified service" business, so the 20% qualified-business-income deduction applies at any income level. It's built into the estimate above.`)
+    +card('Fund a retirement plan',`A SEP-IRA (up to ~25% of net self-employment, ~$70k for 2025) or Solo 401(k) cuts your taxable income dollar-for-dollar &mdash; one of the biggest levers you have.`)
+    +card('Consider an S-corp',`Once net profit clears ~$80&ndash;100k, an S-corp election can save thousands by moving profit above a reasonable salary out of the 15.3% SE tax. Toggle "How you're paid" above to see your number.`)
+    +card('Separate business banking',`A dedicated business account and clean books protect your deductions in an audit and make the S-corp path painless.`);
+}
 
 // ================= CONVENTION TRACKER =================
 function loadLocalProfile(){try{return JSON.parse(localStorage.getItem('roostProfile')||'{}')||{};}catch(e){return {};}}

@@ -383,6 +383,9 @@ function handleProfile(req, res) {
         if (isFinite(d) && d >= 0 && d <= 180) profile.convention_pay_lag_days = Math.round(d);
         else delete profile.convention_pay_lag_days;
       }
+      if ('tax' in o && o.tax && typeof o.tax === 'object') {
+        profile.tax = Object.assign({}, profile.tax, o.tax);
+      }
       for (const key of ['convention_exclude', 'convention_include']) {
         if (key in o) {
           const arr = Array.isArray(o[key]) ? o[key] : [];

@@ -1121,6 +1121,7 @@ function buildSummary(allRecords, config) {
       config: (config.expenses && typeof config.expenses === 'object') ? config.expenses : {},
       current_year: allYears[allYears.length - 1] || new Date().getFullYear(),
     },
+    tax: { config: (config.profile && config.profile.tax) || {} },
     pending: {
       count: pendingRecs.length,
       latest_date: latestPending ? latestPending.date : null,
