@@ -742,6 +742,12 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
             <div class="sl" id="taxSalaryWrap" style="display:none"><label>Reasonable W-2 salary $ <span class="hint">(S-corp)</span></label><input type="number" id="taxSalary" class="numbox" style="width:100%" step="1000"></div>
           </div>
         </div>
+        <div class="card" id="taxAccrualCard" style="margin-bottom:24px;border-left:4px solid var(--primary)">
+          <h3 style="margin-top:0">This tax year &mdash; accruing now</h3>
+          <div class="kpis" id="taxAccrualKpis" style="margin-bottom:8px"></div>
+          <p class="hint" id="taxAccrual"></p>
+        </div>
+        <h3 style="margin:0 2px 10px">Full-year projection</h3>
         <div class="kpis" id="taxKpis"></div>
         <div class="grid2">
           <div class="card chart-card tablecard">
@@ -2194,6 +2200,26 @@ function taxCompute(){
   ];
   $('#taxKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  // ---- accrued THIS tax year (from actual YTD income) ----
+  const curYr=(DATA.years||[]).slice(-1)[0]||{};
+  const ytdNet=Math.max(0,curYr.net||0);
+  const expRatio=inp.income>0?Math.min(1,inp.expenses/inp.income):0;
+  const ytdProfit=ytdNet*(1-expRatio);
+  const effRate=r.netProfit?r.total/r.netProfit:0;
+  const accrued=ytdProfit*effRate;
+  const asOf=(DATA.series&&DATA.series.length)?DATA.series[DATA.series.length-1].date:null;
+  let frac=0.5; if(asOf){const [ay,am,ad]=asOf.split('-').map(Number);frac=Math.min(1,((Date.UTC(ay,am-1,ad)-Date.UTC(ay,0,1))/864e5+1)/365);}
+  const weeksLeft=Math.max(1,Math.round((1-frac)*52));
+  const remaining=Math.max(0,r.total-accrued);
+  const ak=[
+    {l:'Tax accrued so far',v:fmt0(accrued),s:`set this aside now`,gold:true},
+    {l:`${curYr.year||''} net earned`,v:fmt0(ytdNet),s:`through ${asOf||'today'}`},
+    {l:'Still to set aside',v:fmt0(remaining),s:'for the rest of the year'},
+    {l:'Bank per week',v:fmt0(remaining/weeksLeft),s:`over ~${weeksLeft} weeks left`}
+  ];
+  $('#taxAccrualKpis').innerHTML=ak.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  $('#taxAccrual').innerHTML=`You've earned <b>${fmt0(ytdNet)}</b> net so far in ${curYr.year||'this year'}. At your ${eff}% effective rate that's about <b>${fmt0(accrued)}</b> in tax already owed &mdash; keep that much parked in your tax account today. To finish the year covered (projected <b>${fmt0(r.total)}</b> total), set aside roughly <b>${fmt0(remaining/weeksLeft)}/week</b> for the remaining ${weeksLeft} weeks. If you haven't been saving, you're currently <b>${fmt0(accrued)}</b> behind &mdash; catch that up before the next quarterly due date.`;
   const rows=[[inp.entity==='scorp'?'Payroll tax (FICA on salary)':'Self-employment tax',r.seOrPayroll],
     ['Federal income tax',r.fed],['State income tax',r.state]];
   if(r.addlMed>0)rows.push(['Additional Medicare 0.9%',r.addlMed]);
