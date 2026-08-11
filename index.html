@@ -1130,16 +1130,33 @@ function markQuarterStarts(buckets){
   let pq=null,py=null;
   buckets.forEach((b,i)=>{b.qStart=(i===0)||b.q!==pq||b.year!==py;pq=b.q;py=b.year;});
 }
+// every period (by grain) between two dates, so charts show a continuous axis with no gaps
+function fullBucketRange(minDate,maxDate,grain){
+  const out=[],seen=new Set();
+  if(!minDate||!maxDate)return out;
+  let d=new Date(minDate+'T00:00:00Z'); const end=new Date(maxDate+'T00:00:00Z');
+  let guard=0;
+  while(d<=end&&guard++<4000){
+    const info=bucketInfo(d.toISOString().slice(0,10),grain);
+    if(!seen.has(info.key)){seen.add(info.key);out.push(info);}
+    d.setUTCDate(d.getUTCDate()+1);
+  }
+  return out;
+}
 function bucketSeries(grain,src){
   src=src||DATA.series;
-  const map=new Map();
+  const map=new Map(); let minD=null,maxD=null;
   for(const p of src){
+    if(!minD||p.date<minD)minD=p.date; if(!maxD||p.date>maxD)maxD=p.date;
     const info=bucketInfo(p.date,grain);
     let b=map.get(info.key);
     if(!b){b={key:info.key,label:info.label,year:info.year,q:info.q,sort:info.sort,
       advances:0,residual:0,net:0,chargebacks:0,bonus:0,statements:0};map.set(info.key,b);}
     b.advances+=p.advances;b.residual+=p.residual;b.net+=p.net;b.chargebacks+=p.chargebacks;b.bonus+=(p.bonus||0);b.statements++;
   }
+  for(const info of fullBucketRange(minD,maxD,grain)) if(!map.has(info.key))
+    map.set(info.key,{key:info.key,label:info.label,year:info.year,q:info.q,sort:info.sort,
+      advances:0,residual:0,net:0,chargebacks:0,bonus:0,statements:0});
   const arr=[...map.values()].sort((a,b)=>a.sort<b.sort?-1:1);
   arr.forEach(b=>{b.gross=Math.round((b.advances+b.residual)*100)/100;
     b.avg_per_statement=b.statements?b.net/b.statements:0;});
@@ -1397,8 +1414,9 @@ function renderCarriers(){
 
   // roll per-(date,carrier) income into carrier x time-bucket for the selected grain
   function build(field){
-    const map={}, bmap={}, ctot={};
+    const map={}, bmap={}, ctot={}; let minD=null,maxD=null;
     for(const row of cs){
+      if(!minD||row.date<minD)minD=row.date; if(!maxD||row.date>maxD)maxD=row.date;
       const val=field==='res'?row.res:field==='nb'?row.nb:(row.nb+row.res);
       if(!val)continue;
       const info=bucketInfo(row.date,GRAIN);
@@ -1407,6 +1425,7 @@ function renderCarriers(){
       ctot[row.carrier]=(ctot[row.carrier]||0)+val;
       bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};
     }
+    for(const info of fullBucketRange(minD,maxD,GRAIN)) bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};
     const carriers=Object.entries(ctot).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
     const buckets=Object.values(bmap).sort((a,b)=>a.sort<b.sort?-1:1);
     markQuarterStarts(buckets);
@@ -2646,11 +2665,13 @@ function renderProducts(){
     {label:'New business',data:byNet.map(f=>f.advances),backgroundColor:COLORS.nb},
     {label:'Residual',data:byNet.map(f=>f.residual),backgroundColor:COLORS.resid}]},options:baropts(false,false)});
   if(cs.length){
-    const map={},bmap={},ftot={};
-    for(const row of cs){const val=row.nb+row.res; if(!val)continue; const info=bucketInfo(row.date,GRAIN);
+    const map={},bmap={},ftot={}; let minD=null,maxD=null;
+    for(const row of cs){if(!minD||row.date<minD)minD=row.date; if(!maxD||row.date>maxD)maxD=row.date;
+      const val=row.nb+row.res; if(!val)continue; const info=bucketInfo(row.date,GRAIN);
       (map[row.family] ||= {}); map[row.family][info.key]=(map[row.family][info.key]||0)+val;
       ftot[row.family]=(ftot[row.family]||0)+val;
       bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};}
+    for(const info of fullBucketRange(minD,maxD,GRAIN)) bmap[info.key]=bmap[info.key]||{key:info.key,label:info.label,q:info.q,year:info.year,sort:info.sort};
     const families=Object.entries(ftot).sort((a,b)=>b[1]-a[1]).map(e=>e[0]).slice(0,active?productFilter.size:8);
     const buckets=Object.values(bmap).sort((a,b)=>a.sort<b.sort?-1:1); markQuarterStarts(buckets);
     charts.prodTime=new Chart($('#prodTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
