@@ -4,6 +4,17 @@ const crypto = require('crypto');
 const { db } = require('./db.js');
 
 const SESSION_DAYS = 30;
+const MIN_PW_LEN = 10;
+// Cookies get the Secure flag in production / behind TLS. Left off for localhost
+// (http) dev so login still works there. Set ROOST_SECURE=1 when serving over HTTPS.
+const SECURE_COOKIES = process.env.ROOST_SECURE === '1' || process.env.NODE_ENV === 'production';
+
+function validatePassword(pw) {
+  pw = String(pw == null ? '' : pw);
+  if (pw.length < MIN_PW_LEN) throw new Error(`password must be at least ${MIN_PW_LEN} characters`);
+  if (!/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) throw new Error('password must contain at least one letter and one number');
+  return pw;
+}
 
 function hashPassword(password, salt) {
   salt = salt || crypto.randomBytes(16).toString('hex');
@@ -21,7 +32,8 @@ function verifyPassword(password, salt, hash) {
 function createUser(username, password, isAdmin) {
   username = String(username || '').trim().toLowerCase();
   if (!username) throw new Error('username required');
-  if (!password || String(password).length < 6) throw new Error('password must be at least 6 characters');
+  if (!/^[a-z0-9._-]{3,64}$/.test(username)) throw new Error('username must be 3-64 chars: letters, digits, . _ -');
+  validatePassword(password);
   const { salt, hash } = hashPassword(password);
   db.prepare('INSERT INTO users(username, pass_hash, salt, is_admin, created) VALUES(?,?,?,?,?)')
     .run(username, hash, salt, isAdmin ? 1 : 0, new Date().toISOString());
@@ -31,6 +43,7 @@ function createUser(username, password, isAdmin) {
 }
 function setPassword(username, password) {
   const u = getUserByName(username); if (!u) throw new Error('no such user');
+  validatePassword(password);
   const { salt, hash } = hashPassword(password);
   db.prepare('UPDATE users SET pass_hash=?, salt=? WHERE id=?').run(hash, salt, u.id);
 }
@@ -67,6 +80,27 @@ function userForToken(token) {
 }
 function publicUser(u) { return { id: u.id, username: u.username, is_admin: !!u.is_admin }; }
 
+// ---- login throttle (in-memory sliding window; stops brute force) ----
+const MAX_ATTEMPTS = 5;        // failures allowed within the window before lockout
+const WINDOW_MS = 15 * 60000;  // rolling window for counting failures
+const LOCK_MS = 15 * 60000;    // lockout duration once tripped
+const ATTEMPTS = new Map();     // key -> { count, first, lockedUntil }
+function throttleStatus(key) {
+  const e = ATTEMPTS.get(key), now = Date.now();
+  if (e && e.lockedUntil > now) return { locked: true, retryAfter: Math.ceil((e.lockedUntil - now) / 1000) };
+  return { locked: false, retryAfter: 0 };
+}
+function recordFail(key) {
+  const now = Date.now(); let e = ATTEMPTS.get(key);
+  if (!e || now - e.first > WINDOW_MS) e = { count: 0, first: now, lockedUntil: 0 };
+  e.count += 1;
+  if (e.count >= MAX_ATTEMPTS) e.lockedUntil = now + LOCK_MS;
+  ATTEMPTS.set(key, e);
+}
+function recordSuccess(key) { ATTEMPTS.delete(key); }
+// opportunistic cleanup so the map can't grow unbounded
+setInterval(() => { const now = Date.now(); for (const [k, e] of ATTEMPTS) if (e.lockedUntil < now && now - e.first > WINDOW_MS) ATTEMPTS.delete(k); }, WINDOW_MS).unref();
+
 // ---- cookies ----
 function parseCookies(header) {
   const out = {};
@@ -74,9 +108,11 @@ function parseCookies(header) {
   return out;
 }
 function sessionCookie(token, clear) {
-  const base = `roost_session=${clear ? '' : token}; HttpOnly; SameSite=Strict; Path=/`;
+  let base = `roost_session=${clear ? '' : token}; HttpOnly; SameSite=Strict; Path=/`;
+  if (SECURE_COOKIES) base += '; Secure';
   return clear ? base + '; Max-Age=0' : base + `; Max-Age=${SESSION_DAYS * 86400}`;
 }
 
 module.exports = { createUser, setPassword, deleteUser, getUserByName, listUsers,
-  login, logout, userForToken, parseCookies, sessionCookie, publicUser };
+  login, logout, userForToken, parseCookies, sessionCookie, publicUser,
+  validatePassword, throttleStatus, recordFail, recordSuccess, MIN_PW_LEN };

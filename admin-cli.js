@@ -10,7 +10,13 @@ const auth = require('./auth.js');
 
 const [, , cmd, arg1, arg2] = process.argv;
 const isAdmin = process.argv.includes('--admin');
-const genPw = () => crypto.randomBytes(9).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+// Always includes a letter and a digit so it satisfies the password policy.
+const genPw = () => {
+  for (;;) {
+    const p = crypto.randomBytes(12).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 14);
+    if (p.length >= 12 && /[a-zA-Z]/.test(p) && /[0-9]/.test(p)) return p;
+  }
+};
 
 try {
   if (cmd === 'add') {

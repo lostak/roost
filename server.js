@@ -150,9 +150,18 @@ const server = http.createServer((req, res) => {
     if (url === '/' || url === '/index.html')
       return send(res, 200, 'text/html; charset=utf-8', fs.readFileSync(path.join(HERE, 'index.html')));
     if (url === '/api/login' && req.method === 'POST')
-      return readBody(req, o => { const r = auth.login(o.username, o.password);
-        if (!r) return sendJson(res, 401, { status: 'error', message: 'Invalid username or password' });
-        sendJson(res, 200, { status: 'ok', user: r.user }, { 'Set-Cookie': auth.sessionCookie(r.token) }); });
+      return readBody(req, o => {
+        const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+        const key = ip + '|' + String(o.username || '').toLowerCase();
+        const st = auth.throttleStatus(key);
+        if (st.locked) return sendJson(res, 429,
+          { status: 'error', message: `Too many attempts. Try again in about ${Math.ceil(st.retryAfter / 60)} minute(s).` },
+          { 'Retry-After': String(st.retryAfter) });
+        const r = auth.login(o.username, o.password);
+        if (!r) { auth.recordFail(key); return sendJson(res, 401, { status: 'error', message: 'Invalid username or password' }); }
+        auth.recordSuccess(key);
+        sendJson(res, 200, { status: 'ok', user: r.user }, { 'Set-Cookie': auth.sessionCookie(r.token) });
+      });
     if (url === '/api/logout' && req.method === 'POST') { auth.logout(cookies.roost_session);
       return sendJson(res, 200, { status: 'ok' }, { 'Set-Cookie': auth.sessionCookie('', true) }); }
     if (url === '/api/me')
