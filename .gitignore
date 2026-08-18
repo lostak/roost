@@ -14,3 +14,7 @@ Clients/
 
 # Convention rules/reference documents (read-only source material, not app code)
 Convention/
+
+# Hosted edition runtime storage (SQLite DB + uploaded user PDFs — never commit user data)
+data/
+ROOST_DATA/
