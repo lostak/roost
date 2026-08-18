@@ -1,6 +1,10 @@
 # Local parse cache (regenerated automatically from the statement PDFs)
 .parse_cache.json
 
+# Local config (localhost edition writes personal data here). Not used by the hosted
+# server, which stores per-user settings in SQLite. Kept ignored for parity with main.
+config.json
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
