@@ -1,0 +1,15 @@
+{
+  "_comment": "Roost configuration TEMPLATE. Copy this file to 'config.json' in the same folder, then edit that copy. config.json is gitignored, so your personal data (goals, expenses, tax figures, client/agent names) never gets committed. Restart the server after changing.",
+  "statements_dir": "../Statements",
+  "_statements_dir": "Folder holding the year subfolders (2024/, 2025/, ...), relative to this roost/ folder. Defaults to ../Statements; falls back to the Commissions root if that folder has no year folders.",
+  "ma_reclass": {
+    "mult": 3.5,
+    "floor_min": 80
+  },
+  "_ma_reclass": "Medicare Advantage new-business detection. A residual-section line is reclassified as new business when its payable is >= mult x the policy's typical recurring payment AND >= max(floor_min, 3 x global median). Raise mult/floor_min to reclassify fewer lines.",
+  "downline_include": [],
+  "downline_exclude": [],
+  "downline_parents": {},
+  "_downline_parents": "Map each downline agent to their upline, e.g. { \"Jane Agent\": \"Your Name\" }. Names must match how they appear on the commission statements. Left empty in this template; your real mappings live only in your local config.json.",
+  "_note_saved_data": "Goals, expenses, tax inputs, and profile settings are written into config.json by the app as you use it. They are intentionally NOT in this template and are never committed."
+}

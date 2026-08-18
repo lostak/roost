@@ -1,6 +1,14 @@
 # Local parse cache (regenerated automatically from the statement PDFs)
 .parse_cache.json
 
+# Personal config: the app writes goals, expenses, tax, and agent names here.
+# Tracked template is config.example.json — copy it to config.json on first run.
+config.json
+
+# Hosted edition runtime storage (SQLite DB + uploaded user PDFs — never commit user data)
+data/
+ROOST_DATA/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
