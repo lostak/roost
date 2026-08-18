@@ -122,6 +122,13 @@ Two ways to add a weekly statement:
 All user settings live in **`config.json`** (edit it, then restart the server).
 You never have to touch the code.
 
+On a fresh checkout there is no `config.json` — copy the tracked template first:
+`cp config.example.json config.json` (Windows: `copy config.example.json config.json`).
+`config.json` is gitignored because the app also saves your goals, expenses, tax
+figures, and agent names into it; keeping it out of git means that personal data is
+never committed or pushed. The server also runs fine with no `config.json` at all,
+falling back to the built-in defaults.
+
 | Setting | Default | What it does |
 |---|---|---|
 | `statements_dir` | `"../Statements"` | Folder holding the year subfolders (`2024/`, `2025/`, …), relative to the `roost/` app folder. Falls back to the parent folder if it has no year folders. |
@@ -165,7 +172,8 @@ PDF  ──▶  pdftext.js  ──▶  parser.js  ──▶  aggregate.js  ─�
 | `xlsxlite.js` | A minimal OOXML `.xlsx` writer — builds the workbook, styles, and a ZIP container by hand for the Excel export. |
 | `server.js` | The HTTP server. Scans the statement folders, caches parses by file mtime, and serves the dashboard, the JSON API, the Excel export, and the upload endpoint. |
 | `index.html` | The entire front end — a Material-Design single-page dashboard rendered with Chart.js (loaded from a CDN). |
-| `config.json` | User settings (see [Configuration](#configuration)). |
+| `config.example.json` | Tracked template. Copy to `config.json` on first run (see [Configuration](#configuration)). |
+| `config.json` | Your local settings — gitignored (holds personal data). |
 
 ### HTTP endpoints
 
