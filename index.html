@@ -220,7 +220,24 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
   <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light"></button>
+  <span class="meta" id="userChip" style="display:none"></span>
+  <button class="btn ghost" id="logoutBtn" style="display:none" onclick="logout()">Sign out</button>
   <div class="meta" id="meta"></div>
+</div>
+
+<!-- login -->
+<div id="loginOverlay" style="display:none;position:fixed;inset:0;z-index:1000;background:var(--surface);align-items:center;justify-content:center">
+  <div class="card" style="width:340px;max-width:90vw">
+    <h2 style="margin:0 0 4px;display:flex;align-items:center;gap:10px;font-size:24px">
+      <svg viewBox="-5 -8 86 102" width="26" height="31" aria-hidden="true"><rect x="0" y="52" width="16" height="36" rx="8" fill="#00838a"/><rect x="24" y="34" width="16" height="54" rx="8" fill="#00696e"/><rect x="50" y="16" width="16" height="72" rx="8" fill="#c0872f"/><ellipse cx="58" cy="12" rx="12" ry="14" fill="#e0a94a"/></svg>Roost</h2>
+    <p class="hint" style="margin:0 0 16px">Sign in to your account.</p>
+    <form onsubmit="return doLogin(event)">
+      <input id="loginUser" class="sel" style="width:100%;margin-bottom:10px" placeholder="Username" autocomplete="username" autofocus>
+      <input id="loginPass" type="password" class="sel" style="width:100%;margin-bottom:14px" placeholder="Password" autocomplete="current-password">
+      <button class="btn tonal" type="submit" style="width:100%;justify-content:center">Sign in</button>
+      <p class="neg" id="loginMsg" style="margin:12px 0 0;min-height:16px;font-size:13px"></p>
+    </form>
+  </div>
 </div>
 
 <!-- upload statements modal -->
@@ -1185,11 +1202,35 @@ function baropts(stacked,horizontal){
     plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>{const v=c.parsed[horizontal?'x':'y'];
       return c.dataset.label+': '+(c.dataset.money===false?Number(v).toLocaleString():fmt(v));}}}}};}
 
+// ---- auth (hosted edition) ----
+function setUser(u){const chip=$('#userChip'),btn=$('#logoutBtn');
+  if(u){if(chip){chip.textContent=u.username;chip.style.display='';}if(btn)btn.style.display='';}
+  else{if(chip)chip.style.display='none';if(btn)btn.style.display='none';}}
+function showLogin(){const o=$('#loginOverlay');if(o)o.style.display='flex';$('#content').style.display='none';$('#loading').style.display='none';
+  setTimeout(()=>{const u=$('#loginUser');if(u)u.focus();},50);}
+function hideLogin(){const o=$('#loginOverlay');if(o)o.style.display='none';}
+async function doLogin(e){e.preventDefault();$('#loginMsg').textContent='';
+  try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:$('#loginUser').value,password:$('#loginPass').value})});
+    const j=await r.json();
+    if(r.ok&&j.status==='ok'){hideLogin();setUser(j.user);$('#loginPass').value='';await loadData(true);}
+    else $('#loginMsg').textContent=j.message||'Sign in failed';
+  }catch(err){$('#loginMsg').textContent='Sign in failed';}
+  return false;}
+async function logout(){try{await fetch('/api/logout',{method:'POST'});}catch(e){} DATA=null;setUser(null);showLogin();}
+async function initAuth(){
+  try{const r=await fetch('/api/me');
+    if(r.ok){const j=await r.json();setUser(j.user);loadData();}
+    else showLogin();
+  }catch(e){showLogin();}
+}
 async function loadData(force){
   if(force){$('#loading').style.display='block';$('#content').style.display='none';}
   try{
     const r=await fetch('/api/data'+(force?'?t='+Date.now():''));
+    if(r.status===401){showLogin();return;}
     DATA=await r.json();
+    hideLogin();
     render();
     $('#loading').style.display='none';$('#content').style.display='block';
   }catch(e){$('#loading').innerHTML='Could not load data: '+e;}
@@ -2837,7 +2878,7 @@ async function uploadFiles(files){
 })();
 window.addEventListener('keydown',e=>{ if(e.key==='Escape')closeUpload(); });
 
-loadData();
+initAuth();
 </script>
 </body>
 </html>
