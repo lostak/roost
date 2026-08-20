@@ -235,9 +235,10 @@ its console window or press `Ctrl+C`) and start it again with `Start-Roost.bat`
 or `node server.js`, then refresh the browser.
 
 **A statement didn't import.**
-Statements are dated from their contents, or from a `M-D-YY.pdf` filename as a
-fallback. If a file can't be dated or parsed it's skipped and listed in the
-server console on load. Rename it like `M-D-YY.pdf` and re-add it.
+Statements are dated from the pay-period date printed inside the PDF, so the file can
+be named anything (a date in the filename is only used as a fallback). If a file can't
+be dated or parsed it's skipped and listed in the server console on load — check it's an
+actual commission statement.
 
 **A carrier shows up as "Other."**
 Carrier detection is a keyword list in `parser.js` (`CARRIERS`). Add the carrier's
