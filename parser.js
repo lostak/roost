@@ -179,12 +179,16 @@ const iso = d => d.toISOString().slice(0, 10);
 
 function parseStatement(text, fname){
   const data = parseText(text);
-  let d = dateFromFilename(fname);
   const h = data.header;
-  if (!d && h.pay_period_date){
+  // Prefer the date printed ON the statement (the pay-period date). The file can be named
+  // anything; only fall back to a date encoded in the filename if the statement itself has
+  // no readable date (e.g. some pending statements).
+  let d = null;
+  if (h.pay_period_date){
     const [mo, day, yr] = h.pay_period_date.split('/').map(Number);
     d = new Date(Date.UTC(yr, mo - 1, day));
   }
+  if (!d) d = dateFromFilename(fname);
   const f = x => (x == null ? 0 : round2(x));
   const st = data.sectionTotals;
   return {

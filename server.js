@@ -206,10 +206,10 @@ function sendJson(res, code, obj) { send(res, code, 'application/json', JSON.str
 
 // ---- statement upload ----
 // Accepts a raw PDF body (Content-Type ignored) with the original filename in
-// the ?name= query param. The file is parsed to find its statement date, then
-// filed into <statements>/<year>/<M-D-YY>.pdf so it matches the existing naming
-// and lands in the right year folder regardless of what it was called. Existing
-// statements for the same date are left untouched (reported as duplicates).
+// the ?name= query param. The statement date is read from the PDF's own content
+// (the pay-period date), so the upload can be named anything; it's then filed into
+// <statements>/<year>/<M-D-YY>.pdf, named from that date, in the right year folder.
+// Existing statements for the same date are left untouched (reported as duplicates).
 const MAX_UPLOAD = 25 * 1024 * 1024; // 25 MB safety cap (statements are ~60 KB)
 function handleUpload(req, res) {
   const qs = req.url.split('?')[1] || '';
@@ -236,7 +236,7 @@ function handleUpload(req, res) {
       try { rec = parseStatement(extractText(buf), origName); } catch {}
       if (!rec || !rec.date)
         return sendJson(res, 422, { status: 'error', name: origName,
-          message: 'Could not read a statement date — rename the file like M-D-YY.pdf and retry.' });
+          message: 'Could not read a statement date from this PDF. Make sure it’s a commission statement.' });
 
       const [Y, M, D] = rec.date.split('-').map(Number);
       const canonical = `${M}-${D}-${String(Y).slice(2)}.pdf`;
