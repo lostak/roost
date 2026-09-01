@@ -44,6 +44,8 @@ body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);
   padding:12px 24px;background:linear-gradient(90deg,var(--surface-2),var(--surface-1));box-shadow:var(--shadow)}
 .brand{font-size:22px;font-weight:700;margin:0;flex:0 0 auto;display:flex;align-items:center;gap:9px;color:#00434a;letter-spacing:-.5px}
 .brand .mark{display:block}
+#navToggle{display:none}
+#navBackdrop{display:none}
 .appbar .meta{margin-left:auto;font-size:12px;color:var(--on-surface-var);text-align:right;line-height:1.4}
 .btn{font-family:inherit;border:none;cursor:pointer;border-radius:20px;padding:9px 18px;font-size:14px;
   font-weight:500;background:var(--primary);color:var(--primary-c);display:inline-flex;align-items:center;gap:8px;
@@ -203,10 +205,35 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
 .dlchip button{border:none;background:var(--surface-3);color:var(--on-surface-var);border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
 .dlchip button:hover{background:var(--error);color:#fff}
 .sort-arrow{font-size:11px;opacity:.75}
+/* ---- mobile view (phones): off-canvas nav drawer + stacked layout ---- */
+@media(max-width:640px){
+  #navToggle{display:inline-flex;padding:8px 12px;font-size:18px;line-height:1}
+  .appbar{padding:10px 12px;gap:7px;flex-wrap:wrap}
+  .brand{font-size:18px;gap:8px}
+  .appbar .meta{display:none}
+  .btn{padding:8px 12px;font-size:13px}
+  .layout{display:block;min-height:0}
+  .nav{position:fixed;top:0;left:0;height:100dvh;width:264px;max-width:84vw;flex-basis:auto;z-index:60;
+    background:var(--surface-1);box-shadow:2px 0 18px rgba(0,0,0,.28);padding:18px 12px;
+    transform:translateX(-100%);transition:transform .22s ease}
+  body.nav-open .nav{transform:none}
+  .nav .lbl{display:inline}
+  .navgroup-header{display:flex}
+  .navgroup-items{margin:2px 0 8px;padding:0}
+  #navBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:55}
+  body.nav-open #navBackdrop{display:block}
+  .main{padding:16px 14px;max-width:none}
+  .kpis{grid-template-columns:1fr;gap:12px;margin-bottom:18px}
+  .grid2{grid-template-columns:1fr}
+  .chart-wrap{height:260px}
+  .section{font-size:20px}
+  .controls{gap:8px}
+}
 </style>
 </head>
 <body>
 <div class="appbar">
+  <button class="btn ghost" id="navToggle" onclick="toggleNav()" aria-label="Menu" title="Menu">&#9776;</button>
   <h1 class="brand">
     <svg class="mark" viewBox="-5 -8 86 102" width="26" height="31" aria-hidden="true">
       <rect x="0"  y="52" width="16" height="36" rx="8" fill="#00838a"/>
@@ -243,6 +270,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
   </div>
 </div>
 <div class="layout">
+  <div id="navBackdrop" onclick="toggleNav()"></div>
   <nav class="nav" id="nav">
     <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
     <div class="navgroup" data-group="production">
@@ -293,6 +321,27 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
     <div id="loading" class="loading"><div class="spinner"></div>Parsing statements&hellip;</div>
     <div id="content" style="display:none">
 
+      <!-- first-run welcome (shown until the first statement is added) -->
+      <div id="firstRun" style="display:none">
+        <div style="max-width:860px;margin:16px auto 0">
+          <div class="card" style="text-align:center;padding:40px 28px 34px">
+            <svg viewBox="-6 -10 88 108" width="58" height="70" aria-hidden="true" style="margin-bottom:6px">
+              <rect x="0" y="52" width="16" height="36" rx="8" fill="#00838a"/><rect x="24" y="34" width="16" height="54" rx="8" fill="#00696e"/>
+              <rect x="50" y="16" width="16" height="72" rx="8" fill="#c0872f"/><ellipse cx="58" cy="12" rx="12" ry="14" fill="#e0a94a"/></svg>
+            <h2 style="margin:6px 0 6px;font-size:28px">Welcome to Roost</h2>
+            <p class="hint" style="max-width:52ch;margin:0 auto 22px;font-size:15px">Add your commission-statement PDFs and Roost turns them into a live picture of your book &mdash; income over time, residuals, retention, goals, and taxes. Your files never need a special name.</p>
+            <button class="btn" onclick="openUpload()"><span>&#8613;</span> Add your first statement</button>
+            <p class="hint" style="margin:12px 0 0">or drop PDFs into your Statements folder and click Refresh</p>
+          </div>
+          <div class="kpis" style="margin-top:18px">
+            <div class="card" style="padding:18px"><div style="font-size:24px">&#128200;</div><div class="label" style="margin-top:6px">Income over time</div><div class="sub">New business vs. recurring residual &mdash; by week, month, quarter, or year.</div></div>
+            <div class="card" style="padding:18px"><div style="font-size:24px">&#128257;</div><div class="label" style="margin-top:6px">Retention</div><div class="sub">Persistency, lapses, and chargeback drag, by carrier and policy.</div></div>
+            <div class="card" style="padding:18px"><div style="font-size:24px">&#127919;</div><div class="label" style="margin-top:6px">Goals &amp; pace</div><div class="sub">Set a net-paid goal and see the applications needed to hit it.</div></div>
+            <div class="card" style="padding:18px"><div style="font-size:24px">&#129534;</div><div class="label" style="margin-top:6px">Taxes &amp; expenses</div><div class="sub">A 1099 tax estimator and your true net after the cost to write.</div></div>
+          </div>
+        </div>
+      </div>
+
       <!-- OVERVIEW -->
       <section class="view active" id="view-overview">
         <div class="card" id="digestCard" style="margin-bottom:24px;border-left:4px solid var(--primary)">
@@ -331,7 +380,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
       <!-- NEW BUSINESS -->
       <section class="view" id="view-newbusiness">
         <h2 class="section">New business (advances &amp; initial commissions)</h2>
-        <div class="banner">New business = up-front commissions on new enrollments &amp; annuities. Residual (recurring) income is excluded here — see the Residual Income tab.</div>
+        <div class="banner">New business = up-front commissions on new applications &amp; annuities. Residual (recurring) income is excluded here — see the Residual Income tab.</div>
         <p class="note reclassNote"></p>
         <div class="controls">
           <span class="lbl-inline">Timeframe</span>
@@ -352,7 +401,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
         <div class="card chart-card">
           <h3>New business by carrier</h3>
-          <p class="hint">Where your enrollments are landing, stacked by year.</p>
+          <p class="hint">Where your applications are landing, stacked by year.</p>
           <div class="chart-wrap"><canvas id="nbCarrierChart"></canvas></div>
         </div>
         <div class="card chart-card tablecard">
@@ -680,7 +729,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
       <!-- PROJECTIONS -->
       <section class="view" id="view-projections">
         <h2 class="section">Projections &amp; insights</h2>
-        <div class="caveat"><b>Estimates, not guarantees.</b> These forward numbers compound your current book using the assumptions below — retained members renew as residual, new enrollments convert into next year's residual, and switches drop the old residual but earn a new initial. Starting points come from your own history; drag the sliders to test scenarios. Not financial advice.</div>
+        <div class="caveat"><b>Estimates, not guarantees.</b> These forward numbers compound your current book using the assumptions below — retained members renew as residual, new applications convert into next year's residual, and switches drop the old residual but earn a new initial. Starting points come from your own history; drag the sliders to test scenarios. Not financial advice.</div>
         <div class="kpis" id="projKpis"></div>
         <div class="card" style="margin-bottom:24px">
           <div class="controls" style="margin-bottom:10px">
@@ -694,10 +743,10 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
               <div class="sub">Share of this year's residual that renews next year.</div></div>
             <div class="sl"><label>New-business growth <b id="vGrowth"></b></label>
               <input type="range" id="projGrowth" min="-25" max="50" step="1">
-              <div class="sub">First-year change in new enrollments; fades toward flat in later years.</div></div>
+              <div class="sub">First-year change in new applications; fades toward flat in later years.</div></div>
             <div class="sl"><label>New &rarr; residual conversion <b id="vConv"></b></label>
               <input type="range" id="projConv" min="40" max="95" step="1">
-              <div class="sub">Share of new enrollments that persist into a recurring residual.</div></div>
+              <div class="sub">Share of new applications that persist into a recurring residual.</div></div>
             <div class="sl"><label>Renewal-to-initial ratio <b id="vRenew"></b></label>
               <input type="range" id="projRenew" min="10" max="100" step="1">
               <div class="sub">A year of residual as a fraction of the up-front initial it came from.</div></div>
@@ -755,7 +804,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
                 <option value="scorp">Through an LLC/corp with S-corp election</option>
               </select></div>
             <div class="sl"><label>Tax year</label><input id="taxYear" class="numbox" style="width:100%" value="2025" disabled></div>
-            <div class="sl"><label>1099 net commission income $</label><input type="number" id="taxIncome" class="numbox" style="width:100%" step="1000"></div>
+            <div class="sl"><label>1099 net commission income $ <span class="hint">(pre-filled from your projected annual net &mdash; edit to your expected full-year figure)</span></label><input type="number" id="taxIncome" class="numbox" style="width:100%" step="1000"></div>
             <div class="sl"><label>Business expenses $</label><input type="number" id="taxExpenses" class="numbox" style="width:100%" step="500"></div>
             <div class="sl"><label>Other household income $ <span class="hint">(spouse W-2, etc.)</span></label><input type="number" id="taxOther" class="numbox" style="width:100%" step="1000"></div>
             <div class="sl"><label>Retirement contribution $ <span class="hint">(SEP / Solo 401k)</span></label><input type="number" id="taxRetire" class="numbox" style="width:100%" step="500"></div>
@@ -856,7 +905,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
       <!-- GOALS -->
       <section class="view" id="view-goals">
         <h2 class="section">Annual goal &amp; pace</h2>
-        <div class="banner">Set your <b>annual net-paid goal</b> for the year. Roost tracks where you actually are versus where you need to be by this point in the calendar year (goal &times; share of the year elapsed), and breaks down how new business, residual, and enrollments are getting you there.</div>
+        <div class="banner">Set your <b>annual net-paid goal</b> for the year. Roost tracks where you actually are versus where you need to be by this point in the calendar year (goal &times; share of the year elapsed), and breaks down how new business, residual, and applications are getting you there.</div>
         <div class="card" style="margin-bottom:24px">
           <div class="controls" style="gap:14px;flex-wrap:wrap">
             <span class="lbl-inline">Year</span>
@@ -907,7 +956,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <div class="grid2">
           <div class="card chart-card">
             <h3>What's driving your net this year</h3>
-            <p class="hint">New business, residual and chargebacks that make up your net so far &mdash; plus enrollments written.</p>
+            <p class="hint">New business, residual and chargebacks that make up your net so far &mdash; plus applications written.</p>
             <div class="chart-wrap"><canvas id="goalDriverChart"></canvas></div>
           </div>
           <div class="card chart-card tablecard">
@@ -925,7 +974,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
       <!-- EXPENSES -->
       <section class="view" id="view-expenses">
         <h2 class="section">Expenses &amp; true profit</h2>
-        <div class="banner">Commissions aren't profit until you subtract what it costs to write them. Log your business expenses for the year &mdash; leads, marketing, E&amp;O, CRM/software, staff &mdash; and Roost shows your true net, your return on every dollar spent, and your cost per enrollment.</div>
+        <div class="banner">Commissions aren't profit until you subtract what it costs to write them. Log your business expenses for the year &mdash; leads, marketing, E&amp;O, CRM/software, staff &mdash; and Roost shows your true net, your return on every dollar spent, and your cost per application.</div>
         <div class="card" style="margin-bottom:24px">
           <div class="controls" style="gap:14px;flex-wrap:wrap;margin-bottom:14px">
             <span class="lbl-inline">Year</span>
@@ -1020,8 +1069,8 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const fmt = n => (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmt0 = n => (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{maximumFractionDigits:0});
+const fmt = n => (n=Number(n),!isFinite(n)?'$0.00':(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+const fmt0 = n => (n=Number(n),!isFinite(n)?'$0':(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{maximumFractionDigits:0}));
 const cls = n => n<0?'neg':'pos';
 const hexA=(h,a)=>{const n=parseInt(h.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;};
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1066,6 +1115,7 @@ function applyTheme(t){
   try{localStorage.setItem('theme',t);}catch(e){}
 }
 function toggleTheme(){applyTheme(document.body.classList.contains('dark')?'light':'dark'); if(DATA)render();}
+function toggleNav(){document.body.classList.toggle('nav-open');}
 (function(){let t;try{t=localStorage.getItem('theme');}catch(e){}
   if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
   applyTheme(t);})();
@@ -1091,6 +1141,7 @@ document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{
   $('#view-'+v).classList.add('active');
   openGroup(a.closest('.navgroup'));   // null for the standalone Overview -> collapses all
   markActiveGroup();
+  document.body.classList.remove('nav-open');   // close the mobile drawer after choosing a view
 });
 document.querySelectorAll('#nav .navgroup-header').forEach(h=>h.onclick=()=>{
   const g=h.parentElement;
@@ -1198,7 +1249,14 @@ async function loadData(force){
 function render(){
   destroyCharts();
   const d=DATA, years=d.years, yl=d.all_years;
-  $('#meta').innerHTML=`${d.statement_count} statements &middot; ${yl[0]}&ndash;${yl[yl.length-1]}<br>updated ${d.generated.replace('T',' ')}`;
+  $('#meta').innerHTML=(d.statement_count
+    ? `${d.statement_count} statements${yl.length?` &middot; ${yl[0]}&ndash;${yl[yl.length-1]}`:''}`
+    : 'No statements yet')+`<br>updated ${d.generated.replace('T',' ')}`;
+  const empty=!d.statement_count;
+  if($('#firstRun'))$('#firstRun').style.display=empty?'block':'none';
+  if($('#nav'))$('#nav').style.display=empty?'none':'';
+  document.querySelectorAll('#content .view, .layout .main > .view').forEach(v=>{v.style.display=empty?'none':'';});
+  if(empty)return;
   syncGrainSegs();
   renderDigest();
   renderKpis();
@@ -1238,7 +1296,7 @@ function renderReclassNotes(){
 
 function renderKpis(){
   const d=DATA, years=d.years;
-  const cur=years[years.length-1]||{}, prev=years[years.length-2];
+  const cur=years[years.length-1]||{year:new Date().getFullYear(),net:0,advances:0,residual:0}, prev=years[years.length-2];
   const totalResid=years.reduce((s,y)=>s+y.residual,0);
   const deltaHtml=(c,p)=>{if(p==null||!p)return'';const g=(c-p)/Math.abs(p)*100;const up=g>=0;
     return `<div class="delta ${up?'pos':'neg'}">${up?'&#9650;':'&#9660;'} ${Math.abs(g).toFixed(0)}% vs ${prev.year}</div>`;};
@@ -1884,7 +1942,7 @@ function renderGoals(){
 
   const rows=(DATA.series||[]).filter(s=>s.year===year).sort((a,b)=>a.date<b.date?-1:1);
   const sum=f=>rows.reduce((s,r)=>s+(r[f]||0),0);
-  const ytdNet=sum('net'), ytdNew=sum('advances'), ytdRes=sum('residual'), ytdCB=sum('chargebacks'), ytdEnr=sum('enrollments');
+  const ytdNet=sum('net'), ytdNew=sum('advances'), ytdRes=sum('residual'), ytdCB=sum('chargebacks'), ytdEnr=sum('applications');
   const asOf=rows.length?rows[rows.length-1].date:(year+'-01-01');
   const di=dayInfo(asOf,year);
   const needed=goal*di.frac, delta=ytdNet-needed;
@@ -1898,7 +1956,7 @@ function renderGoals(){
   if(!goal){
     kp=[{l:'No goal set',v:'—',s:`Enter a ${year} net-paid goal above to start tracking`,gold:true},
       {l:`${year} net so far`,v:fmt0(ytdNet),s:`as of ${asOf}`},
-      {l:'New business YTD',v:fmt0(ytdNew),s:`${ytdEnr} enrollments`},
+      {l:'New business YTD',v:fmt0(ytdNew),s:`${ytdEnr} applications`},
       {l:'Residual YTD',v:fmt0(ytdRes),s:'recurring'}];
   }else{
     const ahead=delta>=0;
@@ -1945,7 +2003,7 @@ function renderGoals(){
     +`<tr><td>Residual</td><td>${fmt0(ytdRes)}</td><td>${share(ytdRes)}</td><td>${fmt0(rr(ytdRes))}</td></tr>`
     +`<tr><td>Chargebacks</td><td class="neg">${fmt0(ytdCB)}</td><td>${share(ytdCB)}</td><td>${fmt0(rr(ytdCB))}</td></tr>`
     +`<tr><td><b>Net</b></td><td><b>${fmt0(ytdNet)}</b></td><td>100%</td><td><b>${fmt0(rr(ytdNet))}</b></td></tr>`
-    +`<tr><td>Enrollments</td><td>${ytdEnr}</td><td>—</td><td>${Math.round(rr(ytdEnr))}</td></tr>`
+    +`<tr><td>Applications</td><td>${ytdEnr}</td><td>—</td><td>${Math.round(rr(ytdEnr))}</td></tr>`
     +'</tbody>';
 
   _goalCtx={year,goal,rows,ytdNet,ytdNew,ytdRes,ytdCB,ytdEnr,di,asOf,gap};
@@ -1977,7 +2035,7 @@ function renderGoalTraj(){
     if(g==='quarter')return Math.floor((m-1)/3);
     return Math.min(Math.floor((doy(ds)-1)/7),N-1);};
   const bNet=Array(N).fill(0), bEnr=Array(N).fill(0);
-  for(const r of rows){const i=pidx(r.date); bNet[i]+=r.net; bEnr[i]+=r.enrollments;}
+  for(const r of rows){const i=pidx(r.date); bNet[i]+=r.net; bEnr[i]+=r.applications;}
   const lastIdx=pidx(asOf);
   const cumNet=[],cumEnr=[]; let rn=0,re=0;
   for(let i=0;i<N;i++){rn+=bNet[i];re+=bEnr[i];cumNet.push(i<=lastIdx?Math.round(rn):null);cumEnr.push(i<=lastIdx?re:null);}
@@ -2039,15 +2097,15 @@ function goalInsights(x){
   // Working
   if(x.delta>=0) work.push(card('Ahead of pace',`You're <b>${fmt0(x.delta)}</b> ahead of where you need to be, on track to finish about <b>${fmt0(x.projected)}</b> vs a <b>${fmt0(x.goal)}</b> goal.`,'good'));
   if(x.ytdRes>0) work.push(card('Residual is doing the heavy lifting',`Recurring residual is <b>${fmt0(x.ytdRes)}</b> (${x.ytdNet?Math.round(x.ytdRes/x.ytdNet*100):0}% of net) — income you keep earning without writing anything new.`,'good'));
-  if(x.ytdEnr>0) work.push(card('New enrollments are landing',`<b>${x.ytdEnr}</b> new policies written this year at ~<b>${fmt0(avgInit)}</b> of new-business commission each.`,'good'));
+  if(x.ytdEnr>0) work.push(card('New applications are landing',`<b>${x.ytdEnr}</b> new policies written this year at ~<b>${fmt0(avgInit)}</b> of new-business commission each.`,'good'));
   if(nbTop) work.push(card('Top new-business carrier',`<b>${nbTop.carrier}</b> is your biggest new-business source. Leaning into what already converts is the fastest lift.`,'good'));
   if(!work.length) work.push(card('Getting started',`Track builds as more ${x.year} statements come in.`,'good'));
   // To hit the goal
   if(x.gap>0){
     todo.push(card('Close the gap',`You need <b>${fmt0(x.gap)}</b> more to reach the goal. Over the ~<b>${Math.round(x.di.weeksLeft)}</b> weeks left that's <b>${fmt0(x.needWk)}/week</b> — versus <b>${fmt0(x.avgWk)}/week</b> lately.`,'focus'));
-    if(x.needWk>x.avgWk*1.05) todo.push(card('Pace needs to step up',`The required <b>${fmt0(x.needWk)}/week</b> is above your recent run-rate. New business is the main lever — residual compounds slowly, so extra enrollments move the number fastest.`,'focus'));
+    if(x.needWk>x.avgWk*1.05) todo.push(card('Pace needs to step up',`The required <b>${fmt0(x.needWk)}/week</b> is above your recent run-rate. New business is the main lever — residual compounds slowly, so extra applications move the number fastest.`,'focus'));
     else todo.push(card('Stay the course',`Your recent <b>${fmt0(x.avgWk)}/week</b> is enough to reach the goal if you hold it. Protect renewals (watch chargebacks) so residual doesn't leak.`,'focus'));
-    if(avgInit>0) todo.push(card('In enrollments',`At ~<b>${fmt0(avgInit)}</b> per new policy, roughly <b>${Math.ceil(x.gap/avgInit)}</b> more enrollments would cover the remaining gap.`,'focus'));
+    if(avgInit>0) todo.push(card('In applications',`At ~<b>${fmt0(avgInit)}</b> per new policy, roughly <b>${Math.ceil(x.gap/avgInit)}</b> more applications would cover the remaining gap.`,'focus'));
     todo.push(card('Use the season',`Medicare skews to AEP (Oct–Dec) and the Jan effective-date wave, so new business — and the gap — can close quickly in Q4/Q1.`,'focus'));
   }else{
     todo.push(card('Goal in reach',`At the current pace you finish about <b>${fmt0(x.projected)}</b>, <b>${fmt0(-x.gap)}</b> over goal. Consider setting a stretch target, or bank the cushion against Q4 chargebacks.`,'focus'));
@@ -2066,7 +2124,7 @@ function renderDigest(){
   parts.push(`Latest statement <b>${last.date}</b>: paid <b>${fmt(last.net)}</b> `
     +`(${fmt(last.advances)} new business, ${fmt(last.residual)} residual`
     +`${last.chargebacks?`, <span class="neg">${fmt(last.chargebacks)}</span> chargebacks`:''})`
-    +`${last.enrollments?` from <b>${last.enrollments}</b> new enrollment${last.enrollments===1?'':'s'}`:''}.`);
+    +`${last.applications?` from <b>${last.applications}</b> new application${last.applications===1?'':'s'}`:''}.`);
   const R=DATA.retention&&DATA.retention.totals;
   if(R&&R.at_risk_count) parts.push(`<b>${R.at_risk_count}</b> Medicare Advantage polic${R.at_risk_count===1?'y':'ies'} (${fmt0(R.at_risk_dollars)}) are in the rapid-disenrollment window &mdash; worth a retention touch. <a href="#" onclick="gotoView('retention');return false;">See Retention &rarr;</a>`);
   // goal pace (uses saved goal incl. on-device)
@@ -2121,7 +2179,7 @@ function renderExpenses(){
   const totalExp=EXP_CATS.reduce((s,[k])=>s+(Number(exp[k])||0),0);
   const yr=(DATA.years||[]).find(y=>y.year===year)||{net:0};
   const grossNet=yr.net||0;
-  const enroll=(DATA.series||[]).filter(s=>s.year===year).reduce((s,r)=>s+(r.enrollments||0),0);
+  const enroll=(DATA.series||[]).filter(s=>s.year===year).reduce((s,r)=>s+(r.applications||0),0);
   const trueNet=grossNet-totalExp;
   const retPer=totalExp>0?grossNet/totalExp:null;
   const cpa=enroll>0?totalExp/enroll:null;
@@ -2130,7 +2188,7 @@ function renderExpenses(){
     {l:'True net profit',v:fmt0(trueNet),s:`${fmt0(grossNet)} commissions − ${fmt0(totalExp)} costs`,gold:true},
     {l:'Total expenses',v:fmt0(totalExp),s:margin!=null?`${Math.round((1-margin)*100)}% of commissions`:''},
     {l:'Return per $1 spent',v:retPer!=null?('$'+retPer.toFixed(2)):'—',s:'commission earned per expense dollar'},
-    {l:'Cost per enrollment',v:cpa!=null?fmt0(cpa):'—',s:`${enroll} enrollments this year`}
+    {l:'Cost per application',v:cpa!=null?fmt0(cpa):'—',s:`${enroll} applications this year`}
   ];
   $('#expKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
@@ -2197,7 +2255,7 @@ function calcTax(inp){
   const qbi=Math.min(0.20*qbiIncome,0.20*tbq);
   const taxable=Math.max(0,tbq-qbi);
   const fed=bracketTax(taxable,inp.status);
-  const addlMed=Math.max(0,(seWages+(inp.other||0))-TAX2025.addlMedThresh[inp.status])*0.009;
+  const addlMed=Math.max(0,(seWages+(inp.other||0))-(TAX2025.addlMedThresh[inp.status]||TAX2025.addlMedThresh.single))*0.009;
   const state=Math.max(0,agi-std)*((inp.stateRate||0)/100);
   const total=seOrPayroll+fed+state+addlMed;
   return {netProfit,seOrPayroll,halfSE,qbi,agi,taxable,fed,state,addlMed,total};
