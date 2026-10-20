@@ -1521,9 +1521,13 @@ function renderChargebacks(){
   $('#cbKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val${k.neg&&!k.gold?' neg':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
   const car=c.by_carrier||[];
+  const overRate=car.some(r=>r.rate!=null&&r.rate>100);
   $('#cbCarrier').innerHTML=car.length?thead(['Carrier','Charged back','Advanced','Rate'])+'<tbody>'
-    +car.map(r=>`<tr><td style="text-align:left">${r.carrier}</td><td class="neg">${fmt(r.amount)}</td><td>${fmt0(r.advanced)}</td><td>${r.rate!=null?r.rate.toFixed(1)+'%':'—'}</td></tr>`).join('')
-    +'</tbody>':'<p class="hint">No chargebacks recorded yet &mdash; nothing has been clawed back.</p>';
+    +car.map(r=>{const over=r.rate!=null&&r.rate>100;
+      return `<tr><td style="text-align:left">${r.carrier}</td><td class="neg">${fmt(r.amount)}</td><td>${fmt0(r.advanced)}</td>`
+      +`<td${over?' title="The clawback reverses advances paid in an earlier period, outside this date range."':''}>${r.rate!=null?r.rate.toFixed(1)+'%'+(over?' <span style="color:var(--on-surface-var)">&dagger;</span>':''):'&mdash;'}</td></tr>`;}).join('')
+    +'</tbody>'+(overRate?'<p class="hint" style="margin-top:10px">&dagger; A rate above 100% means the clawback reverses advances paid in an earlier period that falls outside the range shown &mdash; the money came back on business booked before this window, not a figure to read as "more than everything advanced."</p>':'')
+    :'<p class="hint">No chargebacks recorded yet &mdash; nothing has been clawed back.</p>';
   const fam=c.by_family||[];
   $('#cbFamily').innerHTML=fam.length?thead(['Product line','Charged back','Events'])+'<tbody>'
     +fam.map(r=>`<tr><td style="text-align:left">${r.family}</td><td class="neg">${fmt(r.amount)}</td><td>${r.count}</td></tr>`).join('')
