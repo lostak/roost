@@ -247,6 +247,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
   <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light"></button>
+  <select class="btn tonal" id="holderSel" onchange="setHolderView(this.value)" style="display:none" title="Which book to show (personal, LLC, or both combined)"></select>
   <div class="meta" id="meta"></div>
 </div>
 
@@ -1087,6 +1088,9 @@ const METRICS={
 };
 const METRIC_ORDER=['net','advances','residual','chargebacks','gross','statements','avg_per_statement'];
 let DATA=null, charts={}, cumMetric='net', overviewType='bar', nbType='bar', GRAIN='quarter', proj=null, projMetric='residual', GOAL_YEAR=null, goalTrajMode='pace', goalTrajGrain='month', _goalCtx=null, carrierFilter=new Set(), productFilter=new Set();
+// Which statement book to show: '__all__' = personal + LLC combined (default), or a holder name.
+let holderView=(function(){try{return localStorage.getItem('roost.holderView')||'__all__';}catch(e){return '__all__';}})();
+function setHolderView(v){holderView=v||'__all__';try{localStorage.setItem('roost.holderView',holderView);}catch(e){}loadData(true);}
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
 // Anchor tooltips to the TOP of the hovered bar/point (not the moving cursor), site-wide.
@@ -1239,16 +1243,32 @@ function baropts(stacked,horizontal){
 async function loadData(force){
   if(force){$('#loading').style.display='block';$('#content').style.display='none';}
   try{
-    const r=await fetch('/api/data'+(force?'?t='+Date.now():''));
+    const qp=new URLSearchParams();
+    if(holderView&&holderView!=='__all__')qp.set('holder',holderView);
+    if(force)qp.set('t',Date.now());
+    const r=await fetch('/api/data'+(qp.toString()?'?'+qp:''));
     DATA=await r.json();
     render();
     $('#loading').style.display='none';$('#content').style.display='block';
   }catch(e){$('#loading').innerHTML='Could not load data: '+e;}
 }
 
+function renderHolderSel(d){
+  const sel=$('#holderSel'); if(!sel)return;
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const hs=(d&&d.holders_available)||[];
+  // Only an agent with more than one book (e.g. a personal statement + an LLC) sees the selector.
+  if(hs.length<2){sel.style.display='none';holderView='__all__';return;}
+  if(holderView!=='__all__'&&!hs.includes(holderView))holderView='__all__';
+  sel.innerHTML=[`<option value="__all__">Combined &middot; all ${hs.length} books</option>`]
+    .concat(hs.map(h=>`<option value="${esc(h)}">${esc(h)} only</option>`)).join('');
+  sel.value=d.holder_view||holderView;
+  sel.style.display='';
+}
 function render(){
   destroyCharts();
   const d=DATA, years=d.years, yl=d.all_years;
+  renderHolderSel(d);
   $('#meta').innerHTML=(d.statement_count
     ? `${d.statement_count} statements${yl.length?` &middot; ${yl[0]}&ndash;${yl[yl.length-1]}`:''}`
     : 'No statements yet')+`<br>updated ${d.generated.replace('T',' ')}`;

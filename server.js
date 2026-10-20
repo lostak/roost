@@ -438,7 +438,11 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/data') {
       const records = loadStatements();
-      return send(res, 200, 'application/json', JSON.stringify(buildSummary(records, loadConfig())));
+      const params = new URLSearchParams(req.url.split('?')[1] || '');
+      // Optional holder "view": combine the personal + LLC books (default) or show just one.
+      // Not persisted — it's a per-request lens, so a shared config.json stays untouched.
+      const cfg = { ...loadConfig(), holder: params.get('holder') || '__all__' };
+      return send(res, 200, 'application/json', JSON.stringify(buildSummary(records, cfg)));
     }
     if (url === '/api/export') {
       const records = loadStatements();

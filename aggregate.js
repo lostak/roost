@@ -185,8 +185,18 @@ function buildSummary(allRecords, config) {
   config = config || {};
   // Work on deep-ish clones so this module never mutates the server's parse cache.
   const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
-  const records = mergeByPeriod(cloned.filter(r => !r.pending));
-  const pendingRecs = cloned.filter(r => r.pending);
+
+  // Distinct statement holders (name + any LLC) across the whole book — used to offer a
+  // "view" selector when an agent runs both a personal and an LLC statement each period.
+  const holdersAvailable = [...new Set(cloned.filter(r => r.holder).map(r => r.holder))].sort();
+  // "holder" view: '__all__' (combined, the default) merges the personal + LLC books; a
+  // specific holder name narrows every figure to just that book.
+  const holderView = (config.holder && config.holder !== '__all__' && holdersAvailable.includes(config.holder))
+    ? config.holder : '__all__';
+  const keep = r => holderView === '__all__' || r.holder === holderView;
+
+  const records = mergeByPeriod(cloned.filter(r => !r.pending && keep(r)));
+  const pendingRecs = cloned.filter(r => r.pending && keep(r));
   const reclass = reclassifyMA(records, config.ma_reclass);
   const bonusInfo = classifyBonuses(records);
 
@@ -1133,6 +1143,8 @@ function buildSummary(allRecords, config) {
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
+    holders_available: holdersAvailable,
+    holder_view: holderView,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,
     years, series,
