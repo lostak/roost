@@ -2124,7 +2124,8 @@ function renderDigest(){
   parts.push(`Latest statement <b>${last.date}</b>: paid <b>${fmt(last.net)}</b> `
     +`(${fmt(last.advances)} new business, ${fmt(last.residual)} residual`
     +`${last.chargebacks?`, <span class="neg">${fmt(last.chargebacks)}</span> chargebacks`:''})`
-    +`${last.applications?` from <b>${last.applications}</b> new application${last.applications===1?'':'s'}`:''}.`);
+    +`${last.applications?` from <b>${last.applications}</b> new application${last.applications===1?'':'s'}`:''}.`
+    +`${last.merged&&last.holders?` <span class="sub">(combines ${last.holders.length} statements: ${last.holders.join(' + ')})</span>`:''}`);
   const R=DATA.retention&&DATA.retention.totals;
   if(R&&R.at_risk_count) parts.push(`<b>${R.at_risk_count}</b> Medicare Advantage polic${R.at_risk_count===1?'y':'ies'} (${fmt0(R.at_risk_dollars)}) are in the rapid-disenrollment window &mdash; worth a retention touch. <a href="#" onclick="gotoView('retention');return false;">See Retention &rarr;</a>`);
   // goal pace (uses saved goal incl. on-device)

@@ -239,18 +239,28 @@ function handleUpload(req, res) {
           message: 'Could not read a statement date from this PDF. Make sure it’s a commission statement.' });
 
       const [Y, M, D] = rec.date.split('-').map(Number);
-      const canonical = `${M}-${D}-${String(Y).slice(2)}.pdf`;
+      const base = `${M}-${D}-${String(Y).slice(2)}`;
       const dir = path.join(statementsDir(), String(Y));
       fs.mkdirSync(dir, { recursive: true });
-      const dest = path.join(dir, canonical);
 
-      if (fs.existsSync(dest))
-        return sendJson(res, 200, { status: 'duplicate', name: origName, filed: canonical, year: Y,
-          message: `Already filed as ${Y}/${canonical}` });
+      // Agents who run an LLC get two statements per pay period (one to their name, one to the
+      // LLC). Both must be kept, so de-duplicate by file CONTENT, not by date: an identical file
+      // is a true duplicate; a different statement for the same date is filed under its own name.
+      const sameBytes = (p) => { try { return Buffer.compare(fs.readFileSync(p), buf) === 0; } catch { return false; } };
+      const existing = fs.readdirSync(dir).filter(n => n.startsWith(base) && n.toLowerCase().endsWith('.pdf'));
+      for (const n of existing) if (sameBytes(path.join(dir, n)))
+        return sendJson(res, 200, { status: 'duplicate', name: origName, filed: n, year: Y,
+          message: `Already filed as ${Y}/${n}` });
 
-      fs.writeFileSync(dest, buf);
-      return sendJson(res, 200, { status: 'filed', name: origName, filed: canonical, year: Y,
-        message: `Filed as ${Y}/${canonical}` });
+      const safeHolder = String(rec.holder || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      const candidates = [`${base}.pdf`];
+      if (safeHolder) candidates.push(`${base} - ${safeHolder}.pdf`);
+      for (let i = 2; i <= 20; i++) candidates.push(`${base} (${i}).pdf`);
+      const name = candidates.find(n => !fs.existsSync(path.join(dir, n))) || `${base}-${Date.now()}.pdf`;
+
+      fs.writeFileSync(path.join(dir, name), buf);
+      return sendJson(res, 200, { status: 'filed', name: origName, filed: name, year: Y,
+        message: `Filed as ${Y}/${name}${rec.holder ? ` (${rec.holder})` : ''}` });
     } catch (e) {
       return sendJson(res, 500, { status: 'error', name: origName, message: String((e && e.message) || e) });
     }

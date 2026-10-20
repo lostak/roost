@@ -147,11 +147,45 @@ function classifyBonuses(records) {
   return { count, dollars: round2(dollars) };
 }
 
+// Combine statements that share a pay-period date into one record. Agents who run an LLC
+// receive two statements per period (one to their name, one to the LLC); this sums their
+// line items, section totals, and YTD figures so the book is seen as a single business.
+function sumN(a, b) { return (a == null && b == null) ? null : round2((a || 0) + (b || 0)); }
+function mergeByPeriod(recs) {
+  const byDate = new Map(); const undated = [];
+  for (const r of recs) {
+    if (!r.date) { undated.push(r); continue; }
+    const ex = byDate.get(r.date);
+    if (!ex) {
+      byDate.set(r.date, { ...r, items: [...(r.items || [])], holders: r.holder ? [r.holder] : [] });
+    } else {
+      ex.items = ex.items.concat(r.items || []);
+      ex.pay_period_net = round2((ex.pay_period_net || 0) + (r.pay_period_net || 0));
+      ex.advances_total = round2((ex.advances_total || 0) + (r.advances_total || 0));
+      ex.residual_total = round2((ex.residual_total || 0) + (r.residual_total || 0));
+      ex.chargebacks_total = round2((ex.chargebacks_total || 0) + (r.chargebacks_total || 0));
+      ex.pending_total = round2((ex.pending_total || 0) + (r.pending_total || 0));
+      ex.bonus_total = sumN(ex.bonus_total, r.bonus_total);
+      ex.ytd_advances = sumN(ex.ytd_advances, r.ytd_advances);
+      ex.ytd_commission = sumN(ex.ytd_commission, r.ytd_commission);
+      ex.ytd_chargebacks = sumN(ex.ytd_chargebacks, r.ytd_chargebacks);
+      ex.ytd_total = sumN(ex.ytd_total, r.ytd_total);
+      if (r.holder && !ex.holders.includes(r.holder)) ex.holders.push(r.holder);
+    }
+  }
+  const out = [...byDate.values()].map(m => {
+    if (m.holders.length) m.holder = m.holders.join(' + ');
+    m.merged = m.holders.length > 1;
+    return m;
+  });
+  return out.concat(undated);
+}
+
 function buildSummary(allRecords, config) {
   config = config || {};
   // Work on deep-ish clones so this module never mutates the server's parse cache.
   const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
-  const records = cloned.filter(r => !r.pending);
+  const records = mergeByPeriod(cloned.filter(r => !r.pending));
   const pendingRecs = cloned.filter(r => r.pending);
   const reclass = reclassifyMA(records, config.ma_reclass);
   const bonusInfo = classifyBonuses(records);
@@ -213,7 +247,7 @@ function buildSummary(allRecords, config) {
 
   // ---- per-statement time series ----
   const series = records.map(r => ({
-    date: r.date, year: r.year,
+    date: r.date, year: r.year, holder: r.holder || '', holders: r.holders || null, merged: !!r.merged,
     net: num(r.pay_period_net), advances: num(r.advances_total),
     residual: num(r.residual_total), chargebacks: num(r.chargebacks_total),
     bonus: num(r.bonus_total), enrollments: enrollByDate[r.date] || 0,
@@ -1135,7 +1169,7 @@ function buildSummary(allRecords, config) {
 function prepareRecords(allRecords, config) {
   config = config || {};
   const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
-  const records = cloned.filter(r => !r.pending);
+  const records = mergeByPeriod(cloned.filter(r => !r.pending));
   reclassifyMA(records, config.ma_reclass);
   classifyBonuses(records);
   return records;

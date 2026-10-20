@@ -99,9 +99,18 @@ function makeItem(section, line, commPct, premium, payable){
 
 function grab(text, re){ const m = text.match(re); return m ? money(m[1]) : null; }
 
+// The statement holder is the name/LLC the statement is addressed to — the line right
+// after the "Commission Statement" title (e.g. "Kaden L Greenwell" or "Greenwell Financial Llc").
+// Agents who run an LLC receive two statements per pay period, one to each name.
+function grabHolder(text){
+  const m = text.match(/Commission Statement\s*\n\s*([^\n]+?)\s*\n/);
+  return m ? m[1].replace(/\s+/g, ' ').trim() : null;
+}
+
 function parseHeader(text){
   const dm = text.match(/Pay Period \((\d{2}\/\d{2}\/\d{4})\):\s*\$(-?[\d,]+\.\d{2})/);
   return {
+    holder: grabHolder(text),
     pay_period_date: dm ? dm[1] : null,
     pay_period_net: dm ? money(dm[2]) : null,
     ytd_advances: grab(text, /YTD Advances & Initial Annuity Payouts:\s*\$(-?[\d,]+\.\d{2})/),
@@ -130,7 +139,7 @@ function parsePending(text){
   }
   return {
     pending: true,
-    header: { pay_period_date: null, pay_period_net: nm ? money(nm[1]) : 0,
+    header: { holder: grabHolder(text), pay_period_date: null, pay_period_net: nm ? money(nm[1]) : 0,
       ytd_advances: null, ytd_commission: null, ytd_chargebacks: null,
       ytd_total: ym ? money(ym[1]) : null },
     items,
@@ -193,6 +202,7 @@ function parseStatement(text, fname){
   const st = data.sectionTotals;
   return {
     file: fname.replace(/^.*[\\/]/, ''),
+    holder: h.holder || null,
     date: d ? iso(d) : null,
     year: d ? d.getUTCFullYear() : null,
     pending: data.pending,
