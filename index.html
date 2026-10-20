@@ -2975,7 +2975,7 @@ function renderPolicies(yl){
 
 // ---- selectors / wiring ----
 function syncGrainSegs(){document.querySelectorAll('.grainSeg button').forEach(b=>b.classList.toggle('on',b.dataset.g===GRAIN));}
-function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderLifetime();renderNewBusiness();renderResidual();renderBonuses();renderCarriers();renderProducts();renderDownline();renderGoals();
+function setGrain(g){GRAIN=g;syncGrainSegs();renderOverviewTrend();renderLifetime();renderNewBusiness();renderResidual();renderBonuses();renderChargebacks();renderCarriers();renderProducts();renderDownline();renderGoals();
   try{localStorage.setItem('grain',g);}catch(e){}}
 function segPick(container,attr,cb){$(container).addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b)return;
