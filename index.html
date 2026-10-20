@@ -53,6 +53,26 @@ body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);
 .btn.tonal{background:var(--primary-container);color:var(--on-primary-container)}
 .btn.ghost{background:transparent;color:var(--primary);border:1px solid var(--outline-var)}
 .btn:hover{filter:brightness(1.06)} .btn:active{transform:scale(.98)}
+/* book (statement-holder) selector — fully custom dropdown so both the pill and the menu are rounded */
+.holderdd{position:relative;display:inline-flex}
+.holderbtn{font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.1px;cursor:pointer;
+  color:var(--on-primary-container);background:var(--primary-container);border:none;border-radius:20px;
+  padding:9px 16px;display:inline-flex;align-items:center;gap:10px;line-height:1.15;max-width:280px;
+  transition:filter .15s,box-shadow .15s}
+.holderbtn:hover{filter:brightness(1.06)}
+.holderbtn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--surface-1),0 0 0 4px var(--primary)}
+.holderbtn .hlbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.holdercar{width:7px;height:7px;flex:none;border-right:2px solid currentColor;border-bottom:2px solid currentColor;
+  border-radius:1px;transform:translateY(-2px) rotate(45deg);opacity:.8;transition:transform .18s}
+.holderdd.open .holdercar{transform:translateY(1px) rotate(225deg)}
+.holdermenu{position:absolute;top:calc(100% + 8px);right:0;min-width:100%;z-index:60;
+  background:var(--surface-1);border:1px solid var(--outline-var);border-radius:14px;padding:6px;
+  box-shadow:var(--shadow);display:none;flex-direction:column;gap:2px}
+.holderdd.open .holdermenu{display:flex}
+.holderitem{font-family:inherit;font-size:13px;font-weight:500;text-align:left;white-space:nowrap;cursor:pointer;
+  color:var(--on-surface);background:transparent;border:none;border-radius:10px;padding:9px 14px;transition:background .12s}
+.holderitem:hover{background:var(--surface-3)}
+.holderitem.on{background:var(--primary-container);color:var(--on-primary-container);font-weight:600}
 .layout{display:flex;min-height:calc(100vh - 61px)}
 .nav{flex:0 0 218px;padding:16px 12px;position:sticky;top:61px;height:calc(100vh - 61px);overflow-y:auto}
 .nav a{display:flex;align-items:center;gap:14px;padding:10px 16px;border-radius:24px;text-decoration:none;
@@ -247,7 +267,10 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
   <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light"></button>
-  <select class="btn tonal" id="holderSel" onchange="setHolderView(this.value)" style="display:none" title="Which book to show (personal, LLC, or both combined)"></select>
+  <div class="holderdd" id="holderWrap" style="display:none">
+    <button type="button" class="holderbtn" id="holderBtn" onclick="toggleHolderMenu(event)" aria-haspopup="listbox" aria-expanded="false" title="Which book to show (personal, LLC, or both combined)"><span class="hlbl" id="holderBtnLabel">All books combined</span><span class="holdercar"></span></button>
+    <div class="holdermenu" id="holderMenu" role="listbox"></div>
+  </div>
   <div class="meta" id="meta"></div>
 </div>
 
@@ -1253,17 +1276,25 @@ async function loadData(force){
   }catch(e){$('#loading').innerHTML='Could not load data: '+e;}
 }
 
+function toggleHolderMenu(e){if(e)e.stopPropagation();const w=$('#holderWrap');if(!w)return;
+  const open=w.classList.toggle('open');const b=$('#holderBtn');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
+function closeHolderMenu(){const w=$('#holderWrap');if(w)w.classList.remove('open');const b=$('#holderBtn');if(b)b.setAttribute('aria-expanded','false');}
+function pickHolder(v){closeHolderMenu();if(v===holderView)return;setHolderView(v);}
+document.addEventListener('click',e=>{const w=$('#holderWrap');if(w&&!w.contains(e.target))closeHolderMenu();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeHolderMenu();});
 function renderHolderSel(d){
-  const sel=$('#holderSel'); if(!sel)return;
+  const wrap=$('#holderWrap'),menu=$('#holderMenu'),lbl=$('#holderBtnLabel'); if(!wrap||!menu||!lbl)return;
   const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const hs=(d&&d.holders_available)||[];
   // Only an agent with more than one book (e.g. a personal statement + an LLC) sees the selector.
-  if(hs.length<2){sel.style.display='none';holderView='__all__';return;}
+  if(hs.length<2){wrap.style.display='none';holderView='__all__';return;}
   if(holderView!=='__all__'&&!hs.includes(holderView))holderView='__all__';
-  sel.innerHTML=[`<option value="__all__">Combined &middot; all ${hs.length} books</option>`]
-    .concat(hs.map(h=>`<option value="${esc(h)}">${esc(h)} only</option>`)).join('');
-  sel.value=d.holder_view||holderView;
-  sel.style.display='';
+  const cur=d.holder_view||holderView;
+  const opts=[{v:'__all__',t:'All books combined'}].concat(hs.map(h=>({v:h,t:h})));
+  menu.innerHTML=opts.map(o=>`<button type="button" class="holderitem${o.v===cur?' on':''}" role="option" aria-selected="${o.v===cur}" data-val="${esc(o.v)}">${esc(o.t)}</button>`).join('');
+  menu.querySelectorAll('.holderitem').forEach(b=>b.onclick=()=>pickHolder(b.dataset.val));
+  lbl.textContent=(opts.find(o=>o.v===cur)||opts[0]).t;
+  wrap.style.display='';
 }
 function render(){
   destroyCharts();
