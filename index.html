@@ -80,6 +80,8 @@ body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--surface);
 .nav a .ic{width:22px;text-align:center;font-size:16px}
 .nav a.active{background:var(--primary-container);color:var(--on-primary-container)}
 .nav a:hover:not(.active){background:var(--surface-3)}
+.navbadge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#b3261e;color:#fff;
+  font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;line-height:1}
 .navgroup{margin:4px 0}
 .navgroup-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 16px;cursor:pointer;
   border-radius:12px;user-select:none;color:var(--on-surface-var);
@@ -297,6 +299,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
   <div id="navBackdrop" onclick="toggleNav()"></div>
   <nav class="nav" id="nav">
     <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
+    <a data-view="review"><span class="ic">&#9873;</span><span class="lbl">Review</span><span class="navbadge" id="reviewBadge" style="display:none"></span></a>
     <div class="navgroup" data-group="production">
       <div class="navgroup-header"><span class="lbl">Production</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
@@ -306,6 +309,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
         <a data-view="products"><span class="ic">&#9638;</span><span class="lbl">By Product</span></a>
         <a data-view="bonuses"><span class="ic">&#9733;</span><span class="lbl">Bonuses</span></a>
+        <a data-view="chargebacks"><span class="ic">&#8630;</span><span class="lbl">Chargebacks</span></a>
       </div>
     </div>
     <div class="navgroup" data-group="book">
@@ -692,6 +696,51 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         <div class="card chart-card tablecard">
           <h3>Detail</h3>
           <div id="bonusBreakdown"></div>
+        </div>
+      </section>
+
+      <!-- CHARGEBACKS -->
+      <section class="view" id="view-chargebacks">
+        <h2 class="section">Chargebacks &amp; clawbacks</h2>
+        <div class="banner">When a policy lapses or cancels early, the carrier claws back part of the advance it already paid you. This shows how much is coming back, which carriers and product lines it's concentrated in, and your clawback rate against everything advanced &mdash; a high or rising rate is an early warning on persistency.</div>
+        <div class="kpis" id="cbKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card tablecard">
+            <h3>By carrier</h3>
+            <p class="hint">Dollars clawed back, worst first. Rate = chargebacks &divide; what that carrier advanced to you.</p>
+            <div id="cbCarrier"></div>
+          </div>
+          <div class="card chart-card">
+            <h3>Over time</h3>
+            <div class="controls"><span class="lbl-inline">Timeframe:</span>
+              <div class="seg grainSeg">
+                <button data-g="week">Week</button>
+                <button data-g="month">Month</button><button data-g="quarter" class="on">Quarter</button>
+                <button data-g="year">Year</button>
+              </div>
+            </div>
+            <p class="hint">Chargebacks per period. Spikes often trail a burst of new business by a few months.</p>
+            <div class="chart-wrap"><canvas id="cbTimeChart"></canvas></div>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="card chart-card tablecard"><h3>By product line</h3><div id="cbFamily"></div></div>
+          <div class="card chart-card tablecard"><h3>Largest clawbacks</h3><div id="cbTop"></div></div>
+        </div>
+      </section>
+
+      <!-- REVIEW -->
+      <section class="view" id="view-review">
+        <h2 class="section">Review &mdash; data to check</h2>
+        <div class="banner">Roost flags statements that may not have parsed cleanly and pay periods that look missing, so a wrong or absent figure doesn't quietly skew your dashboard. Nothing here changes your numbers &mdash; it's a checklist. Re-upload a flagged statement, or drop a missing one in and hit Refresh.</div>
+        <div class="kpis" id="reviewKpis"></div>
+        <div class="card chart-card tablecard" id="reviewGapsCard" style="margin-bottom:24px">
+          <h3>Possible missing statements</h3>
+          <div id="reviewGaps"></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Statements to look at</h3>
+          <div id="reviewList"></div>
         </div>
       </section>
 
@@ -1317,6 +1366,8 @@ function render(){
   renderNewBusiness();
   renderResidual();
   renderBonuses();
+  renderChargebacks();
+  renderReview();
   renderCumulative();
   renderCarriers();
   renderProducts();
@@ -1457,6 +1508,59 @@ function renderBonuses(){
     `<table><thead><tr><th style="text-align:left">Category</th><th>Lines</th><th>Total</th></tr></thead><tbody>${kinds}</tbody></table>`+
     `<h4 style="margin:18px 0 6px;font-size:13px;color:var(--on-surface-var)">Largest bonus / override lines</h4>`+
     `<table><thead><tr><th>Date</th><th style="text-align:left">Category</th><th style="text-align:left">Detail</th><th>Amount</th></tr></thead><tbody>${top}</tbody></table>`;
+}
+function renderChargebacks(){
+  if(charts.cbTime){charts.cbTime.destroy();delete charts.cbTime;}
+  const c=DATA.chargebacks||{}; const curYear=(DATA.all_years||[]).slice(-1)[0];
+  const kp=[
+    {l:'Total charged back',v:fmt0(c.total||0),s:'all-time clawbacks',gold:true,neg:true},
+    {l:'Clawback rate',v:(c.rate_vs_advances!=null?c.rate_vs_advances.toFixed(1)+'%':'—'),s:'of everything advanced'},
+    {l:'Clawback events',v:(c.count||0).toLocaleString(),s:'line items'},
+    {l:'This year',v:fmt0((c.by_year&&curYear!=null&&c.by_year[curYear])||0),s:(curYear!=null?curYear+' to date':''),neg:true}
+  ];
+  $('#cbKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val${k.neg&&!k.gold?' neg':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const car=c.by_carrier||[];
+  $('#cbCarrier').innerHTML=car.length?thead(['Carrier','Charged back','Advanced','Rate'])+'<tbody>'
+    +car.map(r=>`<tr><td style="text-align:left">${r.carrier}</td><td class="neg">${fmt(r.amount)}</td><td>${fmt0(r.advanced)}</td><td>${r.rate!=null?r.rate.toFixed(1)+'%':'—'}</td></tr>`).join('')
+    +'</tbody>':'<p class="hint">No chargebacks recorded yet &mdash; nothing has been clawed back.</p>';
+  const fam=c.by_family||[];
+  $('#cbFamily').innerHTML=fam.length?thead(['Product line','Charged back','Events'])+'<tbody>'
+    +fam.map(r=>`<tr><td style="text-align:left">${r.family}</td><td class="neg">${fmt(r.amount)}</td><td>${r.count}</td></tr>`).join('')
+    +'</tbody>':'<p class="hint">No chargebacks recorded yet.</p>';
+  const top=c.top||[];
+  $('#cbTop').innerHTML=top.length?thead(['Date','Carrier','Client','Product','Amount'])+'<tbody>'
+    +top.slice(0,15).map(r=>`<tr><td>${r.date||''}</td><td style="text-align:left">${r.carrier}</td><td style="text-align:left">${(r.client||'').slice(0,22)}</td><td style="text-align:left">${(r.product||'').slice(0,22)}</td><td class="neg">${fmt(r.amount)}</td></tr>`).join('')
+    +'</tbody>':'<p class="hint">No chargebacks recorded yet.</p>';
+  const buckets=bucketSeries(GRAIN);
+  charts.cbTime=new Chart($('#cbTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
+    datasets:[{label:'Charged back',data:buckets.map(b=>Math.round((b.chargebacks||0)*100)/100),money:true,backgroundColor:'#b3261e'}]},
+    options:timeAxis(buckets,{money:true})});
+}
+function renderReview(){
+  const rv=DATA.review||{counts:{}}; const cts=rv.counts||{};
+  // nav badge
+  const badge=$('#reviewBadge'); if(badge){ if(cts.attention>0){badge.textContent=cts.attention;badge.style.display='';} else badge.style.display='none'; }
+  const kp=[
+    {l:'Needs attention',v:(cts.attention||0),s:'statements + gaps',gold:(cts.attention>0)},
+    {l:'Flagged statements',v:(cts.flagged||0),s:`${cts.high||0} high priority`},
+    {l:'Possible missing',v:(cts.missing_est||0),s:`${cts.gaps||0} gap${cts.gaps===1?'':'s'} in cadence`},
+    {l:'Typical cadence',v:(rv.cadence_days?rv.cadence_days+' days':'—'),s:'between pay periods'}
+  ];
+  $('#reviewKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  const gaps=rv.gaps||[];
+  $('#reviewGaps').innerHTML=gaps.length?thead(['After','Before','Gap','Likely missing'])+'<tbody>'
+    +gaps.map(g=>`<tr><td>${g.after}</td><td>${g.before}</td><td>${g.days} days</td><td><b>~${g.missing_est}</b> statement${g.missing_est===1?'':'s'}</td></tr>`).join('')
+    +'</tbody>':'<p class="hint">No gaps detected &mdash; your pay periods look continuous.</p>';
+  const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">high</span>':'<span class="chip">check</span>';
+  const list=rv.statements||[];
+  $('#reviewList').innerHTML=list.length?list.map(s=>`<div class="card" style="box-shadow:none;border:1px solid var(--outline-var);margin-bottom:10px;padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div><b>${s.date||'(no date)'}</b> &middot; <span class="hint">${s.file}</span>${s.holder?` &middot; <span class="hint">${s.holder}</span>`:''}</div>
+      <div>${fmt0(s.net)}</div></div>
+    <ul style="margin:8px 0 0;padding-left:18px">${s.issues.map(i=>`<li style="margin:3px 0">${sev(i.sev)} ${i.msg}</li>`).join('')}</ul>
+  </div>`).join(''):'<p class="hint">Every statement parsed cleanly. Nothing to review.</p>';
 }
 function renderResidual(){
   if(charts.resid)charts.resid.destroy();

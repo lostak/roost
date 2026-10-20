@@ -1140,11 +1140,101 @@ function buildSummary(allRecords, config) {
     combined_series: Object.values(convCSeries).sort((a, b) => (a.date < b.date ? -1 : 1)),
   };
 
+  // ---- chargebacks (clawbacks) breakdown ----------------------------------
+  // Advances get clawed back when a policy lapses early. This pulls every chargeback
+  // line out on its own so the agent can see where the money is going back, and at what
+  // rate relative to what each carrier advanced.
+  const money2 = v => '$' + (Math.round(v * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cbItems = [];
+  const advByCarrier = {};
+  for (const r of records) for (const it of (r.items || [])) {
+    if (it.section === 'chargebacks')
+      cbItems.push({ date: r.date, year: r.year, carrier: it.carrier, family: productFamily(it.product),
+        client: it.client, product: it.product, policy: it.policy, amount: round2(it.payable) });
+    else if (it.section === 'advances')
+      advByCarrier[it.carrier] = (advByCarrier[it.carrier] || 0) + it.payable;
+  }
+  const cbCar = {}, cbFam = {}, cbYr = {}, cbSer = {};
+  for (const c of cbItems) {
+    (cbCar[c.carrier] ||= { amount: 0, count: 0 }); cbCar[c.carrier].amount += c.amount; cbCar[c.carrier].count++;
+    (cbFam[c.family] ||= { amount: 0, count: 0 }); cbFam[c.family].amount += c.amount; cbFam[c.family].count++;
+    cbYr[c.year] = (cbYr[c.year] || 0) + c.amount;
+    cbSer[c.date] = (cbSer[c.date] || 0) + c.amount;
+  }
+  const totalCb = round2(cbItems.reduce((s, c) => s + c.amount, 0));
+  const totalAdvAll = round2(records.reduce((s, r) => s + num(r.advances_total), 0));
+  const chargebacks = {
+    total: totalCb, count: cbItems.length,
+    rate_vs_advances: totalAdvAll ? round2(Math.abs(totalCb) / totalAdvAll * 100) : null,
+    total_advances: totalAdvAll,
+    by_year: Object.fromEntries(allYears.map(y => [y, round2(cbYr[y] || 0)])),
+    by_carrier: Object.entries(cbCar).map(([carrier, v]) => ({
+      carrier, amount: round2(v.amount), count: v.count, advanced: round2(advByCarrier[carrier] || 0),
+      rate: advByCarrier[carrier] ? round2(Math.abs(v.amount) / advByCarrier[carrier] * 100) : null,
+    })).sort((a, b) => a.amount - b.amount),
+    by_family: Object.entries(cbFam).map(([family, v]) => ({ family, amount: round2(v.amount), count: v.count }))
+      .sort((a, b) => a.amount - b.amount),
+    series: Object.entries(cbSer).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount: round2(amount) })),
+    top: cbItems.slice().sort((a, b) => a.amount - b.amount).slice(0, 30),
+  };
+
+  // ---- review inbox: statements that need a human look, and gaps in the cadence --------
+  // Per-statement flags are computed on the raw parsed records (before the same-period merge)
+  // so a specific bad statement can be pointed at. Gap detection works off the merged pay-period
+  // dates and the typical cadence, to surface a pay period that looks missing.
+  function reviewFlags(r) {
+    const issues = [];
+    const n = (r.items || []).length;
+    if (!r.date) issues.push({ code: 'no_date', sev: 'high', msg: 'No statement date could be read — this statement is not placed on the timeline.' });
+    const computed = round2(num(r.advances_total) + num(r.residual_total) + num(r.chargebacks_total));
+    const net = num(r.pay_period_net);
+    if (net === 0 && computed === 0 && !n) {
+      issues.push({ code: 'empty', sev: 'high', msg: 'No commission data was parsed — the statement format may be unrecognized.' });
+    } else {
+      const diff = round2(Math.abs(computed - net));
+      const tol = Math.max(1, Math.abs(net) * 0.01);
+      if (diff > tol) issues.push({ code: 'net_mismatch', sev: 'high', msg: `Parsed line items total ${money2(computed)}, but the statement's net pay reads ${money2(net)} (off by ${money2(diff)}).` });
+      if (!n && net !== 0) issues.push({ code: 'no_items', sev: 'medium', msg: 'A net pay amount was found, but no line items could be parsed.' });
+      if (n) { const other = (r.items || []).filter(i => i.carrier === 'Other').length;
+        if (other / n > 0.5) issues.push({ code: 'unknown_carriers', sev: 'medium', msg: `${other} of ${n} line items have an unrecognized carrier — some figures may be miscategorized.` }); }
+    }
+    return issues;
+  }
+  const reviewItems = [];
+  for (const r of cloned.filter(x => !x.pending && keep(x))) {
+    const issues = reviewFlags(r);
+    if (issues.length) reviewItems.push({ file: r.file, holder: r.holder || null, date: r.date, net: num(r.pay_period_net), issues });
+  }
+  const dates = [...new Set(records.filter(r => r.date).map(r => r.date))].sort();
+  const gapsDays = [];
+  for (let i = 1; i < dates.length; i++) gapsDays.push((Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5);
+  const cadence = median(gapsDays);
+  const gaps = [];
+  if (dates.length >= 4 && cadence > 0 && cadence <= 45) {
+    for (let i = 1; i < dates.length; i++) {
+      const g = (Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5;
+      if (g > cadence * 1.7) gaps.push({ after: dates[i - 1], before: dates[i], days: Math.round(g), missing_est: Math.max(1, Math.round(g / cadence) - 1) });
+    }
+  }
+  const review = {
+    cadence_days: cadence ? Math.round(cadence) : null,
+    gaps,
+    statements: reviewItems.sort((a, b) => ((a.date || '') < (b.date || '') ? 1 : -1)),
+    counts: {
+      flagged: reviewItems.length,
+      high: reviewItems.filter(s => s.issues.some(i => i.sev === 'high')).length,
+      gaps: gaps.length,
+      missing_est: gaps.reduce((s, g) => s + g.missing_est, 0),
+      attention: reviewItems.length + gaps.length,
+    },
+  };
+
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
     holders_available: holdersAvailable,
     holder_view: holderView,
+    chargebacks, review,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,
     years, series,
