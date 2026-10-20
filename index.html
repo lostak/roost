@@ -842,7 +842,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
         </div>
         <h2 class="section" style="margin-top:8px">Tax playbook for 1099 agents</h2>
         <div class="grid2"><div class="ins-col" id="taxTips1"></div><div class="ins-col" id="taxTips2"></div></div>
-        <p class="hint" style="margin-top:18px">Figures use 2025 federal brackets, standard deduction, and Social Security wage base. Insurance agents are <b>not</b> a specified service trade for QBI, so the 20% deduction applies regardless of income. This is an estimate to guide savings and quarterly payments &mdash; your CPA's return is authoritative.</p>
+        <p class="hint" style="margin-top:18px">Figures use the latest finalized (2025) federal brackets, standard deduction, and Social Security wage base as an estimate; later tax years shift slightly with inflation. Insurance agents are <b>not</b> a specified service trade for QBI, so the 20% deduction applies regardless of income. This is an estimate to guide savings and quarterly payments &mdash; your CPA's return is authoritative.</p>
       </section>
 
       <!-- CONVENTION -->
@@ -2298,12 +2298,16 @@ function renderTaxes(){
   if(!_taxInit){
     $('#taxStatus').value=saved.status||'single';
     $('#taxEntity').value=saved.entity||'sole';
-    $('#taxIncome').value=saved.income!=null?saved.income:def.income;
+    // Pre-fill from projected annual net. A stored 0 (or blank) falls back to the default so the
+    // estimate never sticks at $0 just because an old empty value was saved.
+    $('#taxIncome').value=(saved.income!=null&&Number(saved.income)>0)?saved.income:def.income;
     $('#taxExpenses').value=saved.expenses!=null?saved.expenses:def.expenses;
     $('#taxOther').value=saved.other!=null?saved.other:0;
     $('#taxRetire').value=saved.retire!=null?saved.retire:0;
     $('#taxState').value=saved.stateRate!=null?saved.stateRate:4.4;
     $('#taxSaved').value=saved.saved!=null?saved.saved:0;
+    const _ty=(DATA.projections&&DATA.projections.current_year)||((DATA.years||[]).slice(-1)[0]||{}).year;
+    if(_ty&&$('#taxYear'))$('#taxYear').value=_ty;
     const np=Math.max(0,(Number($('#taxIncome').value)||0)-(Number($('#taxExpenses').value)||0));
     $('#taxSalary').value=saved.salary!=null?saved.salary:Math.round(np*0.4);
     ['taxStatus','taxEntity','taxIncome','taxExpenses','taxOther','taxRetire','taxState','taxSaved','taxSalary'].forEach(id=>{
@@ -2333,32 +2337,45 @@ function taxCompute(){
   ];
   $('#taxKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
-  // ---- accrued THIS tax year (from actual YTD income) ----
+  // ---- this tax year: owed on production so far, projected at pace, and projected at goal ----
+  // These are driven straight off actual production (projections.net_ytd / net_annual) and your
+  // saved goal, so they never read $0 just because the income box above hasn't been filled in.
+  const P=DATA.projections||{};
   const curYr=(DATA.years||[]).slice(-1)[0]||{};
-  const ytdNet=Math.max(0,curYr.net||0);
-  const expRatio=inp.income>0?Math.min(1,inp.expenses/inp.income):0;
-  const ytdProfit=ytdNet*(1-expRatio);
-  const effRate=r.netProfit?r.total/r.netProfit:0;
-  const accrued=ytdProfit*effRate;
+  const taxYr=P.current_year||curYr.year||'';
+  const ytdIncome=Math.max(0,P.net_ytd!=null?P.net_ytd:(curYr.net||0));   // net earned so far this year
+  const projIncome=Math.max(0,P.net_annual!=null?P.net_annual:ytdIncome); // projected full-year net at current pace
   const asOf=(DATA.series&&DATA.series.length)?DATA.series[DATA.series.length-1].date:null;
-  let frac=0.5; if(asOf){const [ay,am,ad]=asOf.split('-').map(Number);frac=Math.min(1,((Date.UTC(ay,am-1,ad)-Date.UTC(ay,0,1))/864e5+1)/365);}
-  const weeksLeft=Math.max(1,Math.round((1-frac)*52));
+  let frac=0.5; if(asOf){const [ay,am,ad]=asOf.split('-').map(Number);frac=Math.min(1,Math.max(0.02,((Date.UTC(ay,am-1,ad)-Date.UTC(ay,0,1))/864e5+1)/365));}
+  const gcfg=Object.assign({},(DATA.goals&&DATA.goals.config)||{},(typeof loadLocalGoals==='function'?loadLocalGoals():{}));
+  const goalNet=(gcfg[taxYr]&&Number(gcfg[taxYr].net)>0)?Number(gcfg[taxYr].net):null;
+  // Run the same calcTax engine on each income scenario (keeping status/entity/state the same);
+  // expenses are prorated for the partial-year accrued figure so profit stays apples-to-apples.
+  const taxFor=(income,expenses)=>calcTax(Object.assign({},inp,{income:Math.max(0,income||0),expenses:Math.max(0,expenses||0)}));
+  const accR=taxFor(ytdIncome,(inp.expenses||0)*frac);
+  const projR=taxFor(projIncome,inp.expenses);
+  const goalR=goalNet!=null?taxFor(goalNet,inp.expenses):null;
+  const accrued=accR.total, projTax=projR.total, goalTax=goalR?goalR.total:null;
+  const accEff=accR.netProfit?Math.round(accrued/accR.netProfit*100):0;
   const savedSoFar=inp.saved||0;
-  const gap=accrued-savedSoFar;            // >0 = behind on what you should have banked by now
-  const remaining=Math.max(0,r.total-savedSoFar);   // still to save to cover the full year
+  const gap=accrued-savedSoFar;                     // >0 = behind what you should have banked by now
   const behind=gap>0;
+  const weeksLeft=Math.max(1,Math.round((1-frac)*52));
+  const remaining=Math.max(0,projTax-savedSoFar);   // still to bank to cover the projected full year
   const ak=[
-    {l:'Tax accrued so far',v:fmt0(accrued),s:`owed on ${curYr.year||''} income to date`,gold:true},
-    {l:'Saved so far',v:fmt0(savedSoFar),s:behind?`${fmt0(gap)} short of accrued`:`${fmt0(-gap)} ahead of accrued`},
-    {l:'Still to set aside',v:fmt0(remaining),s:'to cover the full year'},
-    {l:'Bank per week',v:fmt0(remaining/weeksLeft),s:`over ~${weeksLeft} weeks left`}
+    {l:'Owed on production so far',v:fmt0(accrued),s:`on ${fmt0(ytdIncome)} earned in ${taxYr} &middot; ${accEff}% eff.`,gold:true},
+    {l:'Projected &mdash; current pace',v:fmt0(projTax),s:`on ${fmt0(projIncome)} projected net`},
+    {l:'Projected &mdash; if you hit goal',v:goalTax!=null?fmt0(goalTax):'&mdash;',s:goalTax!=null?`on ${fmt0(goalNet)} goal net`:'set a goal to see this'},
+    {l:'Saved so far',v:fmt0(savedSoFar),s:behind?`${fmt0(gap)} short of accrued`:`${fmt0(-gap)} ahead`}
   ];
   $('#taxAccrualKpis').innerHTML=ak.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
-  $('#taxAccrual').innerHTML=`You've earned <b>${fmt0(ytdNet)}</b> net so far in ${curYr.year||'this year'} &mdash; about <b>${fmt0(accrued)}</b> in tax has accrued at your ${eff}% effective rate. `
-    +`You've set aside <b>${fmt0(savedSoFar)}</b>, so you're <b class="${behind?'neg':''}" style="${behind?'':'color:#2e7d5b'}">${fmt0(Math.abs(gap))} ${behind?'behind':'ahead'}</b> of where you should be right now. `
-    +(behind?`Catch up that ${fmt0(gap)} before the next quarterly due date, then `:`Nice cushion. `)
-    +`to finish the year fully covered (projected <b>${fmt0(r.total)}</b> total), bank about <b>${fmt0(remaining/weeksLeft)}/week</b> for the remaining ${weeksLeft} weeks.`;
+  $('#taxAccrual').innerHTML=`You've earned <b>${fmt0(ytdIncome)}</b> net so far in ${taxYr} &mdash; about <b>${fmt0(accrued)}</b> in tax has accrued at a <b>${accEff}%</b> effective rate. `
+    +`You've set aside <b>${fmt0(savedSoFar)}</b>, so you're <b class="${behind?'neg':''}" style="${behind?'':'color:#2e7d5b'}">${fmt0(Math.abs(gap))} ${behind?'behind':'ahead'}</b> of that right now. `
+    +`At your current pace you're projected to owe <b>${fmt0(projTax)}</b> for all of ${taxYr}`
+    +(goalTax!=null?`, rising to <b>${fmt0(goalTax)}</b> if you hit your ${fmt0(goalNet)} goal`:``)
+    +`. To stay fully covered, bank about <b>${fmt0(remaining/weeksLeft)}/week</b> over the ~${weeksLeft} weeks left`
+    +(behind?` and catch up the ${fmt0(gap)} you're behind before the next quarterly due date`:``)+`.`;
   const rows=[[inp.entity==='scorp'?'Payroll tax (FICA on salary)':'Self-employment tax',r.seOrPayroll],
     ['Federal income tax',r.fed],['State income tax',r.state]];
   if(r.addlMed>0)rows.push(['Additional Medicare 0.9%',r.addlMed]);
