@@ -932,6 +932,9 @@ function buildSummary(allRecords, config) {
     monthly_residual: monthlyResidual,
     new_ma_this_year: newMAThisYear,
     ma_step_up_monthly: maStepUp,
+    // Grounding figures for the what-if sliders and goal advisor:
+    avg_residual_per_policy: active ? round2(residualAnnual / active) : 0,  // annual residual a typical active policy adds
+    base_retention: retention.totals.persistency,                           // observed persistency (null if unknown)
     book_value: { mult_low: 2, mult_mid: 2.5, mult_high: 3,
       low: round2(residualAnnual * 2), mid: round2(residualAnnual * 2.5), high: round2(residualAnnual * 3) },
     cashflow,

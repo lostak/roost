@@ -350,6 +350,23 @@ h2.section{font-family:'Space Grotesk','Inter',sans-serif;font-weight:600}
 .fcband-base{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;
   border:3px solid var(--accent);transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .fcband-scale{display:flex;justify-content:space-between;font-size:12px;color:var(--on-surface-var)}
+/* what-if sliders + readouts */
+.wival{float:right;font-family:'Space Grotesk',sans-serif;font-weight:600;color:var(--accent)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;
+  background:color-mix(in srgb,var(--on-surface) 14%,transparent);outline:none;margin:10px 0 2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--grad-brand);cursor:pointer;box-shadow:0 2px 8px -2px color-mix(in srgb,var(--accent) 80%,transparent);border:2px solid #fff}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #fff}
+.vbreak{display:flex;flex-direction:column;gap:10px}
+.vbreak-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--glass-brd)}
+.vbreak-row:last-child{border-bottom:none}
+.vbreak-k{font-weight:600;color:var(--on-surface);min-width:170px}
+.vbreak-v{font-family:'Space Grotesk',sans-serif;font-weight:600;color:var(--accent)}
+.vbreak-d{color:var(--on-surface-var);font-size:13px;flex:1;min-width:200px}
+.wiresult{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:16px 18px;border-radius:14px;
+  background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid var(--glass-brd)}
+.wiresult .big{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;letter-spacing:-.5px}
+.wiresult .delta{font-weight:600}
 /* command palette */
 .cmdk-ov{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;
   background:color-mix(in srgb,#000 48%,transparent);backdrop-filter:blur(6px);padding-top:14vh}
@@ -952,6 +969,30 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <h2 class="section">Book value &amp; forward cash flow</h2>
         <div class="banner">What you're building. Your in-force residual is an asset &mdash; agencies buy and sell books at a multiple of annual renewals. The cash-flow calendar shows the recurring residual you can expect over the next 12 months if the book holds, including the step-up in January when this year's new Medicare Advantage members begin paying.</div>
         <div class="kpis" id="valKpis"></div>
+        <div class="card" id="valBreakdown" style="margin-bottom:24px">
+          <h3 style="margin-top:0">How your book value is calculated</h3>
+          <div id="valBreakdownBody"></div>
+        </div>
+        <div class="card" id="valWhatif" style="margin-bottom:24px">
+          <h3 style="margin-top:0">What-if &mdash; your book value at different figures</h3>
+          <p class="hint">Drag any lever to see where your book value lands. Nothing here is saved &mdash; it's a sandbox for "what would it take?"</p>
+          <div class="sliders" style="grid-template-columns:1fr 1fr">
+            <div class="sl"><label>Annualized residual <span class="wival" id="wiResidualV"></span></label><input type="range" id="wiResidual"></div>
+            <div class="sl"><label>New policies / month <span class="wival" id="wiPaceV"></span></label><input type="range" id="wiPace" min="0" max="20" step="1" value="0"></div>
+            <div class="sl"><label>Retention <span class="wival" id="wiRetV"></span></label><input type="range" id="wiRet" min="50" max="98" step="1"></div>
+            <div class="sl"><label>Sale multiple <span class="wival" id="wiMultV"></span></label><input type="range" id="wiMult" min="18" max="35" step="1" value="25"></div>
+          </div>
+          <div id="wiOut" style="margin-top:16px"></div>
+        </div>
+        <div class="card" id="valGoal" style="margin-bottom:24px">
+          <h3 style="margin-top:0">Reach a target book value by a date</h3>
+          <p class="hint">Set where you want to be and when &mdash; get the plan to get there, grounded in your own economics.</p>
+          <div class="sliders" style="grid-template-columns:1fr 1fr">
+            <div class="sl"><label>Target book value</label><input type="number" id="goalVal" class="numbox" style="width:100%" step="25000" placeholder="e.g. 500000"></div>
+            <div class="sl"><label>By when</label><input type="month" id="goalDate" class="numbox" style="width:100%"></div>
+          </div>
+          <div id="goalOut" style="margin-top:16px"></div>
+        </div>
         <div class="card" id="aepCard" style="margin-bottom:24px">
           <h3 style="margin-top:0">AEP re-enrollment forecast &mdash; next-year Medicare Advantage renewals</h3>
           <p class="hint" id="aepNote"></p>
@@ -3095,6 +3136,82 @@ function renderValue(){
   $('#valNote').innerHTML=`Valued at <b>${fmt0(bv.mid||0)}</b> (midpoint of ${bv.mult_low}–${bv.mult_high}× your ${fmt0(V.residual_annual||0)} annualized residual). `
     +`Your <b>${V.new_ma_this_year||0}</b> new Medicare Advantage members written this year begin paying residual in January, adding about <b>${fmt0(V.ma_step_up_monthly||0)}/month</b> (~${fmt0((V.ma_step_up_monthly||0)*12)}/yr) to the recurring book. `
     +`This is an estimate of the recurring stream only — it excludes new business you'll write and assumes current policies persist.`;
+  renderValueBreakdown(V);
+  initValueTools(V);
+}
+// Plain-English breakdown of what feeds the valuation.
+function renderValueBreakdown(V){
+  const bv=V.book_value||{}; const ret=V.base_retention;
+  const rows=[
+    ['Annualized residual', fmt0(V.residual_annual||0), 'The recurring commission your in-force policies pay each year — the engine of the whole valuation.'],
+    ['In-force policies', String(V.inforce_policies||0), `Policies still paying residual, averaging about ${fmt0(V.avg_residual_per_policy||0)} per policy per year.`],
+    ['Retention', ret!=null?Math.round(ret*100)+'%':'—', 'The share of policies that keep paying. Higher retention earns a higher multiple — buyers pay more for a book that holds.'],
+    ['Sale multiple', `${bv.mult_low}–${bv.mult_high}×`, 'Agencies buy books at a multiple of annual renewals. Clean, well-retained Medicare books trade at the higher end.'],
+    ['Book value', `${fmt0(bv.low||0)} – ${fmt0(bv.high||0)}`, `Annualized residual × the multiple. Midpoint ${fmt0(bv.mid||0)}.`],
+  ];
+  $('#valBreakdownBody').innerHTML='<div class="vbreak">'+rows.map(r=>`<div class="vbreak-row">
+    <span class="vbreak-k">${r[0]}</span><span class="vbreak-v">${r[1]}</span><span class="vbreak-d">${r[2]}</span></div>`).join('')+'</div>'
+    +`<p class="hint" style="margin:14px 2px 0">In short: <b>annualized residual × multiple = book value</b>. Grow the residual (write more, keep more) or earn a higher multiple (better retention, cleaner book) and the value rises with it. Use the sliders below to see by how much.</p>`;
+}
+let _valInit=false;
+function initValueTools(V){
+  const resid=Math.round(V.residual_annual||0);
+  const avgPP=V.avg_residual_per_policy||0;
+  const baseRet=(V.base_retention!=null?V.base_retention:0.85);
+  if(!_valInit){
+    const R=$('#wiResidual'); R.min=0; R.max=Math.max(resid*2,50000); R.step=Math.max(500,Math.round(resid/100)*100||500); R.value=resid;
+    $('#wiRet').value=Math.round(baseRet*100);
+    ['wiResidual','wiPace','wiRet','wiMult'].forEach(id=>$('#'+id).addEventListener('input',computeWhatif));
+    ['goalVal','goalDate'].forEach(id=>$('#'+id).addEventListener('input',computeGoal));
+    _valInit=true;
+  }
+  // keep residual slider anchored to latest data if the user hasn't dragged it
+  _valCtx={resid,avgPP,baseRet,mult_mid:(V.book_value&&V.book_value.mult_mid)||2.5};
+  computeWhatif(); computeGoal();
+}
+let _valCtx={resid:0,avgPP:0,baseRet:.85,mult_mid:2.5};
+function computeWhatif(){
+  const c=_valCtx;
+  const resid=+$('#wiResidual').value, pace=+$('#wiPace').value, retPct=(+$('#wiRet').value)/100, mult=(+$('#wiMult').value)/10;
+  $('#wiResidualV').textContent=fmt0(resid);
+  $('#wiPaceV').textContent=pace+'/mo';
+  $('#wiRetV').textContent=Math.round(retPct*100)+'%';
+  $('#wiMultV').textContent=mult.toFixed(1)+'×';
+  const added=pace*12*c.avgPP;                                   // a year of writing at this pace
+  const retFactor=c.baseRet?Math.max(.4,Math.min(1.35,retPct/c.baseRet)):1;  // relative to your observed baseline
+  const projResid=Math.max(0,(resid+added)*retFactor);
+  const value=projResid*mult;
+  const today=c.resid*mult;                                       // same multiple, today's residual
+  const delta=value-today; const up=delta>=0;
+  $('#wiOut').innerHTML=`<div class="wiresult">
+    <div><div class="label">Projected book value</div><div class="big">${fmt0(value)}</div></div>
+    <div class="delta ${up?'pos':'neg'}">${up?'▲':'▼'} ${fmt0(Math.abs(delta))} vs today</div>
+    <div class="vbreak-d">Implied annualized residual <b>${fmt0(projResid)}</b>${added>0?` (incl. ~${fmt0(added)} from writing ${pace}/mo for a year)`:''}, valued at ${mult.toFixed(1)}×.</div>
+  </div>`;
+}
+function computeGoal(){
+  const c=_valCtx;
+  const target=+$('#goalVal').value, dateStr=$('#goalDate').value;
+  const out=$('#goalOut');
+  if(!target||!dateStr){ out.innerHTML='<p class="hint">Enter a target value and a date to see the plan.</p>'; return; }
+  const [gy,gm]=dateStr.split('-').map(Number); const now=new Date();
+  const months=(gy-now.getFullYear())*12+(gm-(now.getMonth()+1));
+  if(months<=0){ out.innerHTML='<p class="hint">Pick a date in the future.</p>'; return; }
+  const mult=(+$('#wiMult').value)/10||c.mult_mid;
+  const requiredResid=target/mult;
+  const gap=requiredResid-c.resid;
+  if(gap<=0){ out.innerHTML=`<div class="wiresult"><div class="vbreak-d">You're already there — at ${mult.toFixed(1)}× your current ${fmt0(c.resid)} residual, your book is worth about <b>${fmt0(c.resid*mult)}</b>, which already meets <b>${fmt0(target)}</b>. Focus on protecting it: retention is pure value at this point.</div></div>`; return; }
+  const polTotal=c.avgPP?gap/c.avgPP:0;
+  const polPerMonth=polTotal/months;
+  const altMult=target/c.resid;   // multiple needed if residual doesn't grow
+  out.innerHTML=`<div class="wiresult">
+    <div><div class="label">To reach ${fmt0(target)} in ${months} month${months===1?'':'s'}</div>
+      <div class="big">${polPerMonth>=0.5?Math.round(polPerMonth):polPerMonth.toFixed(1)}<span style="font-size:16px;font-weight:500"> policies / month</span></div></div>
+  </div>
+  <p class="hint" style="margin:12px 2px 0">Grow annualized residual from <b>${fmt0(c.resid)}</b> to <b>${fmt0(requiredResid)}</b> (at a ${mult.toFixed(1)}× multiple). `
+   +`At about ${fmt0(c.avgPP)}/yr of residual per policy, that's roughly <b>${polTotal>=1?Math.round(polTotal):polTotal.toFixed(1)} new policies</b> over the period — about <b>${polPerMonth>=0.5?Math.round(polPerMonth):polPerMonth.toFixed(1)}/month</b>. `
+   +(altMult<=3.5&&altMult>mult?`Alternatively, improving retention enough to earn a <b>${altMult.toFixed(1)}×</b> multiple would get you there with the book you already have. `:'')
+   +`Every lapse you prevent counts double here — it protects residual and lifts the multiple.</p>`;
 }
 
 // ================= BY PRODUCT =================
