@@ -367,6 +367,13 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
   background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid var(--glass-brd)}
 .wiresult .big{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;letter-spacing:-.5px}
 .wiresult .delta{font-weight:600}
+/* since-last-visit banner */
+.visit-banner{display:flex;align-items:center;gap:14px;padding:12px 18px;margin-bottom:20px;border-radius:14px;
+  background:var(--grad-brand);color:#fff;box-shadow:0 10px 30px -14px color-mix(in srgb,var(--accent) 70%,transparent);font-size:14px}
+.visit-banner .neg{color:#ffd9d6}
+.visit-banner button{margin-left:auto;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:10px;
+  padding:7px 14px;font-family:inherit;font-weight:600;cursor:pointer;font-size:13px}
+.visit-banner button:hover{background:rgba(255,255,255,.3)}
 /* command palette */
 .cmdk-ov{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;
   background:color-mix(in srgb,#000 48%,transparent);backdrop-filter:blur(6px);padding-top:14vh}
@@ -505,6 +512,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <main class="main">
     <div id="loading" class="loading"><div class="spinner"></div>Parsing statements&hellip;</div>
     <div id="content" style="display:none">
+      <div id="visitBanner" class="visit-banner" style="display:none"></div>
 
       <!-- first-run welcome (shown until the first statement is added) -->
       <div id="firstRun" style="display:none">
@@ -1093,7 +1101,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 
       <!-- TAXES -->
       <section class="view" id="view-taxes">
-        <h2 class="section">Tax estimate &mdash; self-employed (1099)</h2>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h2 class="section" style="margin:8px 0 16px;flex:1">Tax estimate &mdash; self-employed (1099)</h2>
+          <button class="btn tonal" onclick="yearEndReport()"><span>&#128196;</span> Year-end summary for my CPA</button></div>
         <div class="banner">A working estimate of what you'll owe as a 1099 insurance agent: self-employment tax, federal &amp; state income tax, the 20% QBI deduction, and how much to set aside from every commission check. Adjust the inputs; everything saves to your profile. <b>Estimate only &mdash; not tax advice. Confirm with your CPA.</b></div>
         <div class="card" style="margin-bottom:24px">
           <div class="sliders" style="grid-template-columns:1fr 1fr 1fr">
@@ -1588,6 +1597,7 @@ function render(){
   destroyCharts();
   const d=DATA, years=d.years, yl=d.all_years;
   renderHolderSel(d);
+  renderVisitBanner();
   $('#meta').innerHTML=(d.statement_count
     ? `${d.statement_count} statements${yl.length?` &middot; ${yl[0]}&ndash;${yl[yl.length-1]}`:''}`
     : 'No statements yet')+`<br>updated ${d.generated.replace('T',' ')}`;
@@ -1825,6 +1835,50 @@ function renderGrow(){
     :'<p class="hint">No gaps here — nicely cross-sold.</p>';};
   $('#growDvh').innerHTML=list(cs.dvh,'dental / vision');
   $('#growFe').innerHTML=list(cs.fe,'final-expense');
+}
+let _visitCur=null;
+function renderVisitBanner(){
+  const el=$('#visitBanner'); if(!el||!DATA)return;
+  let prev=null; try{prev=JSON.parse(localStorage.getItem('roost.lastVisit')||'null');}catch(e){}
+  const cur={count:DATA.statement_count||0, net:((DATA.years||[]).slice(-1)[0]||{}).net||0, cb:(DATA.chargebacks||{}).total||0};
+  _visitCur=cur;
+  if(prev&&cur.count>prev.count){
+    const nStmt=cur.count-prev.count, dNet=cur.net-prev.net, dCb=cur.cb-prev.cb;
+    const parts=[`<b>${nStmt}</b> new statement${nStmt===1?'':'s'} since your last visit`];
+    if(dNet)parts.push(`net ${dNet>=0?'+':''}${fmt0(dNet)} this year`);
+    if(dCb<-0.5)parts.push(`<span class="neg">${fmt0(dCb)}</span> in new chargebacks`);
+    el.innerHTML=`<span>&#128075; ${parts.join(' &middot; ')}.</span><button onclick="dismissVisit()">Got it</button>`;
+    el.style.display='';
+  } else { el.style.display='none'; if(!prev){try{localStorage.setItem('roost.lastVisit',JSON.stringify(cur));}catch(e){}} }
+}
+function dismissVisit(){ try{localStorage.setItem('roost.lastVisit',JSON.stringify(_visitCur));}catch(e){} const el=$('#visitBanner'); if(el)el.style.display='none'; }
+function yearEndReport(){
+  const d=DATA; const y=(d.years||[]).slice(-1)[0]; if(!y){alert('No statements yet.');return;}
+  const exp=Object.assign({},(d.expenses&&d.expenses.config)||{},(typeof loadLocalExpenses==='function'?loadLocalExpenses():{}));
+  const eobj=exp[y.year]||{}; const totalExp=Object.values(eobj).reduce((s,v)=>s+(Number(v)||0),0);
+  const row=(k,v,cls)=>`<tr><td>${k}</td><td class="${cls||''}" style="text-align:right">${v}</td></tr>`;
+  const w=window.open('','_blank'); if(!w){alert('Allow pop-ups to open the report.');return;}
+  w.document.write(`<html><head><title>Year-end summary ${y.year}</title><style>
+    body{font-family:Georgia,serif;max-width:720px;margin:40px auto;color:#1a1a1a;padding:0 20px}
+    h1{font-size:22px;margin:0 0 4px}.sub{color:#666;margin:0 0 24px;font-size:13px}
+    table{width:100%;border-collapse:collapse;margin:0 0 20px}td{padding:8px 4px;border-bottom:1px solid #eee}
+    .tot td{border-top:2px solid #333;border-bottom:none;font-weight:700;font-size:16px}
+    .neg{color:#b3261e}h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#888;margin:22px 0 6px}
+    .note{font-size:12px;color:#888;margin-top:28px;line-height:1.5}@media print{body{margin:0}}</style></head><body>
+    <h1>Commission income summary &mdash; ${y.year}</h1>
+    <p class="sub">Compiled from ${y.statements} commission statements &middot; generated ${new Date().toLocaleDateString()}</p>
+    <h2>Income</h2><table>
+    ${row('New business (advances)',fmt(y.advances))}${row('Residual / renewals',fmt(y.residual))}
+    ${row('Bonuses &amp; overrides',fmt(y.bonus||0))}${row('Chargebacks',fmt(y.chargebacks),'neg')}
+    <tr class="tot"><td>Net commissions paid</td><td style="text-align:right">${fmt(y.net)}</td></tr></table>
+    <h2>Business expenses (your entries)</h2><table>
+    ${Object.entries(eobj).filter(([,v])=>Number(v)).map(([k,v])=>row(k.charAt(0).toUpperCase()+k.slice(1),fmt(Number(v)||0))).join('')||row('No expenses entered','&mdash;')}
+    <tr class="tot"><td>Total expenses</td><td style="text-align:right">${fmt(totalExp)}</td></tr></table>
+    <h2>Net business profit</h2><table><tr class="tot"><td>Net commissions &minus; expenses</td><td style="text-align:right">${fmt(y.net-totalExp)}</td></tr></table>
+    <p class="note">Compiled by Roost from your uploaded commission statements, for your records and your accountant. Figures reflect what was paid on ${y.year} statements; confirm against your 1099s. Not tax advice.</p>
+    <p class="note"><button onclick="window.print()" style="font-family:sans-serif;padding:8px 16px;cursor:pointer">Print / Save as PDF</button></p>
+    </body></html>`);
+  w.document.close();
 }
 function renderCarrierTeach(){
   const box=$('#carrierTeach'); if(!box)return;
