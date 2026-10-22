@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Roost — commission &amp; residual intelligence</title>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Roboto+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{
@@ -251,9 +251,132 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
   .section{font-size:20px}
   .controls{gap:8px}
 }
+/* ============================================================================
+   FUTURISTIC OVERHAUL — layered on top of the base styles above. Adds a living
+   aurora backdrop, glassmorphism, gradient/glow accents, modern type, motion,
+   and a command palette. All CSS-variable names from above are preserved.
+   ============================================================================ */
+:root{
+  --accent:#00a6b4; --accent-2:#6d5cff; --accent-3:#00d6b8;
+  --grad-brand:linear-gradient(115deg,#00b3a4 0%,#2d7bf4 52%,#6d5cff 100%);
+  --grad-gold:linear-gradient(115deg,#e0a94a,#c0872f);
+  --glass:rgba(255,255,255,.74); --glass-brd:rgba(255,255,255,.85);
+  --glow:0 10px 30px -14px rgba(0,80,100,.30); --ring:rgba(0,166,180,.55);
+}
+body.dark{
+  --accent:#4dd8de; --accent-2:#9b8cff; --accent-3:#45f3d0;
+  --grad-brand:linear-gradient(115deg,#45f3d0 0%,#4dd8de 45%,#9b8cff 100%);
+  --grad-gold:linear-gradient(115deg,#f3cd80,#d99b3e);
+  --glass:rgba(27,36,35,.86); --glass-brd:rgba(255,255,255,.12);
+  --glow:0 18px 50px -18px rgba(0,0,0,.75),0 0 44px -16px rgba(77,216,222,.22); --ring:rgba(77,216,222,.6);
+  /* brighter text so nothing is lost against the glass + aurora */
+  --on-surface:#edf3f2; --on-surface-var:#c6d1d0;
+}
+html{background:var(--surface)}
+body{background:transparent;font-family:'Inter',Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+/* living aurora backdrop */
+#aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+#aurora b{position:absolute;display:block;border-radius:50%;filter:blur(70px);opacity:.42;
+  background:radial-gradient(circle at 30% 30%,var(--c1),transparent 70%)}
+body.dark #aurora b{opacity:.20;filter:blur(95px)}
+#aurora .a1{--c1:var(--accent);  width:46vw;height:46vw;left:-8vw;top:-12vw;animation:drift1 26s ease-in-out infinite alternate}
+#aurora .a2{--c1:var(--accent-2);width:40vw;height:40vw;right:-6vw;top:-10vw;animation:drift2 30s ease-in-out infinite alternate}
+#aurora .a3{--c1:var(--accent-3);width:52vw;height:52vw;left:35vw;bottom:-22vw;animation:drift3 34s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate3d(6vw,4vh,0) scale(1.12)}}
+@keyframes drift2{to{transform:translate3d(-5vw,6vh,0) scale(1.08)}}
+@keyframes drift3{to{transform:translate3d(4vw,-5vh,0) scale(1.14)}}
+.layout{position:relative;z-index:1}
+/* glass app bar + gradient brand */
+.appbar{background:var(--glass);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);
+  border-bottom:1px solid var(--glass-brd);box-shadow:0 1px 0 var(--glass-brd),0 8px 30px -22px rgba(0,0,0,.5)}
+.brand{font-family:'Space Grotesk','Inter',sans-serif;background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;letter-spacing:-1px}
+body.dark .brand{color:transparent}
+/* glass cards with hover glow + staggered entrance */
+.card{background:var(--glass);backdrop-filter:blur(14px) saturate(1.25);-webkit-backdrop-filter:blur(14px) saturate(1.25);
+  border:1px solid var(--glass-brd);border-radius:18px;box-shadow:var(--glow);
+  transition:transform .22s cubic-bezier(.2,.7,.2,1),box-shadow .22s,border-color .22s}
+.card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent) 45%,var(--glass-brd));
+  box-shadow:var(--glow),0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent),0 24px 60px -24px color-mix(in srgb,var(--accent) 45%,transparent)}
+.kpis .kpi{animation:pop .5s cubic-bezier(.2,.8,.2,1) backwards}
+.kpis .kpi:nth-child(2){animation-delay:.05s}.kpis .kpi:nth-child(3){animation-delay:.1s}.kpis .kpi:nth-child(4){animation-delay:.15s}
+.kpis .kpi:nth-child(5){animation-delay:.2s}.kpis .kpi:nth-child(6){animation-delay:.25s}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.kpi .val{font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.5px;font-weight:600}
+.kpi.gold{background:var(--glass);color:var(--on-surface);border:1px solid var(--glass-brd)}
+.kpi.gold .label,.kpi.gold .sub{color:var(--on-surface-var)}
+.kpi.gold .val{background:var(--grad-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.kpi.accent{background:var(--grad-brand);color:#fff;border:none}
+.kpi.accent .label,.kpi.accent .sub{color:rgba(255,255,255,.9)}
+.kpi .label{color:var(--on-surface-var);font-weight:500}
+.kpi .sub{color:var(--on-surface-var)}
+/* headings */
+h2.section{font-family:'Space Grotesk','Inter',sans-serif;font-weight:600}
+.card h3,.chart-card h3{font-family:'Space Grotesk','Inter',sans-serif}
+/* nav active: gradient pill with glow */
+.nav a{border-radius:14px;transition:background .18s,color .18s,box-shadow .18s,transform .08s}
+.nav a.active{background:var(--grad-brand);color:#fff;box-shadow:0 10px 26px -12px color-mix(in srgb,var(--accent) 70%,transparent)}
+.nav a.active .ic{color:#fff}
+.nav a:hover:not(.active){background:color-mix(in srgb,var(--accent) 12%,transparent);transform:translateX(2px)}
+/* primary buttons: gradient + glow */
+.btn{background:var(--grad-brand);color:#fff;border-radius:14px;font-weight:600;
+  box-shadow:0 8px 22px -12px color-mix(in srgb,var(--accent) 70%,transparent);transition:transform .12s,box-shadow .2s,filter .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 12px 30px -10px color-mix(in srgb,var(--accent) 75%,transparent)}
+.btn.tonal{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--on-surface);box-shadow:none;border:1px solid var(--glass-brd)}
+.btn.ghost{background:transparent;color:var(--on-surface-var);box-shadow:none}
+.banner{border-radius:16px}
+/* readable, scannable list rows (review + flagged statements) */
+.revlist{display:flex;flex-direction:column;gap:10px}
+.revrow{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-radius:14px;
+  background:color-mix(in srgb,var(--on-surface) 4%,transparent);border:1px solid var(--glass-brd)}
+.revrow-ic{flex:none;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);font-size:15px}
+.revrow-ic.bad{background:color-mix(in srgb,#e5484d 22%,transparent);color:#ff7a7a}
+.revrow-t{font-weight:600;font-size:14.5px;color:var(--on-surface);line-height:1.4}
+.revrow-s{font-size:13px;color:var(--on-surface-var);margin-top:3px;line-height:1.55}
+.revissues{margin:9px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.revissues li{font-size:13px;color:var(--on-surface-var);line-height:1.5;display:flex;gap:8px;align-items:baseline}
+/* command palette */
+.cmdk-ov{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;
+  background:color-mix(in srgb,#000 48%,transparent);backdrop-filter:blur(6px);padding-top:14vh}
+.cmdk-ov.open{display:flex;animation:fadein .14s ease}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.cmdk{width:min(620px,92vw);background:var(--glass);backdrop-filter:blur(26px) saturate(1.5);-webkit-backdrop-filter:blur(26px) saturate(1.5);
+  border:1px solid var(--glass-brd);border-radius:18px;box-shadow:0 40px 90px -30px rgba(0,0,0,.6);overflow:hidden;
+  animation:pop .2s cubic-bezier(.2,.8,.2,1)}
+.cmdk input{width:100%;border:none;outline:none;background:transparent;color:var(--on-surface);font-family:inherit;
+  font-size:17px;padding:18px 20px;border-bottom:1px solid var(--glass-brd)}
+.cmdk-list{max-height:52vh;overflow-y:auto;padding:8px}
+.cmdk-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:12px;cursor:pointer;color:var(--on-surface);font-size:14px}
+.cmdk-item .ic{width:20px;text-align:center;opacity:.8}
+.cmdk-item .tag{margin-left:auto;font-size:11px;color:var(--on-surface-var);text-transform:uppercase;letter-spacing:.5px}
+.cmdk-item.sel,.cmdk-item:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.cmdk-hint{display:flex;gap:14px;padding:9px 16px;border-top:1px solid var(--glass-brd);font-size:11px;color:var(--on-surface-var)}
+.cmdk-hint kbd{background:color-mix(in srgb,var(--on-surface) 10%,transparent);border-radius:5px;padding:1px 6px;font-family:inherit}
+.cmdk-trigger{display:inline-flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--glass-brd);
+  background:color-mix(in srgb,var(--on-surface) 5%,transparent);color:var(--on-surface-var);border-radius:12px;
+  padding:8px 12px;font-size:13px;font-family:inherit;transition:border-color .15s,color .15s}
+.cmdk-trigger:hover{border-color:var(--accent);color:var(--on-surface)}
+.cmdk-trigger kbd{background:color-mix(in srgb,var(--on-surface) 10%,transparent);border-radius:5px;padding:1px 6px;font-size:11px}
+/* focus ring */
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+/* respect reduced motion */
+@media (prefers-reduced-motion:reduce){
+  #aurora b{animation:none!important}
+  .kpis .kpi,.view,.cmdk,.cmdk-ov{animation:none!important}
+  .card,.btn,.nav a{transition:none!important}
+}
 </style>
 </head>
 <body>
+<div id="aurora"><b class="a1"></b><b class="a2"></b><b class="a3"></b></div>
+<div class="cmdk-ov" id="cmdkOv">
+  <div class="cmdk" role="dialog" aria-label="Command palette">
+    <input id="cmdkInput" type="text" placeholder="Search views, clients, actions&hellip;" autocomplete="off" spellcheck="false">
+    <div class="cmdk-list" id="cmdkList"></div>
+    <div class="cmdk-hint"><span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> navigate</span><span><kbd>&#8629;</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+  </div>
+</div>
 <div class="appbar">
   <button class="btn ghost" id="navToggle" onclick="toggleNav()" aria-label="Menu" title="Menu">&#9776;</button>
   <h1 class="brand">
@@ -265,6 +388,7 @@ tr.sel td{background:var(--primary-container);color:var(--on-primary-container)}
     </svg>
     Roost
   </h1>
+  <button class="cmdk-trigger" onclick="openCmdk()" title="Search &amp; jump (Ctrl/Cmd-K)"><span>&#9906;</span> Search<kbd>&#8984;K</kbd></button>
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
@@ -1147,6 +1271,15 @@ const fmt0 = n => (n=Number(n),!isFinite(n)?'$0':(n<0?'-':'')+'$'+Math.abs(n).to
 const cls = n => n<0?'neg':'pos';
 const hexA=(h,a)=>{const n=parseInt(h.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;};
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// Human-friendly date: "2026-01-16" -> "Jan 16, 2026"
+function fmtDate(iso){ if(!iso)return ''; const p=String(iso).split('-').map(Number); if(!p[0])return iso;
+  return `${MONTHS[(p[1]||1)-1]} ${p[2]||1}, ${p[0]}`; }
+// Title-case a raw name/product from a statement, keeping common insurance acronyms upper.
+// "SMITH, JOHN" -> "Smith, John"; "MAPD HMO" stays "MAPD HMO".
+const _ACR={LLC:1,INC:1,MAPD:1,PDP:1,HMO:1,PPO:1,POS:1,PFFS:1,SNP:1,MA:1,FE:1,IUL:1,WL:1,DVH:1,LTC:1,RX:1,
+  AARP:1,UHC:1,AIG:1,GTL:1,UNL:1,FGL:1,NWL:1,GWIC:1,BFLIC:1,II:1,III:1,IV:1};
+function titleize(s){ if(s==null)return ''; return String(s).trim().replace(/\s+/g,' ')
+  .replace(/[A-Za-z0-9&']+/g,w=>{ const u=w.toUpperCase(); return _ACR[u]?u:w.charAt(0).toUpperCase()+w.slice(1).toLowerCase(); }); }
 const COLORS={nb:'#00696e',resid:'#c0872f',cbk:'#b3261e',net:'#2f6b46'};
 const PALETTE=['#00696e','#c0872f','#4b607c','#7a5195','#2f6b46','#b3261e','#bc5090','#00838f','#a1887f','#546e7a','#8a5a00','#5c6bc0'];
 const METRICS={
@@ -1385,6 +1518,7 @@ function render(){
   renderAudit();
   renderPolicies(yl);
   renderReclassNotes();
+  animateCounts();
 }
 
 function renderReclassNotes(){
@@ -1522,20 +1656,20 @@ function renderChargebacks(){
     <div class="val${k.neg&&!k.gold?' neg':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
   const car=c.by_carrier||[];
   const overRate=car.some(r=>r.rate!=null&&r.rate>100);
-  $('#cbCarrier').innerHTML=car.length?thead(['Carrier','Charged back','Advanced','Rate'])+'<tbody>'
+  $('#cbCarrier').innerHTML=car.length?'<table>'+thead(['Carrier','Charged back','Advanced','Rate'])+'<tbody>'
     +car.map(r=>{const over=r.rate!=null&&r.rate>100;
       return `<tr><td style="text-align:left">${r.carrier}</td><td class="neg">${fmt(r.amount)}</td><td>${fmt0(r.advanced)}</td>`
       +`<td${over?' title="The clawback reverses advances paid in an earlier period, outside this date range."':''}>${r.rate!=null?r.rate.toFixed(1)+'%'+(over?' <span style="color:var(--on-surface-var)">&dagger;</span>':''):'&mdash;'}</td></tr>`;}).join('')
-    +'</tbody>'+(overRate?'<p class="hint" style="margin-top:10px">&dagger; A rate above 100% means the clawback reverses advances paid in an earlier period that falls outside the range shown &mdash; the money came back on business booked before this window, not a figure to read as "more than everything advanced."</p>':'')
+    +'</tbody></table>'+(overRate?'<p class="hint" style="margin-top:10px">&dagger; A rate above 100% means the clawback reverses advances paid in an earlier period that falls outside the range shown &mdash; the money came back on business booked before this window, not a figure to read as "more than everything advanced."</p>':'')
     :'<p class="hint">No chargebacks recorded yet &mdash; nothing has been clawed back.</p>';
   const fam=c.by_family||[];
-  $('#cbFamily').innerHTML=fam.length?thead(['Product line','Charged back','Events'])+'<tbody>'
+  $('#cbFamily').innerHTML=fam.length?'<table>'+thead(['Product line','Charged back','Events'])+'<tbody>'
     +fam.map(r=>`<tr><td style="text-align:left">${r.family}</td><td class="neg">${fmt(r.amount)}</td><td>${r.count}</td></tr>`).join('')
-    +'</tbody>':'<p class="hint">No chargebacks recorded yet.</p>';
+    +'</tbody></table>':'<p class="hint">No chargebacks recorded yet.</p>';
   const top=c.top||[];
-  $('#cbTop').innerHTML=top.length?thead(['Date','Carrier','Client','Product','Amount'])+'<tbody>'
-    +top.slice(0,15).map(r=>`<tr><td>${r.date||''}</td><td style="text-align:left">${r.carrier}</td><td style="text-align:left">${(r.client||'').slice(0,22)}</td><td style="text-align:left">${(r.product||'').slice(0,22)}</td><td class="neg">${fmt(r.amount)}</td></tr>`).join('')
-    +'</tbody>':'<p class="hint">No chargebacks recorded yet.</p>';
+  $('#cbTop').innerHTML=top.length?'<table>'+thead(['Date','Carrier','Client','Product','Amount'])+'<tbody>'
+    +top.slice(0,15).map(r=>`<tr><td>${fmtDate(r.date)}</td><td style="text-align:left">${r.carrier}</td><td style="text-align:left">${titleize(r.client).slice(0,24)||'&mdash;'}</td><td style="text-align:left">${titleize(r.product).slice(0,26)||'&mdash;'}</td><td class="neg">${fmt(r.amount)}</td></tr>`).join('')
+    +'</tbody></table>':'<p class="hint">No chargebacks recorded yet.</p>';
   const buckets=bucketSeries(GRAIN);
   charts.cbTime=new Chart($('#cbTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
     datasets:[{label:'Charged back',data:buckets.map(b=>Math.round((b.chargebacks||0)*100)/100),money:true,backgroundColor:'#b3261e'}]},
@@ -1553,18 +1687,22 @@ function renderReview(){
   ];
   $('#reviewKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
-  const gaps=rv.gaps||[];
-  $('#reviewGaps').innerHTML=gaps.length?thead(['After','Before','Gap','Likely missing'])+'<tbody>'
-    +gaps.map(g=>`<tr><td>${g.after}</td><td>${g.before}</td><td>${g.days} days</td><td><b>~${g.missing_est}</b> statement${g.missing_est===1?'':'s'}</td></tr>`).join('')
-    +'</tbody>':'<p class="hint">No gaps detected &mdash; your pay periods look continuous.</p>';
-  const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">high</span>':'<span class="chip">check</span>';
+  const gaps=rv.gaps||[], cad=rv.cadence_days;
+  $('#reviewGaps').innerHTML=gaps.length?'<div class="revlist">'+gaps.map(g=>{const n=g.missing_est;
+    return `<div class="revrow"><div class="revrow-ic">&#9888;</div><div style="flex:1">
+      <div class="revrow-t">About ${n} statement${n===1?'':'s'} may be missing between ${fmtDate(g.after)} and ${fmtDate(g.before)}.</div>
+      <div class="revrow-s">That's a ${g.days}-day gap${cad?`, while your pay periods usually run about every ${cad} days`:''}. If you have those statements, add them and hit Refresh.</div>
+    </div></div>`;}).join('')+'</div>'
+    :'<p class="hint">No gaps detected — your pay periods look continuous.</p>';
+  const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">High priority</span>':'<span class="chip">Worth a look</span>';
   const list=rv.statements||[];
-  $('#reviewList').innerHTML=list.length?list.map(s=>`<div class="card" style="box-shadow:none;border:1px solid var(--outline-var);margin-bottom:10px;padding:14px 16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <div><b>${s.date||'(no date)'}</b> &middot; <span class="hint">${s.file}</span>${s.holder?` &middot; <span class="hint">${s.holder}</span>`:''}</div>
-      <div>${fmt0(s.net)}</div></div>
-    <ul style="margin:8px 0 0;padding-left:18px">${s.issues.map(i=>`<li style="margin:3px 0">${sev(i.sev)} ${i.msg}</li>`).join('')}</ul>
-  </div>`).join(''):'<p class="hint">Every statement parsed cleanly. Nothing to review.</p>';
+  $('#reviewList').innerHTML=list.length?'<div class="revlist">'+list.map(s=>{const hi=s.issues.some(i=>i.sev==='high');
+    return `<div class="revrow"><div class="revrow-ic ${hi?'bad':''}">${hi?'&#9888;':'&#8505;'}</div><div style="flex:1">
+      <div class="revrow-t">${fmtDate(s.date)||'Undated statement'} &mdash; paid ${fmt0(s.net)}</div>
+      <div class="revrow-s">File: ${s.file}${s.holder?` &middot; ${titleize(s.holder)}`:''}</div>
+      <ul class="revissues">${s.issues.map(i=>`<li>${sev(i.sev)} <span>${i.msg}</span></li>`).join('')}</ul>
+    </div></div>`;}).join('')+'</div>'
+    :'<p class="hint">Every statement parsed cleanly. Nothing to review.</p>';
 }
 function renderResidual(){
   if(charts.resid)charts.resid.destroy();
@@ -2284,7 +2422,7 @@ function renderDigest(){
     +`(${fmt(last.advances)} new business, ${fmt(last.residual)} residual`
     +`${last.chargebacks?`, <span class="neg">${fmt(last.chargebacks)}</span> chargebacks`:''})`
     +`${last.applications?` from <b>${last.applications}</b> new application${last.applications===1?'':'s'}`:''}.`
-    +`${last.merged&&last.holders?` <span class="sub">(combines ${last.holders.length} statements: ${last.holders.join(' + ')})</span>`:''}`);
+    +`${last.merged&&last.holders?` <span class="sub">(combines ${last.holders.length} statements: ${last.holders.map(titleize).join(' + ')})</span>`:''}`);
   const R=DATA.retention&&DATA.retention.totals;
   if(R&&R.at_risk_count) parts.push(`<b>${R.at_risk_count}</b> Medicare Advantage polic${R.at_risk_count===1?'y':'ies'} (${fmt0(R.at_risk_dollars)}) are in the rapid-disenrollment window &mdash; worth a retention touch. <a href="#" onclick="gotoView('retention');return false;">See Retention &rarr;</a>`);
   // goal pace (uses saved goal incl. on-device)
@@ -3071,6 +3209,66 @@ async function uploadFiles(files){
     const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])]; if(fs.length)uploadFiles(fs); });
 })();
 window.addEventListener('keydown',e=>{ if(e.key==='Escape')closeUpload(); });
+
+/* ---- animated KPI count-ups ---- */
+function animateCounts(){
+  if(window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  document.querySelectorAll('.kpi .val').forEach(el=>{
+    const raw=el.textContent; const m=raw.match(/-?[\d,]*\.?\d+/); if(!m)return;
+    const target=parseFloat(m[0].replace(/,/g,'')); if(!isFinite(target))return;
+    const pre=raw.slice(0,m.index), post=raw.slice(m.index+m[0].length);
+    const dec=(m[0].split('.')[1]||'').length, t0=performance.now(), dur=640;
+    const f=v=>v.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+    (function step(t){const p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,3);
+      el.textContent=pre+f(target*e)+post; if(p<1)requestAnimationFrame(step); else el.textContent=raw;})(t0);
+  });
+}
+/* ---- command palette (Cmd/Ctrl-K) ---- */
+let _cmdkSel=0,_cmdkItems=[];
+function cmdkCommands(){
+  const views=[...document.querySelectorAll('#nav a[data-view]')].map(a=>({
+    type:'view',label:a.querySelector('.lbl').textContent.trim(),view:a.dataset.view,
+    ic:(a.querySelector('.ic')||{}).textContent||'&#9632;'}));
+  const extra=[{type:'action',label:'Upload statements',ic:'&#8613;',run:openUpload},
+    {type:'action',label:'Refresh data',ic:'&#8635;',run:()=>loadData(true)},
+    {type:'action',label:'Toggle dark / light theme',ic:'&#9681;',run:toggleTheme},
+    {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'}];
+  const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({
+    type:'client',label:c.client,ic:'&#9787;',sub:'client',run:()=>{gotoView('clients');if(typeof openClient==='function')openClient(c.client);}}));
+  return views.concat(extra).concat(clients);
+}
+function openCmdk(){ const ov=$('#cmdkOv'); if(!ov)return; ov.classList.add('open');
+  const i=$('#cmdkInput'); i.value=''; cmdkRender(''); setTimeout(()=>i.focus(),20); }
+function closeCmdk(){ const ov=$('#cmdkOv'); if(ov)ov.classList.remove('open'); }
+function cmdkRender(q){
+  q=(q||'').toLowerCase();
+  const all=cmdkCommands();
+  _cmdkItems=q?all.filter(x=>x.label.toLowerCase().includes(q)):all.filter(x=>x.type!=='client').concat(all.filter(x=>x.type==='client').slice(0,0));
+  _cmdkItems=_cmdkItems.slice(0,60); _cmdkSel=0;
+  $('#cmdkList').innerHTML=_cmdkItems.map((x,i)=>`<div class="cmdk-item${i===0?' sel':''}" data-i="${i}">
+    <span class="ic">${x.ic}</span><span>${x.label.replace(/</g,'&lt;')}</span><span class="tag">${x.sub||x.type}</span></div>`).join('')
+    ||'<div class="cmdk-item" style="opacity:.6">No matches</div>';
+  [...$('#cmdkList').children].forEach(el=>{ if(!el.dataset)return;
+    el.onclick=()=>cmdkRun(+el.dataset.i); el.onmousemove=()=>cmdkHi(+el.dataset.i); });
+}
+function cmdkHi(i){ if(isNaN(i))return; _cmdkSel=i;
+  [...$('#cmdkList').children].forEach((el,j)=>el.classList.toggle('sel',j===i)); }
+function cmdkRun(i){ const x=_cmdkItems[i]; if(!x)return; closeCmdk();
+  if(x.type==='view')gotoView(x.view); else if(x.run)x.run(); }
+(function(){ const i=$('#cmdkInput'); if(!i)return;
+  i.addEventListener('input',()=>cmdkRender(i.value));
+  i.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'){e.preventDefault();cmdkHi(Math.min(_cmdkSel+1,_cmdkItems.length-1));scrollSel();}
+    else if(e.key==='ArrowUp'){e.preventDefault();cmdkHi(Math.max(_cmdkSel-1,0));scrollSel();}
+    else if(e.key==='Enter'){e.preventDefault();cmdkRun(_cmdkSel);}
+    else if(e.key==='Escape'){closeCmdk();} });
+  function scrollSel(){ const el=$('#cmdkList').children[_cmdkSel]; if(el&&el.scrollIntoView)el.scrollIntoView({block:'nearest'}); }
+  $('#cmdkOv').addEventListener('click',e=>{ if(e.target.id==='cmdkOv')closeCmdk(); });
+})();
+window.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault();
+    const ov=$('#cmdkOv'); if(ov&&ov.classList.contains('open'))closeCmdk(); else openCmdk(); }
+});
 
 loadData();
 </script>
