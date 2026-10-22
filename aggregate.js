@@ -1178,6 +1178,66 @@ function buildSummary(allRecords, config) {
     top: cbItems.slice().sort((a, b) => a.amount - b.amount).slice(0, 30),
   };
 
+  // ---- forward-looking forecast: persistency, predicted chargebacks, projection band ----
+  // Everything here is an estimate from the agent's own history — labelled as such in the UI.
+  const monthsAgo = d => { const g = daysAgo(d); return g == null ? null : g / 30.44; };
+  const aged = pols.filter(p => p.firstAdvance && (p.status === 'Yes' || p.status === 'No'));
+  // Survival curve: of policies now at each age, how many are still paying.
+  const ageDefs = [['0–3 mo', 0, 3], ['3–6 mo', 3, 6], ['6–12 mo', 6, 12], ['1–2 yr', 12, 24], ['2 yr +', 24, 1e4]];
+  const persistCurve = ageDefs.map(([label, lo, hi]) => {
+    const g = aged.filter(p => { const m = monthsAgo(p.firstAdvance); return m != null && m >= lo && m < hi; });
+    const act = g.filter(p => p.status === 'Yes').length;
+    return { label, policies: g.length, persistency: g.length ? round2(act / g.length) : null };
+  });
+  const old13 = aged.filter(p => { const m = monthsAgo(p.firstAdvance); return m != null && m >= 13; });
+  const m13 = old13.length ? round2(old13.filter(p => p.status === 'Yes').length / old13.length) : null;
+  const weakCarriers = retention.by_carrier.filter(c => (c.active + c.lapsed) >= 4 && c.persistency != null)
+    .sort((a, b) => a.persistency - b.persistency).slice(0, 5)
+    .map(c => ({ carrier: c.key, persistency: c.persistency, policies: c.active + c.lapsed, lapsed: c.lapsed, residual: c.residual }));
+  // Predicted chargebacks: advances still inside the ~6-month clawback window, at the agent's
+  // historical chargeback rate — an estimate of money likely to be clawed back from recent sales.
+  const cbRate = chargebacks.total_advances ? Math.abs(chargebacks.total) / chargebacks.total_advances : 0;
+  const latestMs = Date.parse(latestDate + 'T00:00:00Z');
+  let windowAdv = 0;
+  for (const r of records) for (const it of (r.items || [])) if (it.section === 'advances' && r.date) {
+    const days = (latestMs - Date.parse(r.date + 'T00:00:00Z')) / 864e5;
+    if (days >= 0 && days <= 180) windowAdv += it.payable;
+  }
+  windowAdv = round2(windowAdv);
+  const predictedCb = round2(windowAdv * cbRate);
+  // Projection band: base annual pace ± how much the agent's per-period net actually varies.
+  const curYearNet = series.filter(s => s.year === projections.current_year).map(s => s.net).filter(n => isFinite(n));
+  const base = round2(projections.net_annual || 0);
+  let low = base, high = base, spreadFrac = 0;
+  if (curYearNet.length >= 3) {
+    const mean = curYearNet.reduce((a, b) => a + b, 0) / curYearNet.length;
+    const sd = Math.sqrt(curYearNet.reduce((a, b) => a + (b - mean) ** 2, 0) / curYearNet.length);
+    spreadFrac = mean ? Math.min(0.4, Math.max(0.05, sd / Math.abs(mean))) : 0.12;
+    low = round2(base * (1 - spreadFrac)); high = round2(base * (1 + spreadFrac));
+  }
+  // A couple of grounded, actionable prompts tied to these forecasts.
+  const fcSuggest = [];
+  if (m13 != null && m13 < 0.85 && residualAnnual > 0) {
+    const lift = Math.min(0.95, m13 + 0.05);
+    fcSuggest.push({ title: `Lift 13-month persistency from ${Math.round(m13 * 100)}% toward ${Math.round(lift * 100)}%`,
+      body: `Each point of persistency protects recurring residual. Closing this gap could retain roughly ${money0(residualAnnual * (lift - m13))}/yr in renewals — focus retention calls on the carriers below.` });
+  }
+  if (weakCarriers.length && weakCarriers[0].persistency < 0.75) {
+    const w = weakCarriers[0];
+    fcSuggest.push({ title: `${w.carrier} is your weakest book at ${Math.round(w.persistency * 100)}% persistency`,
+      body: `${w.lapsed} of ${w.policies} ${w.carrier} policies have lapsed. A retention touch on this block protects more residual per call than anywhere else.` });
+  }
+  if (predictedCb > 0) {
+    fcSuggest.push({ title: `About ${money0(predictedCb)} of recent advances may be clawed back`,
+      body: `At your historical ${round2(cbRate * 100)}% chargeback rate, that's the expected exposure on the ${money0(windowAdv)} advanced in the last 6 months. Early retention outreach on new policies is the cheapest way to cut it.` });
+  }
+  const forecast = {
+    persistency: { overall: retention.totals.persistency, m13, curve: persistCurve, weak_carriers: weakCarriers },
+    predicted_chargebacks: { next_window: predictedCb, window_advances: windowAdv, rate: round2(cbRate * 100), window_days: 180 },
+    projection_band: { base, low, high, spread_pct: round2(spreadFrac * 100), year: projections.current_year },
+    suggestions: fcSuggest,
+  };
+
   // ---- review inbox: statements that need a human look, and gaps in the cadence --------
   // Per-statement flags are computed on the raw parsed records (before the same-period merge)
   // so a specific bad statement can be pointed at. Gap detection works off the merged pay-period
@@ -1234,7 +1294,7 @@ function buildSummary(allRecords, config) {
     all_years: allYears,
     holders_available: holdersAvailable,
     holder_view: holderView,
-    chargebacks, review,
+    chargebacks, review, forecast,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,
     years, series,
