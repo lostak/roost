@@ -315,6 +315,28 @@ function handleDownlineHierarchy(req, res) {
 }
 
 // ---- goals (annual net-paid target per year) ----
+// Persists the "teach the carrier" map into config.json as carrier_map [{kw,name}].
+function handleCarrierMap(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cfg = loadConfig();
+      const map = Array.isArray(o.carrier_map) ? o.carrier_map
+        .filter(m => m && m.kw && m.name)
+        .map(m => ({ kw: String(m.kw).slice(0, 40), name: String(m.name).slice(0, 60) }))
+        .slice(0, 100) : [];
+      cfg.carrier_map = map;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', carrier_map: map });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 // Persists into config.json as goals { "<year>": { net: <number> } }.
 function handleGoals(req, res) {
   const chunks = []; let size = 0;
@@ -429,6 +451,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/goals' && req.method === 'POST') {
       return handleGoals(req, res);
+    }
+    if (url === '/api/carrier-map' && req.method === 'POST') {
+      return handleCarrierMap(req, res);
     }
     if (url === '/api/expenses' && req.method === 'POST') {
       return handleExpenses(req, res);

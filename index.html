@@ -895,9 +895,14 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3>Possible missing statements</h3>
           <div id="reviewGaps"></div>
         </div>
-        <div class="card chart-card tablecard">
+        <div class="card chart-card tablecard" style="margin-bottom:24px">
           <h3>Statements to look at</h3>
           <div id="reviewList"></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Teach Roost your carriers</h3>
+          <p class="hint">Lines Roost couldn't match to a carrier show up as "Other". Map a keyword to the right carrier and every past and future statement is corrected automatically.</p>
+          <div id="carrierTeach"></div>
         </div>
       </section>
 
@@ -1602,6 +1607,7 @@ function render(){
   renderBonuses();
   renderChargebacks();
   renderReview();
+  renderCarrierTeach();
   renderForecast();
   renderGrow();
   renderCumulative();
@@ -1819,6 +1825,33 @@ function renderGrow(){
     :'<p class="hint">No gaps here — nicely cross-sold.</p>';};
   $('#growDvh').innerHTML=list(cs.dvh,'dental / vision');
   $('#growFe').innerHTML=list(cs.fe,'final-expense');
+}
+function renderCarrierTeach(){
+  const box=$('#carrierTeach'); if(!box)return;
+  const unk=DATA.carriers_unknown||[], map=DATA.carrier_map||[];
+  let html='';
+  if(map.length){ html+='<p style="margin:0 0 8px;font-weight:600">Your mappings</p><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
+    +map.map((m,i)=>`<span class="chip" style="display:inline-flex;align-items:center;gap:6px">${titleize(m.kw)} → ${m.name} <b style="cursor:pointer;color:var(--neg)" onclick="removeCarrierMap(${i})">×</b></span>`).join('')+'</div>'; }
+  if(unk.length){
+    html+=thead(['Unrecognized keyword','Seen on','Lines','$ volume','Map to carrier'])+'<tbody>'
+      +unk.map(u=>`<tr><td style="text-align:left"><b>${u.key}</b></td><td style="text-align:left" class="hint">${titleize(u.sample)}</td><td>${u.count}</td><td>${fmt0(u.dollars)}</td>
+        <td><div style="display:flex;gap:6px"><input class="numbox cmap-name" data-kw="${u.key}" placeholder="Carrier name" style="width:150px;padding:6px 8px"><button class="btn tonal" style="padding:6px 12px" onclick="addCarrierMap('${u.key.replace(/'/g,'')}',this)">Save</button></div></td></tr>`).join('')
+      +'</tbody>';
+    box.innerHTML='<table>'+html+'</table>';
+  } else {
+    box.innerHTML=(map.length?'<table>'+html+'</table>':'')+'<p class="hint">Every line matched a carrier — nothing in the "Other" bucket. Nice and clean.</p>';
+  }
+}
+function addCarrierMap(kw,btn){
+  const inp=btn.parentElement.querySelector('.cmap-name'); const name=(inp.value||'').trim();
+  if(!name)return; const map=[...(DATA.carrier_map||[]),{kw,name}];
+  saveCarrierMap(map);
+}
+function removeCarrierMap(i){ const map=[...(DATA.carrier_map||[])]; map.splice(i,1); saveCarrierMap(map); }
+async function saveCarrierMap(map){
+  try{ await fetch('/api/carrier-map',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({carrier_map:map})});
+    loadData(true);
+  }catch(e){}
 }
 function renderForecast(){
   const f=DATA.forecast; if(!f)return;

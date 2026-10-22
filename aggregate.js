@@ -186,6 +186,24 @@ function buildSummary(allRecords, config) {
   // Work on deep-ish clones so this module never mutates the server's parse cache.
   const cloned = allRecords.map(r => ({ ...r, items: (r.items || []).map(it => ({ ...it })) }));
 
+  // "Teach the carrier": the user can map a keyword to a carrier name for lines that fell to
+  // "Other". Applied here, before anything downstream, so every view uses the corrected carrier.
+  const carrierMap = Array.isArray(config.carrier_map) ? config.carrier_map.filter(m => m && m.kw && m.name) : [];
+  if (carrierMap.length) for (const r of cloned) for (const it of (r.items || [])) if (it.carrier === 'Other') {
+    const hay = `${it.policy || ''} ${it.product || ''} ${it.client || ''}`.toUpperCase();
+    const hit = carrierMap.find(m => hay.includes(String(m.kw).toUpperCase()));
+    if (hit) it.carrier = hit.name;
+  }
+  // Unresolved "Other" lines, grouped so the UI can offer a mapping for each.
+  const otherGroups = {};
+  for (const r of cloned) for (const it of (r.items || [])) if (it.carrier === 'Other' && (it.section === 'advances' || it.section === 'commission' || it.section === 'chargebacks')) {
+    const key = ((String(it.product || it.policy || '').toUpperCase().match(/[A-Z][A-Z0-9&-]{2,}/) || ['OTHER'])[0]);
+    const e = (otherGroups[key] ||= { key, count: 0, dollars: 0, sample: `${it.product || it.policy || ''}`.trim().slice(0, 40) });
+    e.count++; e.dollars += Math.abs(it.payable || 0);
+  }
+  const unknownCarriers = Object.values(otherGroups).map(e => ({ ...e, dollars: round2(e.dollars) }))
+    .sort((a, b) => b.dollars - a.dollars).slice(0, 20);
+
   // Distinct statement holders (name + any LLC) across the whole book — used to offer a
   // "view" selector when an agent runs both a personal and an LLC statement each period.
   const holdersAvailable = [...new Set(cloned.filter(r => r.holder).map(r => r.holder))].sort();
@@ -1341,6 +1359,7 @@ function buildSummary(allRecords, config) {
     holders_available: holdersAvailable,
     holder_view: holderView,
     chargebacks, review, forecast, growth,
+    carriers_unknown: unknownCarriers, carrier_map: carrierMap,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,
     years, series,
