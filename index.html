@@ -336,6 +336,20 @@ h2.section{font-family:'Space Grotesk','Inter',sans-serif;font-weight:600}
 .revrow-s{font-size:13px;color:var(--on-surface-var);margin-top:3px;line-height:1.55}
 .revissues{margin:9px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .revissues li{font-size:13px;color:var(--on-surface-var);line-height:1.5;display:flex;gap:8px;align-items:baseline}
+/* forecast: persistency bars + projection band */
+.fcbars{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.fcbar-row{display:grid;grid-template-columns:64px 1fr 44px auto;align-items:center;gap:10px;font-size:13px}
+.fcbar-lbl{color:var(--on-surface-var);font-weight:500}
+.fcbar-track{height:10px;border-radius:999px;background:color-mix(in srgb,var(--on-surface) 12%,transparent);overflow:hidden}
+.fcbar-fill{height:100%;border-radius:999px;background:var(--grad-brand)}
+.fcbar-val{font-family:'Space Grotesk',sans-serif;font-weight:600;text-align:right}
+.fcbar-n{color:var(--on-surface-var);font-size:12px;white-space:nowrap}
+.fcband-track{position:relative;height:14px;border-radius:999px;background:color-mix(in srgb,var(--on-surface) 10%,transparent);margin:8px 0 6px}
+.fcband-range{position:absolute;inset:0;border-radius:999px;background:linear-gradient(90deg,
+  color-mix(in srgb,var(--accent) 30%,transparent),color-mix(in srgb,var(--accent) 60%,transparent))}
+.fcband-base{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;
+  border:3px solid var(--accent);transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.fcband-scale{display:flex;justify-content:space-between;font-size:12px;color:var(--on-surface-var)}
 /* command palette */
 .cmdk-ov{position:fixed;inset:0;z-index:200;display:none;align-items:flex-start;justify-content:center;
   background:color-mix(in srgb,#000 48%,transparent);backdrop-filter:blur(6px);padding-top:14vh}
@@ -448,6 +462,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <div class="navgroup-header"><span class="lbl">Planning</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
         <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
+        <a data-view="forecast"><span class="ic">&#9673;</span><span class="lbl">Forecast</span></a>
         <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
         <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
         <a data-view="taxes"><span class="ic">&#167;</span><span class="lbl">Taxes</span></a>
@@ -865,6 +880,34 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="card chart-card tablecard">
           <h3>Statements to look at</h3>
           <div id="reviewList"></div>
+        </div>
+      </section>
+
+      <!-- FORECAST -->
+      <section class="view" id="view-forecast">
+        <h2 class="section">Forecast &mdash; where your book is heading</h2>
+        <div class="banner">Forward-looking estimates built from your own history: how well your policies are sticking, how much of your recent business is likely to be clawed back, and where this year's income is trending. These are projections, not guarantees &mdash; use them to decide where to put your next retention call.</div>
+        <div class="kpis" id="fcKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card tablecard">
+            <h3>How your policies stick</h3>
+            <p class="hint">Of the policies at each age, the share still paying residual. A healthy book holds its value as it ages.</p>
+            <div id="fcCurve"></div>
+          </div>
+          <div class="card chart-card">
+            <h3>This year's income range</h3>
+            <p class="hint">Your projected net for the year, with a range reflecting how much your pay varies period to period.</p>
+            <div id="fcBand" style="padding:10px 4px 4px"></div>
+          </div>
+        </div>
+        <div class="card chart-card tablecard" style="margin-bottom:24px">
+          <h3>Books worth a retention call</h3>
+          <p class="hint">Carriers where the most policies have lapsed &mdash; the highest-leverage place to protect residual.</p>
+          <div id="fcWeak"></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>Ways to move the needle</h3>
+          <div id="fcSuggest"></div>
         </div>
       </section>
 
@@ -1501,6 +1544,7 @@ function render(){
   renderBonuses();
   renderChargebacks();
   renderReview();
+  renderForecast();
   renderCumulative();
   renderCarriers();
   renderProducts();
@@ -1703,6 +1747,48 @@ function renderReview(){
       <ul class="revissues">${s.issues.map(i=>`<li>${sev(i.sev)} <span>${i.msg}</span></li>`).join('')}</ul>
     </div></div>`;}).join('')+'</div>'
     :'<p class="hint">Every statement parsed cleanly. Nothing to review.</p>';
+}
+function renderForecast(){
+  const f=DATA.forecast; if(!f)return;
+  const pct=x=>x==null?'—':Math.round(x*100)+'%';
+  const pb=f.projection_band||{}, pc=f.predicted_chargebacks||{}, ps=f.persistency||{};
+  const kp=[
+    {l:'13-month persistency',v:pct(ps.m13),s:'policies still paying after a year',gold:true},
+    {l:'Overall persistency',v:pct(ps.overall),s:'of all policies with a verdict'},
+    {l:'Predicted chargebacks',v:fmt0(pc.next_window||0),s:`expected on recent sales · ~6 mo`,neg:true},
+    {l:'Projected net (year)',v:fmt0(pb.base||0),s:`range ${fmt0(pb.low||0)}–${fmt0(pb.high||0)}`}
+  ];
+  $('#fcKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+    <div class="val${k.neg?' neg':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  // persistency survival curve as labelled bars
+  const curve=(ps.curve||[]).filter(c=>c.policies>0);
+  $('#fcCurve').innerHTML=curve.length?'<div class="fcbars">'+curve.map(c=>{
+    const p=c.persistency==null?0:Math.round(c.persistency*100);
+    return `<div class="fcbar-row"><div class="fcbar-lbl">${c.label}</div>
+      <div class="fcbar-track"><div class="fcbar-fill" style="width:${p}%"></div></div>
+      <div class="fcbar-val">${c.persistency==null?'—':p+'%'}</div>
+      <div class="fcbar-n">${c.policies} ${c.policies===1?'policy':'policies'}</div></div>`;}).join('')+'</div>'
+    :'<p class="hint">Not enough policy history yet to chart persistency by age.</p>';
+  // projection band visual
+  const lo=pb.low||0,hi=pb.high||0,base=pb.base||0,span=(hi-lo)||1;
+  const basePos=Math.max(0,Math.min(100,((base-lo)/span)*100));
+  $('#fcBand').innerHTML=base?`<div class="fcband">
+      <div class="fcband-track"><div class="fcband-range"></div><div class="fcband-base" style="left:${basePos}%"></div></div>
+      <div class="fcband-scale"><span>${fmt0(lo)}</span><span>${fmt0(hi)}</span></div>
+    </div>
+    <div style="text-align:center;margin-top:14px"><div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:600">${fmt0(base)}</div>
+    <div class="hint">most likely · ±${pb.spread_pct||0}% based on your variability</div></div>`
+    :'<p class="hint">Need a few statements this year to project a range.</p>';
+  // weak carriers
+  const wk=ps.weak_carriers||[];
+  $('#fcWeak').innerHTML=wk.length?'<table>'+thead(['Carrier','Persistency','Lapsed','Policies','Residual at stake'])+'<tbody>'
+    +wk.map(w=>`<tr><td style="text-align:left">${w.carrier}</td><td>${pct(w.persistency)}</td><td class="neg">${w.lapsed}</td><td>${w.policies}</td><td>${fmt0(w.residual)}</td></tr>`).join('')
+    +'</tbody></table>':'<p class="hint">No carrier has enough lapses to flag — your book is holding well.</p>';
+  // suggestions
+  const sg=f.suggestions||[];
+  $('#fcSuggest').innerHTML=sg.length?'<div class="revlist">'+sg.map(s=>`<div class="revrow"><div class="revrow-ic">&#9733;</div><div style="flex:1">
+    <div class="revrow-t">${s.title}</div><div class="revrow-s">${s.body}</div></div></div>`).join('')+'</div>'
+    :'<p class="hint">No standout actions right now — your book looks healthy.</p>';
 }
 function renderResidual(){
   if(charts.resid)charts.resid.destroy();
