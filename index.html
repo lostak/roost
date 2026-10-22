@@ -455,6 +455,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <nav class="nav" id="nav">
     <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
     <a data-view="review"><span class="ic">&#9873;</span><span class="lbl">Review</span><span class="navbadge" id="reviewBadge" style="display:none"></span></a>
+    <a data-view="grow"><span class="ic">&#9650;</span><span class="lbl">Grow</span></a>
     <div class="navgroup" data-group="production">
       <div class="navgroup-header"><span class="lbl">Production</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
@@ -897,6 +898,22 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="card chart-card tablecard">
           <h3>Statements to look at</h3>
           <div id="reviewList"></div>
+        </div>
+      </section>
+
+      <!-- GROW -->
+      <section class="view" id="view-grow">
+        <h2 class="section">Grow &mdash; your biggest opportunities</h2>
+        <div class="banner">Concrete, data-grounded ways to grow income and book value, pulled from your own numbers. Start at the top &mdash; these are ordered by leverage, not effort.</div>
+        <div class="card chart-card tablecard" style="margin-bottom:24px">
+          <h3>Ways to move the needle</h3>
+          <div id="growList"></div>
+        </div>
+        <div class="grid2">
+          <div class="card chart-card tablecard"><h3>Cross-sell: dental / vision / hearing</h3>
+            <p class="hint">Medicare clients with no DVH policy &mdash; the easiest add-on sale you have.</p><div id="growDvh"></div></div>
+          <div class="card chart-card tablecard"><h3>Cross-sell: life / final expense</h3>
+            <p class="hint">Health clients with no life or final-expense policy &mdash; a warm, household-rounding conversation.</p><div id="growFe"></div></div>
         </div>
       </section>
 
@@ -1586,6 +1603,7 @@ function render(){
   renderChargebacks();
   renderReview();
   renderForecast();
+  renderGrow();
   renderCumulative();
   renderCarriers();
   renderProducts();
@@ -1788,6 +1806,19 @@ function renderReview(){
       <ul class="revissues">${s.issues.map(i=>`<li>${sev(i.sev)} <span>${i.msg}</span></li>`).join('')}</ul>
     </div></div>`;}).join('')+'</div>'
     :'<p class="hint">Every statement parsed cleanly. Nothing to review.</p>';
+}
+function renderGrow(){
+  const G=DATA.growth; if(!G)return;
+  const sg=G.suggestions||[];
+  $('#growList').innerHTML=sg.length?'<div class="revlist">'+sg.map((s,i)=>`<div class="revrow"><div class="revrow-ic">${i+1}</div><div style="flex:1">
+    <div class="revrow-t"><span class="chip" style="margin-right:8px">${s.area}</span>${s.title}</div><div class="revrow-s">${s.body}</div></div></div>`).join('')+'</div>'
+    :'<p class="hint">No standout plays right now — your book looks healthy across the board.</p>';
+  const cs=G.cross_sell||{};
+  const list=(arr,fam)=>{const names=(arr&&arr.clients)||[];return names.length?`<p style="margin:0 0 10px"><b>${arr.count}</b> client${arr.count===1?'':'s'} &mdash; a potential ${fam} sale each.</p>`
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px">'+names.slice(0,24).map(n=>`<span class="chip">${titleize(n)}</span>`).join('')+(names.length>24?` <span class="chip">+${arr.count-24} more</span>`:'')+'</div>'
+    :'<p class="hint">No gaps here — nicely cross-sold.</p>';};
+  $('#growDvh').innerHTML=list(cs.dvh,'dental / vision');
+  $('#growFe').innerHTML=list(cs.fe,'final-expense');
 }
 function renderForecast(){
   const f=DATA.forecast; if(!f)return;

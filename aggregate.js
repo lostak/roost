@@ -1241,6 +1241,49 @@ function buildSummary(allRecords, config) {
     suggestions: fcSuggest,
   };
 
+  // ---- growth: cross-sell gaps + prioritized, data-grounded ways to grow -----------------
+  // Which product families each client holds (active policies only), to spot coverage gaps.
+  const clientFam = {};
+  for (const p of pols) if (p.status !== 'No' && p.client) (clientFam[p.client] ||= new Set()).add(p.family);
+  const clientList2 = Object.entries(clientFam).map(([client, set]) => ({ client, fams: [...set] }));
+  const isHealth = f => ['Medicare Advantage', 'Med Supp', 'Part D (PDP)', 'Hospital / Supplemental', 'Dental / Vision'].includes(f);
+  const isMedicare = f => ['Medicare Advantage', 'Med Supp', 'Part D (PDP)'].includes(f);
+  const monoline = clientList2.filter(c => c.fams.length === 1);
+  const dvhTargets = clientList2.filter(c => c.fams.some(isMedicare) && !c.fams.includes('Dental / Vision'));
+  const feTargets = clientList2.filter(c => c.fams.some(isHealth) && !c.fams.includes('Life / Final Expense'));
+  const crossSell = {
+    clients_total: clientList2.length,
+    monoline_count: monoline.length,
+    dvh: { count: dvhTargets.length, clients: dvhTargets.slice(0, 50).map(c => c.client) },
+    fe: { count: feTargets.length, clients: feTargets.slice(0, 50).map(c => c.client) },
+    monoline_clients: monoline.slice(0, 50).map(c => ({ client: c.client, has: c.fams[0] })),
+  };
+  // Prioritized growth plays across the whole book — each grounded in a real number.
+  const grow = [];
+  const gy = allYears[allYears.length - 1];
+  const goalNet = (config.goals && config.goals[gy] && Number(config.goals[gy].net)) || 0;
+  if (dvhTargets.length) grow.push({ area: 'Cross-sell', title: `${dvhTargets.length} Medicare clients have no dental / vision`,
+    body: `Dental, vision & hearing is the easiest add-on sale to an existing Medicare client — no new relationship needed. Even a small share converting adds recurring residual with almost no acquisition cost.` });
+  if (feTargets.length) grow.push({ area: 'Cross-sell', title: `${feTargets.length} health clients have no final-expense / life policy`,
+    body: `A small whole-life or final-expense policy rounds out the household and books upfront commission plus trail. These clients already trust you — the conversation is warm.` });
+  if (forecast.persistency.m13 != null && forecast.persistency.m13 < 0.85 && residualAnnual > 0) {
+    const lift = Math.min(0.95, forecast.persistency.m13 + 0.05);
+    grow.push({ area: 'Retention', title: `Lift 13-month persistency to ${Math.round(lift * 100)}% and protect ${money0(residualAnnual * (lift - forecast.persistency.m13))}/yr`,
+      body: `Keeping policies on the books is cheaper than writing new ones. Work the weakest carriers first (see Forecast) and the renewals compound into book value.` });
+  }
+  if (cbRate > 0.03) grow.push({ area: 'Chargebacks', title: `Cut your ${round2(cbRate * 100)}% chargeback rate`,
+    body: `Early lapses clawed back ${money0(Math.abs(chargebacks.total))} so far. A first-90-day check-in call on new policies is the cheapest dollar you'll ever protect.` });
+  if (residualShareNow < 0.5 && residualAnnual > 0) grow.push({ area: 'Residual', title: `Residual is only ${Math.round(residualShareNow * 100)}% of your earnings — build the passive base`,
+    body: `Leaning toward residual-rich lines (Med Supp, MA renewals, annuity trails) grows income that pays even in slow writing months, and it's what lifts your book value.` });
+  if (goalNet > 0) {
+    const ytd = (projections.net_ytd || 0), pace = (projections.net_annual || 0);
+    if (pace < goalNet) grow.push({ area: 'Goal', title: `You're pacing ${money0(pace)} against a ${money0(goalNet)} goal`,
+      body: `About ${money0((goalNet - ytd))} to go this year. Steady weekly writing closes most of the gap — the Goals page breaks down the pace you need.` });
+  }
+  if (value && value.ma_renewal && value.ma_renewal.active_members > 0) grow.push({ area: 'Book value', title: `Protect ${value.ma_renewal.active_members} MA members through AEP for ~${money0(value.ma_renewal.next_year_income)} in renewals`,
+    body: `Re-enrollment income is the cheapest you earn all year — no new writing. Every member kept also lifts the multiple your whole book would sell at.` });
+  const growth = { suggestions: grow, cross_sell: crossSell };
+
   // ---- review inbox: statements that need a human look, and gaps in the cadence --------
   // Per-statement flags are computed on the raw parsed records (before the same-period merge)
   // so a specific bad statement can be pointed at. Gap detection works off the merged pay-period
@@ -1297,7 +1340,7 @@ function buildSummary(allRecords, config) {
     all_years: allYears,
     holders_available: holdersAvailable,
     holder_view: holderView,
-    chargebacks, review, forecast,
+    chargebacks, review, forecast, growth,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,
     years, series,
