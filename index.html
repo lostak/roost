@@ -3469,7 +3469,11 @@ function cmdkCommands(){
     {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'}];
   const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({
     type:'client',label:c.client,ic:'&#9787;',sub:'client',run:()=>{gotoView('clients');if(typeof openClient==='function')openClient(c.client);}}));
-  return views.concat(extra).concat(clients);
+  const carriers=((DATA&&DATA.retention&&DATA.retention.by_carrier)||[]).map(c=>({
+    type:'carrier',label:c.key,ic:'&#9707;',sub:'carrier',run:()=>gotoView('carriers')}));
+  const prods=((DATA&&DATA.products&&DATA.products.by_family)||[]).map(p=>({
+    type:'product',label:p.key,ic:'&#9638;',sub:'product line',run:()=>gotoView('products')}));
+  return views.concat(extra).concat(carriers).concat(prods).concat(clients);
 }
 function openCmdk(){ const ov=$('#cmdkOv'); if(!ov)return; ov.classList.add('open');
   const i=$('#cmdkInput'); i.value=''; cmdkRender(''); setTimeout(()=>i.focus(),20); }
