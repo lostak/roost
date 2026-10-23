@@ -17,6 +17,7 @@ const { extractText } = require('./pdftext.js');
 const { buildXlsx } = require('./xlsxlite.js');
 const { parseStatement } = require('./parser.js');
 const { buildSummary, prepareRecords } = require('./aggregate.js');
+const ai = require('./ai.js');
 const { writeClientFolders } = require('./clients.js');
 
 const HERE = __dirname;
@@ -468,6 +469,25 @@ const server = http.createServer((req, res) => {
       // Not persisted — it's a per-request lens, so a shared config.json stays untouched.
       const cfg = { ...loadConfig(), holder: params.get('holder') || '__all__' };
       return send(res, 200, 'application/json', JSON.stringify(buildSummary(records, cfg)));
+    }
+    // AI insights (optional, local-by-default): rule-based anomalies always; LLM summary/chat only
+    // if a key is set (ANTHROPIC_API_KEY env var or "ai_key" in config.json). The digest is built
+    // server-side from your own statements — nothing leaves the machine unless a key is set.
+    if (url === '/api/ai' && req.method === 'POST') {
+      const chunks = []; let size = 0;
+      req.on('data', c => { size += c.length; if (size > 1e6) req.destroy(); else chunks.push(c); });
+      req.on('error', () => {});
+      req.on('end', async () => {
+        let o = {}; try { o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch {}
+        try {
+          const cfg = loadConfig(); ai.setKey(cfg.ai_key);
+          const summary = buildSummary(loadStatements(), cfg);
+          if (o.mode === 'anomalies') return sendJson(res, 200, { configured: ai.isConfigured(), anomalies: ai.anomalies(summary) });
+          if (o.mode === 'ask') return sendJson(res, 200, await ai.ask(summary, o.question));
+          return sendJson(res, 200, await ai.summary(summary));
+        } catch (e) { return sendJson(res, 200, { configured: ai.isConfigured(), error: String((e && e.message) || e), anomalies: [] }); }
+      });
+      return;
     }
     if (url === '/api/export') {
       const records = loadStatements();

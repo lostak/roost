@@ -368,6 +368,11 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
   background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid var(--glass-brd)}
 .wiresult .big{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;letter-spacing:-.5px}
 .wiresult .delta{font-weight:600}
+/* AI insights */
+.airesp{line-height:1.65;color:var(--on-surface);font-size:14.5px}
+.aibubble{max-width:85%;padding:11px 15px;border-radius:14px;margin-bottom:10px;line-height:1.55;font-size:14px}
+.aibubble.you{margin-left:auto;background:var(--grad-brand);color:#fff;border-bottom-right-radius:4px}
+.aibubble.bot{background:color-mix(in srgb,var(--on-surface) 7%,transparent);border:1px solid var(--glass-brd);color:var(--on-surface);border-bottom-left-radius:4px}
 /* book health score */
 .health-wrap{display:flex;gap:30px;align-items:center;flex-wrap:wrap}
 .health-gauge{flex:none}
@@ -376,6 +381,13 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
 .hc-track{height:8px;border-radius:999px;background:color-mix(in srgb,var(--on-surface) 12%,transparent);overflow:hidden}
 .hc-fill{height:100%;border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .hc-val{font-family:'Space Grotesk',sans-serif;font-weight:600;text-align:right;font-size:13px}
+@media(max-width:640px){
+  #valWhatif .sliders,#valGoal .sliders{grid-template-columns:1fr!important}
+  .hc-row{grid-template-columns:120px 1fr 32px;gap:8px}
+  .fcbar-row{grid-template-columns:54px 1fr 40px;gap:8px}
+  .fcbar-n{display:none}
+  .health-wrap{gap:18px}
+}
 /* since-last-visit banner */
 .visit-banner{display:flex;align-items:center;gap:14px;padding:12px 18px;margin-bottom:20px;border-radius:14px;
   background:var(--grad-brand);color:#fff;box-shadow:0 10px 30px -14px color-mix(in srgb,var(--accent) 70%,transparent);font-size:14px}
@@ -472,6 +484,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
     <a data-view="review"><span class="ic">&#9873;</span><span class="lbl">Review</span><span class="navbadge" id="reviewBadge" style="display:none"></span></a>
     <a data-view="grow"><span class="ic">&#9650;</span><span class="lbl">Grow</span></a>
+    <a data-view="insights"><span class="ic">&#10024;</span><span class="lbl">AI Insights</span></a>
     <div class="navgroup" data-group="production">
       <div class="navgroup-header"><span class="lbl">Production</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
@@ -930,6 +943,30 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3>Teach Roost your carriers</h3>
           <p class="hint">Lines Roost couldn't match to a carrier show up as "Other". Map a keyword to the right carrier and every past and future statement is corrected automatically.</p>
           <div id="carrierTeach"></div>
+        </div>
+      </section>
+
+      <!-- AI INSIGHTS -->
+      <section class="view" id="view-insights">
+        <h2 class="section">AI Insights</h2>
+        <div class="banner">Your book, read back to you in plain English. Anomalies are flagged automatically (no AI needed); the summary and the "ask your book" box use AI to interpret your own numbers. Optional and local by default &mdash; nothing leaves this machine unless you set an API key and ask.</div>
+        <div class="card chart-card tablecard" style="margin-bottom:24px">
+          <h3>Flagged automatically</h3>
+          <div id="aiAnoms"><p class="hint">Loading&hellip;</p></div>
+        </div>
+        <div class="card" style="margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h3 style="margin:0;flex:1">Summary of where you stand</h3>
+            <button class="btn" id="aiSumBtn" onclick="aiSummarize()">&#10024; Summarize my book</button></div>
+          <div id="aiSummary" style="margin-top:14px"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Ask your book anything</h3>
+          <p class="hint">e.g. "Which carrier should I focus retention on?" or "Am I on track for my goal?"</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input id="aiAskInput" class="numbox" style="flex:1;min-width:220px" placeholder="Ask a question about your book&hellip;" onkeydown="if(event.key==='Enter')aiAsk()">
+            <button class="btn" onclick="aiAsk()">Ask</button>
+          </div>
+          <div id="aiChat" style="margin-top:16px"></div>
         </div>
       </section>
 
@@ -3636,6 +3673,46 @@ window.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault();
     const ov=$('#cmdkOv'); if(ov&&ov.classList.contains('open'))closeCmdk(); else openCmdk(); }
 });
+
+/* ---- AI insights ---- */
+function aiText(t){return (t||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))
+  .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[\-\*]\s+(.*)$/gm,'• $1').replace(/\n/g,'<br>');}
+let _aiAnomsLoaded=false;
+function renderAnoms(j){
+  const a=(j&&j.anomalies)||[];
+  $('#aiAnoms').innerHTML=a.length?'<div class="revlist">'+a.map(x=>`<div class="revrow"><div class="revrow-ic ${x.severity==='high'?'bad':''}">${x.severity==='high'?'&#9888;':'&#8505;'}</div><div style="flex:1"><div class="revrow-s" style="font-size:14px;color:var(--on-surface)">${aiText(x.text)}</div></div></div>`).join('')+'</div>'
+    :'<p class="hint">Nothing unusual right now — your book looks steady.</p>';
+}
+async function loadInsights(){
+  if(_aiAnomsLoaded)return; _aiAnomsLoaded=true;
+  try{const r=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'anomalies'})});
+    renderAnoms(await r.json());}catch(e){$('#aiAnoms').innerHTML='<p class="hint">Could not load.</p>';}
+}
+async function aiSummarize(){
+  const btn=$('#aiSumBtn'),out=$('#aiSummary'); if(btn)btn.disabled=true; out.innerHTML='<p class="hint">Thinking…</p>';
+  try{const r=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'summary'})});
+    const j=await r.json();
+    if(j.configured===false)out.innerHTML='<p class="hint">AI summaries aren\'t enabled yet. Set an <code>ANTHROPIC_API_KEY</code> environment variable (or add <code>"ai_key"</code> to config.json) and restart. The anomalies above work without it.</p>';
+    else if(j.error)out.innerHTML='<p class="hint">Could not generate: '+aiText(j.error)+'</p>';
+    else out.innerHTML='<div class="airesp">'+aiText(j.text)+'</div>';
+    if(j.anomalies)renderAnoms(j);
+  }catch(e){out.innerHTML='<p class="hint">Request failed.</p>';}
+  if(btn)btn.disabled=false;
+}
+async function aiAsk(){
+  const inp=$('#aiAskInput'),chat=$('#aiChat'); const q=(inp.value||'').trim(); if(!q)return; inp.value='';
+  chat.insertAdjacentHTML('beforeend',`<div class="aibubble you">${aiText(q)}</div>`);
+  const id='ab'+Date.now(); chat.insertAdjacentHTML('beforeend',`<div class="aibubble bot" id="${id}"><span class="hint">Thinking…</span></div>`);
+  chat.scrollTop=chat.scrollHeight;
+  try{const r=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'ask',question:q})});
+    const j=await r.json(); const el=$('#'+id);
+    if(j.configured===false)el.innerHTML='<span class="hint">AI isn\'t enabled yet (set an ANTHROPIC_API_KEY or add ai_key to config.json).</span>';
+    else if(j.error)el.innerHTML='<span class="hint">'+aiText(j.error)+'</span>';
+    else el.innerHTML=aiText(j.text);
+  }catch(e){const el=$('#'+id); if(el)el.innerHTML='<span class="hint">Request failed.</span>';}
+  chat.scrollTop=chat.scrollHeight;
+}
+(function(){const a=document.querySelector('#nav a[data-view="insights"]'); if(a)a.addEventListener('click',loadInsights);})();
 
 loadData();
 </script>
