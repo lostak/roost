@@ -1385,9 +1385,9 @@ function buildSummary(allRecords, config) {
   const topCarrier = (totRes > 0 && (retention.by_carrier || []).length)
     ? retention.by_carrier.slice().sort((a, b) => (b.residual || 0) - (a.residual || 0))[0].key : null;
   const persistForScore = (forecast.persistency.m13 != null) ? forecast.persistency.m13 : (retention.totals.persistency != null ? retention.totals.persistency : null);
-  const yoy = (projections.growth_yoy != null) ? projections.growth_yoy
-    : (projections.observed && projections.observed.growth != null ? projections.observed.growth
-    : (typeof bookGrowth === 'number' && isFinite(bookGrowth) ? bookGrowth : null));
+  // First FINITE growth figure (guard against NaN, which passes a != null check and renders "NaN%").
+  const yoy = [projections.growth_yoy, projections.observed && projections.observed.growth, bookGrowth]
+    .find(v => typeof v === 'number' && isFinite(v));
   const attention = review.counts.attention;
   // Scores are gradients, not cliffs: a low figure should read "weak" (not a flat 0), and the
   // data-quality penalty is proportional to how many statements you have.
