@@ -272,10 +272,11 @@ body.dark{
   /* brighter text so nothing is lost against the glass + aurora */
   --on-surface:#edf3f2; --on-surface-var:#c6d1d0;
 }
-html{background:var(--surface)}
-body{background:transparent;font-family:'Inter',Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+/* Base surface lives on BODY (which carries the .dark class), so it's theme-aware. The aurora
+   sits just above it (z-index:0) and below the app content (.appbar/.layout are positioned above). */
+body{background:var(--surface);font-family:'Inter',Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 /* living aurora backdrop */
-#aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+#aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 #aurora b{position:absolute;display:block;border-radius:50%;filter:blur(70px);opacity:.42;
   background:radial-gradient(circle at 30% 30%,var(--c1),transparent 70%)}
 body.dark #aurora b{opacity:.20;filter:blur(95px)}

@@ -773,6 +773,19 @@ function buildSummary(allRecords, config) {
   const latestDate = records.reduce((a, r) => (!r.pending && r.date > a ? r.date : a), '0000-00-00');
   const daysAgo = d => d ? Math.round((Date.parse(latestDate + 'T00:00:00Z') - Date.parse(d + 'T00:00:00Z')) / 86400000) : null;
 
+  // Re-enrollment awareness: Medicare Advantage (and Med Supp) members who stay with the agent
+  // but re-enroll each year get a NEW policy number, so the old number reads as lapsed. A lapsed
+  // policy whose client has another policy in the same carrier+family that is still active, or was
+  // written later, is a switch — not a true lapse — so it shouldn't count against persistency.
+  const polsByClientCF = {};
+  for (const p of pols) { const k = (p.client || '') + '|' + p.carrier + '|' + p.family; (polsByClientCF[k] ||= []).push(p); }
+  for (const p of pols) {
+    if (p.status !== 'No') continue;
+    const peers = polsByClientCF[(p.client || '') + '|' + p.carrier + '|' + p.family] || [];
+    p.reenrolled = peers.some(q => q !== p && (q.status === 'Yes' ||
+      (q.firstAdvance && p.firstAdvance && q.firstAdvance > p.firstAdvance)));
+  }
+
   const retGroup = keyFn => {
     const g = {};
     for (const p of pols) {
@@ -780,7 +793,9 @@ function buildSummary(allRecords, config) {
       const e = (g[k] ||= { key: k, policies: 0, active: 0, lapsed: 0, no_residual: 0,
         advances: 0, residual: 0, chargebacks: 0, net: 0, cb_policies: 0 });
       e.policies++; e.advances += p.advances; e.residual += p.residual; e.chargebacks += p.chargebacks; e.net += p.net;
-      if (p.status === 'Yes') e.active++; else if (p.status === 'No') e.lapsed++; else e.no_residual++;
+      // A re-enrolled (superseded) old policy number counts toward neither active nor lapsed.
+      if (p.reenrolled) { /* switch, not a lapse */ }
+      else if (p.status === 'Yes') e.active++; else if (p.status === 'No') e.lapsed++; else e.no_residual++;
       if (p.hasChargeback) e.cb_policies++;
     }
     return Object.values(g).map(e => ({ ...e,
@@ -791,7 +806,7 @@ function buildSummary(allRecords, config) {
   const byCarrierRet = retGroup(p => p.carrier);
   const byFamily = retGroup(p => p.family);
   const active = pols.filter(p => p.status === 'Yes').length;
-  const lapsed = pols.filter(p => p.status === 'No').length;
+  const lapsed = pols.filter(p => p.status === 'No' && !p.reenrolled).length;
   const noRes = pols.filter(p => p.status === 'No Residual').length;
   const clawback = round2(pols.reduce((s, p) => s + Math.min(0, p.chargebacks), 0)); // total money clawed back
   const cbPolicies = pols.filter(p => p.hasChargeback).length;
@@ -1210,7 +1225,7 @@ function buildSummary(allRecords, config) {
   // ---- forward-looking forecast: persistency, predicted chargebacks, projection band ----
   // Everything here is an estimate from the agent's own history — labelled as such in the UI.
   const monthsAgo = d => { const g = daysAgo(d); return g == null ? null : g / 30.44; };
-  const aged = pols.filter(p => p.firstAdvance && (p.status === 'Yes' || p.status === 'No'));
+  const aged = pols.filter(p => p.firstAdvance && !p.reenrolled && (p.status === 'Yes' || p.status === 'No'));
   // Survival curve: of policies now at each age, how many are still paying.
   const ageDefs = [['0–3 mo', 0, 3], ['3–6 mo', 3, 6], ['6–12 mo', 6, 12], ['1–2 yr', 12, 24], ['2 yr +', 24, 1e4]];
   const persistCurve = ageDefs.map(([label, lo, hi]) => {
