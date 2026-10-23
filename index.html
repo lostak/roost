@@ -367,6 +367,14 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
   background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid var(--glass-brd)}
 .wiresult .big{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;letter-spacing:-.5px}
 .wiresult .delta{font-weight:600}
+/* book health score */
+.health-wrap{display:flex;gap:30px;align-items:center;flex-wrap:wrap}
+.health-gauge{flex:none}
+.hc-row{display:grid;grid-template-columns:160px 1fr 38px;align-items:center;gap:10px;margin-bottom:9px}
+.hc-lbl{color:var(--on-surface-var);font-weight:500;font-size:13px}
+.hc-track{height:8px;border-radius:999px;background:color-mix(in srgb,var(--on-surface) 12%,transparent);overflow:hidden}
+.hc-fill{height:100%;border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.hc-val{font-family:'Space Grotesk',sans-serif;font-weight:600;text-align:right;font-size:13px}
 /* since-last-visit banner */
 .visit-banner{display:flex;align-items:center;gap:14px;padding:12px 18px;margin-bottom:20px;border-radius:14px;
   background:var(--grad-brand);color:#fff;box-shadow:0 10px 30px -14px color-mix(in srgb,var(--accent) 70%,transparent);font-size:14px}
@@ -540,6 +548,16 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="card" id="digestCard" style="margin-bottom:24px;border-left:4px solid var(--primary)">
           <h3 style="margin:0 0 6px">&#128203; This week</h3>
           <div id="digest" class="hint" style="font-size:14px;line-height:1.7"></div>
+        </div>
+        <div class="card" id="healthCard" style="margin-bottom:24px">
+          <div class="health-wrap">
+            <div class="health-gauge" id="healthGauge"></div>
+            <div style="flex:1;min-width:250px">
+              <h3 style="margin:0 0 4px">Book health score</h3>
+              <p class="hint" id="healthLede" style="margin:0 0 14px"></p>
+              <div id="healthComps"></div>
+            </div>
+          </div>
         </div>
         <div class="kpis" id="kpis"></div>
         <div class="card chart-card">
@@ -1608,6 +1626,7 @@ function render(){
   if(empty)return;
   syncGrainSegs();
   renderDigest();
+  renderHealth();
   renderKpis();
   renderOverviewTrend();
   renderLifetime();
@@ -1837,6 +1856,28 @@ function renderGrow(){
   $('#growFe').innerHTML=list(cs.fe,'final-expense');
 }
 let _visitCur=null;
+function renderHealth(){
+  const H=DATA.health, card=$('#healthCard'); if(!card)return;
+  if(!H||H.score==null){card.style.display='none';return;} card.style.display='';
+  const sc=H.score;
+  const col=sc>=85?'#2e9e6b':sc>=70?'#3aa0d0':sc>=55?'#c0872f':'#d4694a';
+  const r=56,c=2*Math.PI*r,off=c*(1-sc/100);
+  $('#healthGauge').innerHTML=`<svg width="150" height="150" viewBox="0 0 150 150">
+    <circle cx="75" cy="75" r="${r}" fill="none" stroke="rgba(130,140,140,.22)" stroke-width="12"/>
+    <circle cx="75" cy="75" r="${r}" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 75 75)"/>
+    <text x="75" y="72" text-anchor="middle" style="fill:var(--on-surface)" font-family="Space Grotesk,sans-serif" font-size="36" font-weight="700">${sc}</text>
+    <text x="75" y="96" text-anchor="middle" style="fill:var(--on-surface-var)" font-size="13">Grade ${H.grade}</text>
+  </svg>`;
+  const lever=(H.components||[]).find(x=>x.key===H.top_lever);
+  $('#healthLede').innerHTML=`A blended measure of what makes a book valuable: persistency, chargeback control, residual mix, carrier diversification, growth and data quality. `
+    +(lever?`Your biggest lever right now is <b>${lever.label.toLowerCase()}</b> — ${lever.detail}`:`You're strong across the board — protect it through AEP.`);
+  const sfill=s=>s>=75?'#2e9e6b':s>=50?'#c0872f':'#d4694a';
+  $('#healthComps').innerHTML=(H.components||[]).map(x=>{const s=x.score;
+    return `<div class="hc-row" title="${(x.detail||'').replace(/"/g,'&quot;')}"><div class="hc-lbl">${x.label}</div>
+      <div class="hc-track"><div class="hc-fill" style="width:${s==null?0:s}%;background:${s==null?'transparent':sfill(s)}"></div></div>
+      <div class="hc-val">${s==null?'—':s}</div></div>`;}).join('');
+}
 function renderVisitBanner(){
   const el=$('#visitBanner'); if(!el||!DATA)return;
   let prev=null; try{prev=JSON.parse(localStorage.getItem('roost.lastVisit')||'null');}catch(e){}
