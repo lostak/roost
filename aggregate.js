@@ -1371,27 +1371,31 @@ function buildSummary(allRecords, config) {
     ? retention.by_carrier.slice().sort((a, b) => (b.residual || 0) - (a.residual || 0))[0].key : null;
   const persistForScore = (forecast.persistency.m13 != null) ? forecast.persistency.m13 : (retention.totals.persistency != null ? retention.totals.persistency : null);
   const yoy = (projections.growth_yoy != null) ? projections.growth_yoy
-    : (projections.observed && projections.observed.growth != null ? projections.observed.growth : null);
+    : (projections.observed && projections.observed.growth != null ? projections.observed.growth
+    : (typeof bookGrowth === 'number' && isFinite(bookGrowth) ? bookGrowth : null));
   const attention = review.counts.attention;
+  // Scores are gradients, not cliffs: a low figure should read "weak" (not a flat 0), and the
+  // data-quality penalty is proportional to how many statements you have.
+  const dataPenalty = Math.min(100, (attention / Math.max(records.length, 1)) * 220);
   const comps = [
     { key: 'persistency', label: 'Persistency', weight: 0.30,
-      score: persistForScore == null ? null : clampS((persistForScore - 0.5) / 0.45 * 100),
-      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value.` },
+      score: persistForScore == null ? null : clampS((persistForScore - 0.35) / 0.55 * 100),
+      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value. (Medicare Advantage members who re-enroll each year under a new policy number can read as lapsed, so this can understate a healthy book.)` },
     { key: 'chargebacks', label: 'Chargeback control', weight: 0.20,
-      score: clampS((0.08 - cbRate) / 0.08 * 100),
-      detail: `${round2(cbRate * 100)}% of advances get clawed back. Under ~3% is healthy.` },
+      score: clampS((0.15 - cbRate) / 0.15 * 100),
+      detail: `${round2(cbRate * 100)}% of advances get clawed back. Under ~3% is healthy, ~8%+ is worth attention.` },
     { key: 'residual', label: 'Residual stability', weight: 0.15,
-      score: clampS(residualShareNow / 0.6 * 100),
+      score: clampS(residualShareNow / 0.55 * 100),
       detail: `${Math.round(residualShareNow * 100)}% of your earnings are recurring residual — income that pays without new writing.` },
     { key: 'diversification', label: 'Carrier diversification', weight: 0.15,
       score: totRes > 0 ? clampS((0.6 - topShare) / 0.4 * 100) : null,
       detail: totRes > 0 ? `Your top carrier${topCarrier ? ` (${topCarrier})` : ''} is ${Math.round(topShare * 100)}% of residual. Spreading it lowers risk and lifts the sale multiple.` : 'Not enough residual yet to assess.' },
     { key: 'growth', label: 'Growth', weight: 0.10,
-      score: yoy == null ? null : clampS((yoy + 0.1) / 0.4 * 100),
+      score: yoy == null ? null : clampS((yoy + 0.15) / 0.45 * 100),
       detail: yoy == null ? 'Need a prior year to measure growth.' : `Net income is ${yoy >= 0 ? 'up' : 'down'} ${Math.round(Math.abs(yoy) * 100)}% year over year.` },
     { key: 'data', label: 'Data completeness', weight: 0.10,
-      score: clampS(attention === 0 ? 100 : 100 - attention * 15),
-      detail: attention === 0 ? 'Every statement parsed cleanly, no gaps.' : `${attention} item${attention === 1 ? '' : 's'} on the Review page — clearing them sharpens every number.` },
+      score: clampS(100 - dataPenalty),
+      detail: attention === 0 ? 'Every statement parsed cleanly, no gaps.' : `${attention} item${attention === 1 ? '' : 's'} on the Review page out of ${records.length} statements — clearing them sharpens every number.` },
   ];
   const scored = comps.filter(c => c.score != null);
   const totalW = scored.reduce((s, c) => s + c.weight, 0) || 1;
