@@ -213,13 +213,21 @@ function buildSummary(allRecords, config) {
     ? config.holder : '__all__';
   const keep = r => holderView === '__all__' || r.holder === holderView;
 
-  const records = mergeByPeriod(cloned.filter(r => !r.pending && keep(r)));
+  // Merge same-period statements, then keep undated records OUT of the time-based rollups below
+  // (a statement whose date couldn't be read can't be placed on a timeline). They're still caught
+  // by the Review page's "no date" flag, so the user can fix them.
+  const mergedRecs = mergeByPeriod(cloned.filter(r => !r.pending && keep(r)));
+  const records = mergedRecs.filter(r => r.date);
+  const undatedRecs = mergedRecs.filter(r => !r.date);
   const pendingRecs = cloned.filter(r => r.pending && keep(r));
   const reclass = reclassifyMA(records, config.ma_reclass);
   const bonusInfo = classifyBonuses(records);
 
   const byYear = {};
-  for (const r of records) (byYear[r.year] ||= []).push(r);
+  // Only records with a real year go into the per-year rollups; an undated/yearless record
+  // (e.g. a statement whose date couldn't be read) would otherwise create a NaN year bucket
+  // and crash the rollup below.
+  for (const r of records) if (r.year != null && isFinite(r.year)) (byYear[r.year] ||= []).push(r);
   const allYears = Object.keys(byYear).map(Number).sort((a, b) => a - b);
 
   // ---- bonuses & overrides (separated out of residual) ----
@@ -1353,12 +1361,53 @@ function buildSummary(allRecords, config) {
     },
   };
 
+  // ---- book health score: one glanceable 0–100 from the drivers that make a book valuable ----
+  const clampS = n => isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
+  const carrRes = (retention.by_carrier || []).map(c => Math.max(0, c.residual || 0));
+  const totRes = carrRes.reduce((a, b) => a + b, 0);
+  const shares = totRes > 0 ? carrRes.map(r => r / totRes) : [];
+  const topShare = shares.length ? Math.max(...shares) : 0;
+  const topCarrier = (totRes > 0 && (retention.by_carrier || []).length)
+    ? retention.by_carrier.slice().sort((a, b) => (b.residual || 0) - (a.residual || 0))[0].key : null;
+  const persistForScore = (forecast.persistency.m13 != null) ? forecast.persistency.m13 : (retention.totals.persistency != null ? retention.totals.persistency : null);
+  const yoy = (projections.growth_yoy != null) ? projections.growth_yoy
+    : (projections.observed && projections.observed.growth != null ? projections.observed.growth : null);
+  const attention = review.counts.attention;
+  const comps = [
+    { key: 'persistency', label: 'Persistency', weight: 0.30,
+      score: persistForScore == null ? null : clampS((persistForScore - 0.5) / 0.45 * 100),
+      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value.` },
+    { key: 'chargebacks', label: 'Chargeback control', weight: 0.20,
+      score: clampS((0.08 - cbRate) / 0.08 * 100),
+      detail: `${round2(cbRate * 100)}% of advances get clawed back. Under ~3% is healthy.` },
+    { key: 'residual', label: 'Residual stability', weight: 0.15,
+      score: clampS(residualShareNow / 0.6 * 100),
+      detail: `${Math.round(residualShareNow * 100)}% of your earnings are recurring residual — income that pays without new writing.` },
+    { key: 'diversification', label: 'Carrier diversification', weight: 0.15,
+      score: totRes > 0 ? clampS((0.6 - topShare) / 0.4 * 100) : null,
+      detail: totRes > 0 ? `Your top carrier${topCarrier ? ` (${topCarrier})` : ''} is ${Math.round(topShare * 100)}% of residual. Spreading it lowers risk and lifts the sale multiple.` : 'Not enough residual yet to assess.' },
+    { key: 'growth', label: 'Growth', weight: 0.10,
+      score: yoy == null ? null : clampS((yoy + 0.1) / 0.4 * 100),
+      detail: yoy == null ? 'Need a prior year to measure growth.' : `Net income is ${yoy >= 0 ? 'up' : 'down'} ${Math.round(Math.abs(yoy) * 100)}% year over year.` },
+    { key: 'data', label: 'Data completeness', weight: 0.10,
+      score: clampS(attention === 0 ? 100 : 100 - attention * 15),
+      detail: attention === 0 ? 'Every statement parsed cleanly, no gaps.' : `${attention} item${attention === 1 ? '' : 's'} on the Review page — clearing them sharpens every number.` },
+  ];
+  const scored = comps.filter(c => c.score != null);
+  const totalW = scored.reduce((s, c) => s + c.weight, 0) || 1;
+  const score = Math.round(scored.reduce((s, c) => s + c.score * c.weight, 0) / totalW);
+  const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F';
+  comps.forEach(c => { c.status = c.score == null ? 'na' : c.score >= 75 ? 'good' : c.score >= 50 ? 'ok' : 'weak'; });
+  const lever = scored.filter(c => c.score < 75).sort((a, b) => (a.score * a.weight) - (b.score * b.weight))[0] || null;
+  const health = { score, grade, components: comps, concentration: { top_carrier: topCarrier, top_share: round2(topShare) },
+    top_lever: lever ? lever.key : null };
+
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
     holders_available: holdersAvailable,
     holder_view: holderView,
-    chargebacks, review, forecast, growth,
+    chargebacks, review, forecast, growth, health,
     carriers_unknown: unknownCarriers, carrier_map: carrierMap,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,
