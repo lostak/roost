@@ -1370,16 +1370,30 @@ function buildSummary(allRecords, config) {
   const gapsDays = [];
   for (let i = 1; i < dates.length; i++) gapsDays.push((Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5);
   const cadence = median(gapsDays);
+  // Gaps the user has marked "not missing" (e.g. a week with no statement issued) are remembered
+  // in config so they stop being flagged and stop dragging the data-quality score.
+  const dismissed = new Set((Array.isArray(config.dismissed_gaps) ? config.dismissed_gaps : []).map(String));
   const gaps = [];
   if (dates.length >= 4 && cadence > 0 && cadence <= 45) {
+    const stepMs = Math.round(cadence) * 864e5;
     for (let i = 1; i < dates.length; i++) {
       const g = (Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5;
-      if (g > cadence * 1.7) gaps.push({ after: dates[i - 1], before: dates[i], days: Math.round(g), missing_est: Math.max(1, Math.round(g / cadence) - 1) });
+      if (g <= cadence * 1.7) continue;
+      const key = dates[i - 1] + '|' + dates[i];
+      if (dismissed.has(key)) continue;
+      // the specific dates that would fall at your cadence inside the gap — what to go look for
+      const expected = [];
+      const start = Date.parse(dates[i - 1] + 'T00:00:00Z'), end = Date.parse(dates[i] + 'T00:00:00Z');
+      for (let t = start + stepMs; t < end - stepMs * 0.4 && expected.length < 24; t += stepMs)
+        expected.push(new Date(t).toISOString().slice(0, 10));
+      gaps.push({ after: dates[i - 1], before: dates[i], days: Math.round(g),
+        missing_est: Math.max(1, expected.length || Math.round(g / cadence) - 1), key, expected });
     }
   }
   const review = {
     cadence_days: cadence ? Math.round(cadence) : null,
     gaps,
+    dismissed_gaps: [...dismissed],
     statements: reviewItems.sort((a, b) => ((a.date || '') < (b.date || '') ? 1 : -1)),
     counts: {
       flagged: reviewItems.length,

@@ -336,6 +336,31 @@ function handleAiKey(req, res) {
   });
 }
 
+// Marks a cadence gap as "not missing" (or restores it) in config.dismissed_gaps ["after|before"].
+function handleDismissGap(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e5) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cfg = loadConfig();
+      let list = Array.isArray(cfg.dismissed_gaps) ? cfg.dismissed_gaps.map(String) : [];
+      const a = String(o.after || ''), b = String(o.before || '');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(a) && /^\d{4}-\d{2}-\d{2}$/.test(b)) {
+        const key = a + '|' + b;
+        if (o.undismiss) list = list.filter(k => k !== key);
+        else if (!list.includes(key)) list.push(key);
+      }
+      cfg.dismissed_gaps = list.slice(0, 1000);
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', dismissed_gaps: cfg.dismissed_gaps });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 // Persists the "teach the carrier" map into config.json as carrier_map [{kw,name}].
 function handleCarrierMap(req, res) {
   const chunks = []; let size = 0;
@@ -475,6 +500,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/carrier-map' && req.method === 'POST') {
       return handleCarrierMap(req, res);
+    }
+    if (url === '/api/dismiss-gap' && req.method === 'POST') {
+      return handleDismissGap(req, res);
     }
     if (url === '/api/ai-key' && req.method === 'POST') {
       return handleAiKey(req, res);

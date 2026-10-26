@@ -1902,13 +1902,21 @@ function renderReview(){
   ];
   $('#reviewKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
-  const gaps=rv.gaps||[], cad=rv.cadence_days;
-  $('#reviewGaps').innerHTML=gaps.length?'<div class="revlist">'+gaps.map(g=>{const n=g.missing_est;
+  const gaps=rv.gaps||[], cad=rv.cadence_days, dism=rv.dismissed_gaps||[];
+  const gapsHtml=gaps.length?'<div class="revlist">'+gaps.map(g=>{const n=g.missing_est;
+    const chips=(g.expected||[]).map(d=>`<span class="chip">${fmtDate(d)}</span>`).join(' ');
     return `<div class="revrow"><div class="revrow-ic">&#9888;</div><div style="flex:1">
       <div class="revrow-t">About ${n} statement${n===1?'':'s'} may be missing between ${fmtDate(g.after)} and ${fmtDate(g.before)}.</div>
-      <div class="revrow-s">That's a ${g.days}-day gap${cad?`, while your pay periods usually run about every ${cad} days`:''}. If you have those statements, add them and hit Refresh.</div>
+      <div class="revrow-s">That's a ${g.days}-day gap${cad?`, while your pay periods usually run about every ${cad} days`:''}.${chips?' The pay periods that would fall in the gap:':''}</div>
+      ${chips?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0">${chips}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">
+        <button class="btn tonal" style="padding:7px 14px" onclick="openUpload()"><span>&#8613;</span> Add these statements</button>
+        <button class="btn ghost" style="padding:7px 14px" onclick="dismissGap('${g.after}','${g.before}')" title="Mark this gap as expected — no statement was issued">Not missing</button>
+      </div>
     </div></div>`;}).join('')+'</div>'
     :'<p class="hint">No gaps detected — your pay periods look continuous.</p>';
+  const dismHtml=dism.length?`<p class="hint" style="margin-top:16px">Marked as not missing: ${dism.map(k=>{const p=String(k).split('|');return `<span class="chip" style="cursor:pointer" title="Restore this gap" onclick="restoreGap('${p[0]}','${p[1]}')">${fmtDate(p[0])} &rarr; ${fmtDate(p[1])} &times;</span>`;}).join(' ')}</p>`:'';
+  $('#reviewGaps').innerHTML=gapsHtml+dismHtml;
   const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">High priority</span>':'<span class="chip">Worth a look</span>';
   const list=rv.statements||[];
   $('#reviewList').innerHTML=list.length?'<div class="revlist">'+list.map(s=>{const hi=s.issues.some(i=>i.sev==='high');
@@ -2025,6 +2033,12 @@ async function saveCarrierMap(map){
   try{ await fetch('/api/carrier-map',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({carrier_map:map})});
     loadData(true);
   }catch(e){}
+}
+async function dismissGap(after,before){
+  try{ await fetch('/api/dismiss-gap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({after,before})}); loadData(true); }catch(e){}
+}
+async function restoreGap(after,before){
+  try{ await fetch('/api/dismiss-gap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({after,before,undismiss:true})}); loadData(true); }catch(e){}
 }
 function renderForecast(){
   const f=DATA.forecast; if(!f)return;
