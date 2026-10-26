@@ -186,8 +186,7 @@ function dateFromFilename(fname){
 }
 const iso = d => d.toISOString().slice(0, 10);
 
-function parseStatement(text, fname){
-  const data = parseText(text);
+function finalizeRecord(data, fname){
   const h = data.header;
   // Prefer the date printed ON the statement (the pay-period date). The file can be named
   // anything; only fall back to a date encoded in the filename if the statement itself has
@@ -217,4 +216,118 @@ function parseStatement(text, fname){
   };
 }
 
-module.exports = { parseText, parseStatement, dateFromFilename, detectCarrier, round2 };
+function parseStatement(text, fname){
+  return finalizeRecord(parseText(text), fname);
+}
+
+// =================================================================
+// 2026 statement format (column-aware). The newer ASB layout wraps the
+// Product and Writing-Agent columns onto extra text lines and splits long
+// client names, so a single logical row is scattered across several y-lines.
+// We reassemble each row from the glyph runs by bucketing them into columns
+// by x-position, which recovers client / product / agent cleanly. Detected via
+// the "Payable Comm  Writing Agent" column header or the split "Advances &"
+// section title, neither of which appears in the prior single-line format.
+// =================================================================
+function isNewFormat(text){
+  return /Payable Comm\s+Writing Agent/.test(text) || /(^|\n)\s*Advances &\s*(\n|$)/.test(text);
+}
+
+// Column x-ranges (points). The ASB grid is fixed: policy ~22, client ~97,
+// product ~172, the numeric band (dates/mode/premium/comm%/payable) 247-660,
+// writing agent ~698+.
+const NF_COLS = [['policy',0,60],['client',60,168],['product',168,246],['core',246,690],['agent',690,1e9]];
+const nfCol = x => { for (const [k,a,b] of NF_COLS) if (x>=a && x<b) return k; return 'core'; };
+const nfNorm = s => s.replace(/\s+/g,'').toUpperCase();
+
+// Gap-aware join of a column's runs into text (handles wrapped sub-lines and
+// the font's irregular intra-word advances).
+function nfCellText(runs){
+  runs = runs.slice().sort((a,b)=> b.y-a.y || a.x-b.x);
+  let s='', px=null, py=null;
+  for (const p of runs){
+    if (px!=null){
+      if (Math.abs(p.y-py) > 3){ if (!s.endsWith(' ')) s += ' '; }
+      else if (p.x-px > (p.size||10)*0.7 && !s.endsWith(' ') && !p.t.startsWith(' ')) s += ' ';
+    }
+    s += p.t; px = p.x + p.t.length*(p.size||10)*0.4; py = p.y;
+  }
+  return s.replace(/\s+/g,' ').trim();
+}
+function nfPhysLines(runs){
+  const m={}; for (const r of runs){ const k=Math.round(r.y); (m[k]||(m[k]=[])).push(r); }
+  return Object.keys(m).map(Number).sort((a,b)=>b-a).map(y=>({ y, text: nfCellText(m[y]) }));
+}
+function nfSection(text){
+  const n = nfNorm(text);
+  if (n.startsWith('YTD')) return null;
+  if (n.includes('ADVANCES&') || n.includes('INITIALANNUITY')) return 'advances';
+  if (n.startsWith('COMMISSION') && n.includes('YEARTODATE')) return 'commission';
+  if (n.includes('CHARGEBACK') || (n.includes('EXPENSE') && n.includes('ADJUSTMENT'))) return 'chargebacks';
+  return null;
+}
+const NF_ANCHOR = /\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+[A-Z]\b/;
+
+function makeItemNew(section, cells){
+  const policy = nfCellText(cells.policy);
+  const client = nfCellText(cells.client);
+  const product = nfCellText(cells.product);
+  const core = nfCellText(cells.core);
+  const agentTxt = nfCellText(cells.agent);
+  const cur = [...core.matchAll(CURRENCY_G)].map(m => m[1]);
+  const premium = money(cur[0]);
+  const payable = money(cur[cur.length-1]);
+  const pm = core.match(MIDPCT_RE);
+  const comm_pct = pm ? parseFloat(pm[1]) : null;
+  const carrier = detectCarrier(policy + ' ' + client + ' ' + product);
+  return { section, policy, client, product, carrier, premium, comm_pct, payable, agents: extractAgents(agentTxt) };
+}
+
+function parseTextStructured(pages, text){
+  if (text.includes('Pending Commission Statement')){
+    // Pending statements carry a handful of rows; reuse the line-based pending
+    // parser on the flattened text (the extra columns don't affect its totals).
+    return parsePending(text);
+  }
+  const header = parseHeader(text);
+  const items = [];
+  const totals = { advances: 0, commission: 0, chargebacks: 0 };
+  let section = null;
+  for (const runs of pages){
+    const pls = nfPhysLines(runs);
+    const anchorYs = pls.filter(L => NF_ANCHOR.test(L.text)).map(L => L.y);
+    if (!anchorYs.length){
+      // still track section changes on a page with no rows (rare)
+      for (const L of pls){ const s = nfSection(L.text); if (s) section = s; }
+      continue;
+    }
+    // bucket every run on the page to the nearest anchor row (within 13pt)
+    const bucket = {};
+    for (const r of runs){
+      let best=null, bd=13;
+      for (const ay of anchorYs){ const d=Math.abs(r.y-ay); if (d<bd){ bd=d; best=ay; } }
+      if (best!=null) (bucket[best]||(bucket[best]=[])).push(r);
+    }
+    for (const L of pls){
+      const s = nfSection(L.text); if (s) section = s;
+      if (anchorYs.includes(L.y) && section){
+        const cells = { policy:[], client:[], product:[], core:[], agent:[] };
+        for (const r of (bucket[L.y]||[])) cells[nfCol(r.x)].push(r);
+        const it = makeItemNew(section, cells);
+        if (!isFinite(it.premium) && !isFinite(it.payable)) continue;
+        totals[section] += (it.payable || 0);
+        items.push(it);
+      }
+    }
+  }
+  const st = { advances: round2(totals.advances), commission: round2(totals.commission),
+               chargebacks: round2(totals.chargebacks), pending: 0 };
+  return { pending: false, header, items, sectionTotals: st };
+}
+
+function parseStatementNew(pages, text, fname){
+  return finalizeRecord(parseTextStructured(pages, text), fname);
+}
+
+module.exports = { parseText, parseStatement, parseStatementNew, isNewFormat,
+                   dateFromFilename, detectCarrier, round2 };

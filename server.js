@@ -13,10 +13,18 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const { extractText } = require('./pdftext.js');
+const { extractText, extractPages } = require('./pdftext.js');
 const { buildXlsx } = require('./xlsxlite.js');
-const { parseStatement } = require('./parser.js');
+const { parseStatement, parseStatementNew, isNewFormat } = require('./parser.js');
 const { buildSummary, prepareRecords } = require('./aggregate.js');
+
+// Parse a statement PDF buffer, auto-selecting the line-based parser (prior
+// format) or the column-aware parser (2026 ASB format).
+function parsePdfBuffer(buf, fname){
+  const text = extractText(buf);
+  return isNewFormat(text) ? parseStatementNew(extractPages(buf), text, fname)
+                           : parseStatement(text, fname);
+}
 const ai = require('./ai.js');
 const { writeClientFolders } = require('./clients.js');
 
@@ -28,7 +36,7 @@ const CLIENTS_DIR = path.join(ROOT, 'Clients'); // ../Commissions/Clients
 const PORT = process.env.PORT || 5000;
 // Bump when parser.js output shape changes so cached records are re-parsed.
 // (v5: expanded carrier detection.)
-const PARSE_VERSION = 6;
+const PARSE_VERSION = 7;
 
 // ---- user configuration (downline roster, MA thresholds) ----
 function loadConfig() {
@@ -96,8 +104,7 @@ function loadStatements() {
         rec = cached.rec;
       } else {
         try {
-          const text = extractText(fs.readFileSync(full));
-          rec = parseStatement(text, f);
+          rec = parsePdfBuffer(fs.readFileSync(full), f);
         } catch (e) {
           rec = { file: f, error: String((e && e.message) || e) };
         }
@@ -272,7 +279,7 @@ function handleUpload(req, res) {
         return sendJson(res, 400, { status: 'error', name: origName, message: 'Not a PDF file' });
 
       let rec = null;
-      try { rec = parseStatement(extractText(buf), origName); } catch {}
+      try { rec = parsePdfBuffer(buf, origName); } catch {}
       if (!rec || !rec.date)
         return sendJson(res, 422, { status: 'error', name: origName,
           message: 'Could not read a statement date from this PDF. Make sure it’s a commission statement.' });

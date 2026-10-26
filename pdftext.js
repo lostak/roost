@@ -133,7 +133,12 @@ function runsToLines(runs, spaceFactor) {
         const gap = p.x - prevX;
         if (gap > (p.size||10) * spaceFactor && !line.endsWith(' ') && !p.t.startsWith(' ')) line += ' ';
       }
-      line += p.t; prevX = p.x;
+      // Advance prevX past the END of this run (start + estimated rendered width),
+      // not just its start. Measuring gaps start-to-start inflates the gap after any
+      // multi-glyph run and injects spurious spaces mid-word/mid-number (seen in the
+      // 2026 statement format, e.g. "EMIL Y", "$147.1 1"). 0.40em/char is tuned so the
+      // prior statement format parses byte-identically across the full corpus.
+      line += p.t; prevX = p.x + p.t.length * (p.size||10) * 0.40;
     }
     lines.push(line.replace(/\s+$/,''));
   }
@@ -142,8 +147,8 @@ function runsToLines(runs, spaceFactor) {
 
 
 // ---- high-level driver ----
-function _extractText(buf, spaceFactor){
-  spaceFactor = spaceFactor==null?0.55:spaceFactor;
+// Shared stage: parse fonts + content streams into per-page glyph runs {x,y,size,t}.
+function _pageRuns(buf){
   const { s, objs } = parseObjects(buf);
   const getBody=ref=>{const o=objs[ref+"_0"];if(!o)return null;const e=s.indexOf("endobj",o.bodyStart);return s.slice(o.bodyStart,e<0?undefined:e);};
   const getStreamRaw=ref=>{const o=objs[ref+"_0"];if(!o)return null;return getStream(s,buf,o.bodyStart);};
@@ -160,14 +165,25 @@ function _extractText(buf, spaceFactor){
   }
   const contentRe=/\/Contents\s+(\d+)\s+0\s+R|\/Contents\s*\[\s*([\d\sR]+)\]/g; let cm; const pages=[];
   while((cm=contentRe.exec(s))){ if(cm[1]) pages.push([cm[1]]); else pages.push([...cm[2].matchAll(/(\d+)\s+0\s+R/g)].map(x=>x[1])); }
-  const out=[];
+  const pageRuns=[];
   for(const refs of pages){
     let content="";
     for(const r of refs){ const st=getStreamRaw(r); if(st){ const d=inflate(st.raw); if(d) content+=d.toString("latin1")+String.fromCharCode(10); } }
     if(!content) continue;
-    const runs=extractRuns(content,resFonts);
-    out.push(...runsToLines(runs,spaceFactor));
+    pageRuns.push(extractRuns(content,resFonts));
   }
+  return pageRuns;
+}
+
+function _extractText(buf, spaceFactor){
+  spaceFactor = spaceFactor==null?0.7:spaceFactor;
+  const out=[];
+  for(const runs of _pageRuns(buf)) out.push(...runsToLines(runs,spaceFactor));
   return out.join(String.fromCharCode(10));
 }
-module.exports = { extractText: _extractText };
+
+// Structured view used by the column-aware parser for the 2026 statement format:
+// an array of pages, each an array of glyph runs {x,y,size,t} (y increases up the page).
+function _extractPages(buf){ return _pageRuns(buf); }
+
+module.exports = { extractText: _extractText, extractPages: _extractPages };
