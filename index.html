@@ -1471,8 +1471,12 @@ function fmtDate(iso){ if(!iso)return ''; const p=String(iso).split('-').map(Num
 // "SMITH, JOHN" -> "Smith, John"; "MAPD HMO" stays "MAPD HMO".
 const _ACR={LLC:1,INC:1,MAPD:1,PDP:1,HMO:1,PPO:1,POS:1,PFFS:1,SNP:1,MA:1,FE:1,IUL:1,WL:1,DVH:1,LTC:1,RX:1,
   AARP:1,UHC:1,AIG:1,GTL:1,UNL:1,FGL:1,NWL:1,GWIC:1,BFLIC:1,II:1,III:1,IV:1};
-function titleize(s){ if(s==null)return ''; return String(s).trim().replace(/\s+/g,' ')
-  .replace(/[A-Za-z0-9&']+/g,w=>{ const u=w.toUpperCase(); return _ACR[u]?u:w.charAt(0).toUpperCase()+w.slice(1).toLowerCase(); }); }
+// HTML-escape, for any PDF-derived string going into innerHTML (product/client/policy names can
+// contain characters like "<65 Medical"). Safe for display; never use on values used for logic.
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// titleize humanizes AND escapes, so every display site that uses it is XSS/markup-safe.
+function titleize(s){ if(s==null)return ''; return esc(String(s).trim().replace(/\s+/g,' ')
+  .replace(/[A-Za-z0-9&']+/g,w=>{ const u=w.toUpperCase(); return _ACR[u]?u:w.charAt(0).toUpperCase()+w.slice(1).toLowerCase(); })); }
 const COLORS={nb:'#00696e',resid:'#c0872f',cbk:'#b3261e',net:'#2f6b46'};
 const PALETTE=['#00696e','#c0872f','#4b607c','#7a5195','#2f6b46','#b3261e','#bc5090','#00838f','#a1887f','#546e7a','#8a5a00','#5c6bc0'];
 const METRICS={
@@ -1857,17 +1861,17 @@ function renderChargebacks(){
   const overRate=car.some(r=>r.rate!=null&&r.rate>100);
   $('#cbCarrier').innerHTML=car.length?'<table>'+thead(['Carrier','Charged back','Advanced','Rate'])+'<tbody>'
     +car.map(r=>{const over=r.rate!=null&&r.rate>100;
-      return `<tr><td style="text-align:left">${r.carrier}</td><td class="neg">${fmt(r.amount)}</td><td>${fmt0(r.advanced)}</td>`
+      return `<tr><td style="text-align:left">${esc(r.carrier)}</td><td class="neg">${fmt(r.amount)}</td><td>${fmt0(r.advanced)}</td>`
       +`<td${over?' title="The clawback reverses advances paid in an earlier period, outside this date range."':''}>${r.rate!=null?r.rate.toFixed(1)+'%'+(over?' <span style="color:var(--on-surface-var)">&dagger;</span>':''):'&mdash;'}</td></tr>`;}).join('')
     +'</tbody></table>'+(overRate?'<p class="hint" style="margin-top:10px">&dagger; A rate above 100% means the clawback reverses advances paid in an earlier period that falls outside the range shown &mdash; the money came back on business booked before this window, not a figure to read as "more than everything advanced."</p>':'')
     :'<p class="hint">No chargebacks recorded yet &mdash; nothing has been clawed back.</p>';
   const fam=c.by_family||[];
   $('#cbFamily').innerHTML=fam.length?'<table>'+thead(['Product line','Charged back','Events'])+'<tbody>'
-    +fam.map(r=>`<tr><td style="text-align:left">${r.family}</td><td class="neg">${fmt(r.amount)}</td><td>${r.count}</td></tr>`).join('')
+    +fam.map(r=>`<tr><td style="text-align:left">${esc(r.family)}</td><td class="neg">${fmt(r.amount)}</td><td>${r.count}</td></tr>`).join('')
     +'</tbody></table>':'<p class="hint">No chargebacks recorded yet.</p>';
   const top=c.top||[];
   $('#cbTop').innerHTML=top.length?'<table>'+thead(['Date','Carrier','Client','Product','Amount'])+'<tbody>'
-    +top.slice(0,15).map(r=>`<tr><td>${fmtDate(r.date)}</td><td style="text-align:left">${r.carrier}</td><td style="text-align:left">${titleize(r.client).slice(0,24)||'&mdash;'}</td><td style="text-align:left">${titleize(r.product).slice(0,26)||'&mdash;'}</td><td class="neg">${fmt(r.amount)}</td></tr>`).join('')
+    +top.slice(0,15).map(r=>`<tr><td>${fmtDate(r.date)}</td><td style="text-align:left">${esc(r.carrier)}</td><td style="text-align:left">${titleize((r.client||'').slice(0,24))||'&mdash;'}</td><td style="text-align:left">${titleize((r.product||'').slice(0,26))||'&mdash;'}</td><td class="neg">${fmt(r.amount)}</td></tr>`).join('')
     +'</tbody></table>':'<p class="hint">No chargebacks recorded yet.</p>';
   const buckets=bucketSeries(GRAIN);
   charts.cbTime=new Chart($('#cbTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
@@ -2043,7 +2047,7 @@ function renderForecast(){
   // weak carriers
   const wk=ps.weak_carriers||[];
   $('#fcWeak').innerHTML=wk.length?'<table>'+thead(['Carrier','Persistency','Lapsed','Policies','Residual at stake'])+'<tbody>'
-    +wk.map(w=>`<tr><td style="text-align:left">${w.carrier}</td><td>${pct(w.persistency)}</td><td class="neg">${w.lapsed}</td><td>${w.policies}</td><td>${fmt0(w.residual)}</td></tr>`).join('')
+    +wk.map(w=>`<tr><td style="text-align:left">${esc(w.carrier)}</td><td>${pct(w.persistency)}</td><td class="neg">${w.lapsed}</td><td>${w.policies}</td><td>${fmt0(w.residual)}</td></tr>`).join('')
     +'</tbody></table>':'<p class="hint">No carrier has enough lapses to flag — your book is holding well.</p>';
   // suggestions
   const sg=f.suggestions||[];
@@ -2861,11 +2865,11 @@ function openClient(name){
   const st=s=>s==='Yes'?'<span style="color:#2e7d5b">Active</span>':s==='No'?'<span class="neg">Lapsed</span>':'<span class="hint">'+s+'</span>';
   $('#cliDetailTable').innerHTML=thead(['Policy','Carrier','Product','Line','New business','Residual','Chargebacks','Net','Status','First written','Last residual','Pmts','Writing agents'])
     +'<tbody>'+(c.detail||[]).map(p=>`<tr>
-      <td class="mono">${p.policy}</td><td><span class="chip">${p.carrier}</span></td><td>${p.product||'&mdash;'}</td>
-      <td>${p.family}</td><td>${fmt(p.advances)}</td><td>${fmt(p.residual)}</td>
+      <td class="mono">${esc(p.policy)}</td><td><span class="chip">${esc(p.carrier)}</span></td><td>${esc(p.product)||'&mdash;'}</td>
+      <td>${esc(p.family)}</td><td>${fmt(p.advances)}</td><td>${fmt(p.residual)}</td>
       <td class="neg">${fmt(p.chargebacks)}</td><td class="${cls(p.net)}"><b>${fmt(p.net)}</b></td>
       <td>${st(p.status)}</td><td>${p.first_written||'&mdash;'}</td><td>${p.last_residual||'&mdash;'}</td>
-      <td>${p.payments}</td><td class="hint">${p.agents||'&mdash;'}</td></tr>`).join('')+'</tbody>';
+      <td>${p.payments}</td><td class="hint">${esc(p.agents)||'&mdash;'}</td></tr>`).join('')+'</tbody>';
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#view-client').classList.add('active');
   window.scrollTo(0,0);
@@ -3261,8 +3265,8 @@ function renderAudit(){
     : '<tbody><tr><td class="hint">No unusual gaps in statement cadence.</td></tr></tbody>';
   $('#audUnderTable').innerHTML=(A.underpaid&&A.underpaid.length)
     ? thead(['Client','Carrier','Product','Typical (median)','Latest','As of','Shortfall'])
-      +'<tbody>'+A.underpaid.map(u=>`<tr><td>${u.client}</td><td><span class="chip">${u.carrier}</span></td>
-        <td>${(u.product||'').slice(0,26)}</td><td>${fmt(u.median)}</td><td>${fmt(u.latest)}</td>
+      +'<tbody>'+A.underpaid.map(u=>`<tr><td>${esc(u.client)}</td><td><span class="chip">${esc(u.carrier)}</span></td>
+        <td>${esc((u.product||'').slice(0,26))}</td><td>${fmt(u.median)}</td><td>${fmt(u.latest)}</td>
         <td>${u.latest_date}</td><td class="neg">${fmt(-u.shortfall)}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No residual payments materially below their norm.</td></tr></tbody>';
 }
@@ -3316,7 +3320,7 @@ function renderClients(){
   const rows=(C.list||[]).filter(c=>!q||(c.client+' '+c.families.join(' ')+' '+c.carriers.join(' ')).toLowerCase().includes(q));
   $('#cliTable').innerHTML=thead(['Client','Policies','Lines of business','Net earned','Active','Lapsed','Cross-sell'])
     +'<tbody>'+rows.slice(0,500).map(c=>`<tr class="rowlink" data-client="${encodeURIComponent(c.client)}">
-      <td><b>${c.client}</b> <span class="hint">&rsaquo;</span></td><td>${c.policies}</td><td>${c.families.map(f=>`<span class="chip">${f}</span>`).join(' ')}</td>
+      <td><b>${esc(c.client)}</b> <span class="hint">&rsaquo;</span></td><td>${c.policies}</td><td>${c.families.map(f=>`<span class="chip">${esc(f)}</span>`).join(' ')}</td>
       <td class="${cls(c.net)}"><b>${fmt(c.net)}</b></td><td>${c.active}</td><td>${c.lapsed}</td>
       <td>${c.cross_sell?`<span style="color:var(--primary)">${c.cross_sell}</span>`:'&mdash;'}</td></tr>`).join('')+'</tbody>';
   $('#cliHouseTable').innerHTML=thead(['Surname','People','Policies','Combined net','Members'])
@@ -3541,21 +3545,21 @@ function renderRetention(){
 
   $('#retRiskTable').innerHTML=(R.at_risk&&R.at_risk.length)
     ? thead(['Client','Carrier','Product','At risk','Written','Days ago'])
-      +'<tbody>'+R.at_risk.map(x=>`<tr><td>${x.client}</td><td><span class="chip">${x.carrier}</span></td>
-        <td>${(x.product||'').slice(0,30)}</td><td class="neg">${fmt(x.at_risk)}</td><td>${x.written||''}</td><td>${x.days_ago}</td></tr>`).join('')+'</tbody>'
+      +'<tbody>'+R.at_risk.map(x=>`<tr><td>${esc(x.client)}</td><td><span class="chip">${esc(x.carrier)}</span></td>
+        <td>${esc((x.product||'').slice(0,30))}</td><td class="neg">${fmt(x.at_risk)}</td><td>${x.written||''}</td><td>${x.days_ago}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No Medicare Advantage policies currently inside the rapid-disenrollment window.</td></tr></tbody>';
 
   const carRows=(R.by_carrier||[]);
   $('#retCarrierTable').innerHTML=thead(['Carrier','Policies','Active','Lapsed','Persistency','Chargebacks','Net'])
-    +'<tbody>'+carRows.map(c=>`<tr><td>${c.key}</td><td>${c.policies}</td><td>${c.active}</td><td>${c.lapsed}</td>
+    +'<tbody>'+carRows.map(c=>`<tr><td>${esc(c.key)}</td><td>${c.policies}</td><td>${c.active}</td><td>${c.lapsed}</td>
       <td>${(c.active+c.lapsed)?pctP(c.persistency):'—'}</td><td class="neg">${fmt(c.chargebacks)}</td><td><b>${fmt(c.net)}</b></td></tr>`).join('')+'</tbody>';
   $('#retFamilyTable').innerHTML=thead(['Product family','Policies','Active','Lapsed','Persistency','Chargebacks','Net'])
-    +'<tbody>'+(R.by_family||[]).map(c=>`<tr><td>${c.key}</td><td>${c.policies}</td><td>${c.active}</td><td>${c.lapsed}</td>
+    +'<tbody>'+(R.by_family||[]).map(c=>`<tr><td>${esc(c.key)}</td><td>${c.policies}</td><td>${c.active}</td><td>${c.lapsed}</td>
       <td>${(c.active+c.lapsed)?pctP(c.persistency):'—'}</td><td class="neg">${fmt(c.chargebacks)}</td><td><b>${fmt(c.net)}</b></td></tr>`).join('')+'</tbody>';
   $('#retLapseTable').innerHTML=(R.lapses&&R.lapses.length)
     ? thead(['Client','Carrier','Product','Family','Chargebacks','Net so far','Last residual'])
-      +'<tbody>'+R.lapses.map(x=>`<tr><td>${x.client}</td><td><span class="chip">${x.carrier}</span></td>
-        <td>${(x.product||'').slice(0,26)}</td><td>${x.family}</td><td class="neg">${fmt(x.chargebacks)}</td>
+      +'<tbody>'+R.lapses.map(x=>`<tr><td>${esc(x.client)}</td><td><span class="chip">${esc(x.carrier)}</span></td>
+        <td>${esc((x.product||'').slice(0,26))}</td><td>${esc(x.family)}</td><td class="neg">${fmt(x.chargebacks)}</td>
         <td class="${cls(x.net)}">${fmt(x.net)}</td><td>${x.last_residual||'&mdash;'}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No lapses or chargebacks recorded.</td></tr></tbody>';
 }
@@ -3565,8 +3569,8 @@ function renderPolicies(yl){
   const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
   $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Product',...yl.map(String),'Total','Pmts'])
     +'<tbody>'+rows.slice(0,400).map(p=>`<tr>
-      <td>${p.client||'&mdash;'}</td><td><span class="chip">${p.carrier}</span></td>
-      <td class="mono">${p.policy}</td><td>${(p.product||'').slice(0,34)}</td>
+      <td>${esc(p.client)||'&mdash;'}</td><td><span class="chip">${esc(p.carrier)}</span></td>
+      <td class="mono">${esc(p.policy)}</td><td>${esc((p.product||'').slice(0,34))}</td>
       ${yl.map(y=>`<td>${fmt(p[String(y)]||0)}</td>`).join('')}
       <td><b>${fmt(p.total)}</b></td><td>${p.payments}</td></tr>`).join('')+'</tbody>';
 }
