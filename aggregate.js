@@ -1255,14 +1255,18 @@ function buildSummary(allRecords, config) {
   // Predicted chargebacks: advances still inside the ~6-month clawback window, at the agent's
   // historical chargeback rate — an estimate of money likely to be clawed back from recent sales.
   const cbRate = chargebacks.total_advances ? Math.abs(chargebacks.total) / chargebacks.total_advances : 0;
+  const cbCountRateF = (chargebacks.count_rate != null) ? chargebacks.count_rate / 100 : null;
   const latestMs = Date.parse(latestDate + 'T00:00:00Z');
-  let windowAdv = 0;
+  let windowAdv = 0; const windowPolSet = new Set();
   for (const r of records) for (const it of (r.items || [])) if (it.section === 'advances' && r.date) {
     const days = (latestMs - Date.parse(r.date + 'T00:00:00Z')) / 864e5;
-    if (days >= 0 && days <= 180) windowAdv += it.payable;
+    if (days >= 0 && days <= 180) { windowAdv += it.payable; if (it.policy) windowPolSet.add(it.policy); }
   }
   windowAdv = round2(windowAdv);
   const predictedCb = round2(windowAdv * cbRate);
+  // Also the expected NUMBER of recent policies likely to lapse (count-based), not just dollars.
+  const windowPolicies = windowPolSet.size;
+  const predictedCbPolicies = (cbCountRateF != null) ? Math.round(windowPolicies * cbCountRateF) : null;
   // Projection band: base annual pace ± how much the agent's per-period net actually varies.
   const curYearNet = series.filter(s => s.year === projections.current_year).map(s => s.net).filter(n => isFinite(n));
   const base = round2(projections.net_annual || 0);
@@ -1291,7 +1295,8 @@ function buildSummary(allRecords, config) {
   }
   const forecast = {
     persistency: { overall: retention.totals.persistency, m13, curve: persistCurve, weak_carriers: weakCarriers },
-    predicted_chargebacks: { next_window: predictedCb, window_advances: windowAdv, rate: round2(cbRate * 100), window_days: 180 },
+    predicted_chargebacks: { next_window: predictedCb, window_advances: windowAdv, rate: round2(cbRate * 100), window_days: 180,
+      next_window_policies: predictedCbPolicies, window_policies: windowPolicies, rate_count: chargebacks.count_rate },
     projection_band: { base, low, high, spread_pct: round2(spreadFrac * 100), year: projections.current_year },
     suggestions: fcSuggest,
   };

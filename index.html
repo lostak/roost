@@ -2047,7 +2047,7 @@ function renderForecast(){
   const kp=[
     {l:'13-month persistency',v:pct(ps.m13),s:'policies still paying after a year',gold:true},
     {l:'Overall persistency',v:pct(ps.overall),s:'of all policies with a verdict'},
-    {l:'Predicted chargebacks',v:fmt0(pc.next_window||0),s:`expected on recent sales · ~6 mo`,neg:true},
+    {l:'Predicted chargebacks',v:fmt0(pc.next_window||0),s:(pc.next_window_policies!=null?`~${pc.next_window_policies} polic${pc.next_window_policies===1?'y':'ies'} · recent sales`:`expected on recent sales · ~6 mo`),neg:true},
     {l:'Projected net (year)',v:fmt0(pb.base||0),s:`range ${fmt0(pb.low||0)}–${fmt0(pb.high||0)}`}
   ];
   $('#fcKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
