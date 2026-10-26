@@ -316,6 +316,26 @@ function handleDownlineHierarchy(req, res) {
 }
 
 // ---- goals (annual net-paid target per year) ----
+// Persists an optional Anthropic API key into config.json (ai_key) so AI insights can be enabled
+// from the UI without editing files. Stays on this machine; only sent to the AI API when you ask.
+function handleAiKey(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e5) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const cfg = loadConfig();
+      const key = String(o.ai_key == null ? '' : o.ai_key).trim();
+      if (key) cfg.ai_key = key.slice(0, 200); else delete cfg.ai_key;   // empty clears it
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return sendJson(res, 200, { status: 'ok', configured: !!cfg.ai_key || !!process.env.ANTHROPIC_API_KEY });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 // Persists the "teach the carrier" map into config.json as carrier_map [{kw,name}].
 function handleCarrierMap(req, res) {
   const chunks = []; let size = 0;
@@ -455,6 +475,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/carrier-map' && req.method === 'POST') {
       return handleCarrierMap(req, res);
+    }
+    if (url === '/api/ai-key' && req.method === 'POST') {
+      return handleAiKey(req, res);
     }
     if (url === '/api/expenses' && req.method === 'POST') {
       return handleExpenses(req, res);
