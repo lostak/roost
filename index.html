@@ -957,7 +957,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="banner">Your book, read back to you in plain English. Anomalies are flagged automatically (no AI needed); the summary and the "ask your book" box use AI to interpret your own numbers. Optional and local by default &mdash; nothing leaves this machine unless you set an API key and ask.</div>
         <div class="card" id="aiSetup" style="margin-bottom:24px;border-left:4px solid var(--primary);display:none">
           <h3 style="margin-top:0">&#128273; Turn on AI summaries &amp; chat</h3>
-          <p class="hint" style="margin:0 0 12px">Paste an Anthropic API key to enable the AI parts. It's stored only on this computer (in your config) and used only when you click Summarize or Ask. The anomalies below work without it. Get a key at <b>console.anthropic.com</b>.</p>
+          <p class="hint" style="margin:0 0 12px">Paste an Anthropic API key to enable the AI parts. It's stored only on this computer (in your config) and used only when you click Summarize or Ask. The anomalies below work without it. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-weight:600">console.anthropic.com</a>.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <input id="aiKeyInput" class="numbox" type="password" style="flex:1;min-width:260px" placeholder="sk-ant-..." autocomplete="off">
             <button class="btn" onclick="saveAiKey()">Save &amp; enable</button>
