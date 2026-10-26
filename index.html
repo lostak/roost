@@ -513,6 +513,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
         <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
         <a data-view="taxes"><span class="ic">&#167;</span><span class="lbl">Taxes</span></a>
+        <a data-view="cashflow"><span class="ic">&#128197;</span><span class="lbl">Cash Flow</span></a>
         <a data-view="convention"><span class="ic">&#127942;</span><span class="lbl">Convention</span></a>
       </div>
     </div>
@@ -1212,6 +1213,18 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <p class="hint" style="margin-top:18px">Figures use the latest finalized (2025) federal brackets, standard deduction, and Social Security wage base as an estimate; later tax years shift slightly with inflation. Insurance agents are <b>not</b> a specified service trade for QBI, so the 20% deduction applies regardless of income. This is an estimate to guide savings and quarterly payments &mdash; your CPA's return is authoritative.</p>
       </section>
 
+      <!-- CASH FLOW -->
+      <section class="view" id="view-cashflow">
+        <h2 class="section">Cash flow &amp; tax calendar</h2>
+        <div class="banner">What's coming in versus what you'll owe. Your expected residual income over the next 12 months, the quarterly estimated-tax due dates, and how much to bank each month so a tax bill never catches you short. Tax figures come from your <a href="#" onclick="gotoView('taxes');return false;">Taxes</a> estimate.</div>
+        <div class="kpis" id="cfKpis2"></div>
+        <div class="card chart-card tablecard">
+          <h3>The next 12 months</h3>
+          <p class="hint">Residual income is what your in-force book pays if it holds. "Bank for taxes" is a steady monthly set-aside; the reserve builds up and draws down as quarterly payments come due.</p>
+          <div id="cfTable2"></div>
+        </div>
+      </section>
+
       <!-- CONVENTION -->
       <section class="view" id="view-convention">
         <h2 class="section">Convention tracker &mdash; ASB 2027 incentive trip</h2>
@@ -1689,6 +1702,7 @@ function render(){
   renderGoals();
   renderExpenses();
   renderTaxes();
+  renderCashflow();
   renderConvention();
   renderClients();
   renderAudit();
@@ -3303,6 +3317,39 @@ function renderClients(){
 }
 
 // ================= BOOK VALUE & CASH FLOW =================
+function renderCashflow(){
+  const V=DATA.value; if(!V)return;
+  const cf=V.cashflow||[];
+  let annualTax=0, configured=false;
+  try{
+    const saved=Object.assign({},(DATA.tax&&DATA.tax.config)||{},(typeof loadLocalTax==='function'?loadLocalTax():{}));
+    const def=(typeof taxDefaults==='function')?taxDefaults():{income:0,expenses:0};
+    const income=(saved.income!=null&&+saved.income>0)?+saved.income:def.income;
+    if(income>0){
+      const inp={status:saved.status||'single',entity:saved.entity||'sole',income:+income,
+        expenses:saved.expenses!=null?+saved.expenses:def.expenses,other:+saved.other||0,retire:+saved.retire||0,
+        stateRate:saved.stateRate!=null?+saved.stateRate:4.4,salary:+saved.salary||0,saved:+saved.saved||0};
+      const r=calcTax(inp); annualTax=r.total||0; configured=annualTax>0;
+    }
+  }catch(e){}
+  const quarterly=annualTax/4, monthly=annualTax/12;
+  const dueLabel={1:'Q4 prior yr',4:'Q1',6:'Q2',9:'Q3'};  // estimated-tax payments due Jan/Apr/Jun/Sep 15
+  const kp=[
+    {l:'Residual, next 12 mo',v:fmt0(V.cashflow_total||0),s:'if the book holds',gold:true},
+    {l:'Est. annual tax',v:configured?fmt0(annualTax):'—',s:configured?'from your Taxes estimate':'set up Taxes first'},
+    {l:'Quarterly payment',v:configured?fmt0(quarterly):'—',s:'4× per year'},
+    {l:'Bank per month',v:configured?fmt0(monthly):'—',s:'to stay covered'}
+  ];
+  $('#cfKpis2').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div><div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
+  let reserve=0;
+  const rows=cf.map(m=>{
+    reserve+=monthly; const dueAmt=dueLabel[m.month]?quarterly:0; reserve-=dueAmt;
+    const dueCell=dueLabel[m.month]?(configured?`<b>${fmt0(quarterly)}</b> <span class="hint">${dueLabel[m.month]} due</span>`:`<span class="hint">${dueLabel[m.month]} due</span>`):'—';
+    return `<tr><td style="text-align:left">${m.label}</td><td>${fmt0(m.amount)}</td><td>${configured?fmt0(monthly):'—'}</td><td>${dueCell}</td><td class="${reserve<-0.5?'neg':''}">${configured?fmt0(reserve):'—'}</td></tr>`;
+  }).join('');
+  $('#cfTable2').innerHTML=cf.length?'<table>'+thead(['Month','Residual income','Bank for taxes','Tax payment due','Reserve'])+'<tbody>'+rows+'</tbody></table>'
+    :'<p class="hint">Add statements to see your residual run-rate and tax calendar.</p>';
+}
 function renderValue(){
   if(charts.valCash){charts.valCash.destroy();delete charts.valCash;}
   const V=DATA.value; if(!V){return;}
