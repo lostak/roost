@@ -1749,7 +1749,7 @@ function renderKpis(){
   const deltaHtml=(c,p)=>{if(p==null||!p)return'';const g=(c-p)/Math.abs(p)*100;const up=g>=0;
     return `<div class="delta ${up?'pos':'neg'}">${up?'&#9650;':'&#9660;'} ${Math.abs(g).toFixed(0)}% vs ${prev.year}</div>`;};
   const kpis=[
-    {l:'YTD net paid',v:fmt0(cur.net),s:`actual paid through ${cur.last_statement||''}`,d:''},
+    {l:'YTD net paid',v:fmt0(cur.net),s:`actual paid through ${fmtDate(cur.last_statement)}`,d:''},
     {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring policy renewals',d:'',gold:true},
     {l:'Bonuses & overrides',v:fmt0(d.bonuses?d.bonuses.total:0),s:'trips, bonuses, overrides — not residual',d:''},
     {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
@@ -1848,7 +1848,7 @@ function renderBonuses(){
     datasets:[{label:'Bonuses & overrides',data:buckets.map(x=>x.bonus||0),money:true,backgroundColor:COLORS.gold||'#c0872f'}]},
     options:timeAxis(buckets,{money:true})});
   const kinds=b.by_kind.map(k=>`<tr><td style="text-align:left">${k.kind}</td><td>${k.count}</td><td>${fmt(k.total)}</td></tr>`).join('');
-  const top=b.top.slice(0,15).map(t=>`<tr><td>${t.date}</td><td style="text-align:left">${t.kind}</td>
+  const top=b.top.slice(0,15).map(t=>`<tr><td>${fmtDate(t.date)}</td><td style="text-align:left">${esc(t.kind)}</td>
     <td style="text-align:left">${((t.client||t.product||'').replace(/</g,'&lt;')).slice(0,30)}</td><td>${fmt(t.amount)}</td></tr>`).join('');
   box.innerHTML=
     `<table><thead><tr><th style="text-align:left">Category</th><th>Lines</th><th>Total</th></tr></thead><tbody>${kinds}</tbody></table>`+
@@ -2320,9 +2320,9 @@ function renderDownline(){
 
   $('#dlPolTable').innerHTML=thead(['Date','Client','Carrier','Product','Type','Amount','Writing agents'])
     +'<tbody>'+(dl.policies||[]).slice(0,300).map(p=>`<tr>
-      <td>${p.date}</td><td>${p.client||'&mdash;'}</td><td><span class="chip">${p.carrier}</span></td>
-      <td>${(p.product||'').slice(0,30)}</td><td>${p.section}</td>
-      <td class="${cls(p.amount)}">${fmt(p.amount)}</td><td>${p.agents}</td></tr>`).join('')+'</tbody>';
+      <td>${fmtDate(p.date)}</td><td>${esc(p.client)||'&mdash;'}</td><td><span class="chip">${esc(p.carrier)}</span></td>
+      <td>${esc((p.product||'').slice(0,30))}</td><td>${esc(p.section)}</td>
+      <td class="${cls(p.amount)}">${fmt(p.amount)}</td><td>${esc(p.agents)}</td></tr>`).join('')+'</tbody>';
 }
 
 // ================= COMPARISON BUILDER =================
@@ -2779,7 +2779,7 @@ function renderDigest(){
   const ser=(DATA.series||[]); if(!ser.length){el.textContent='No statements yet.';return;}
   const last=ser[ser.length-1];
   const parts=[];
-  parts.push(`Latest statement <b>${last.date}</b>: paid <b>${fmt(last.net)}</b> `
+  parts.push(`Latest statement <b>${fmtDate(last.date)}</b>: paid <b>${fmt(last.net)}</b> `
     +`(${fmt(last.advances)} new business, ${fmt(last.residual)} residual`
     +`${last.chargebacks?`, <span class="neg">${fmt(last.chargebacks)}</span> chargebacks`:''})`
     +`${last.applications?` from <b>${last.applications}</b> new application${last.applications===1?'':'s'}`:''}.`
@@ -2878,7 +2878,7 @@ function openClient(name){
       <td class="mono">${esc(p.policy)}</td><td><span class="chip">${esc(p.carrier)}</span></td><td>${esc(p.product)||'&mdash;'}</td>
       <td>${esc(p.family)}</td><td>${fmt(p.advances)}</td><td>${fmt(p.residual)}</td>
       <td class="neg">${fmt(p.chargebacks)}</td><td class="${cls(p.net)}"><b>${fmt(p.net)}</b></td>
-      <td>${st(p.status)}</td><td>${p.first_written||'&mdash;'}</td><td>${p.last_residual||'&mdash;'}</td>
+      <td>${st(p.status)}</td><td>${fmtDate(p.first_written)||'&mdash;'}</td><td>${fmtDate(p.last_residual)||'&mdash;'}</td>
       <td>${p.payments}</td><td class="hint">${esc(p.agents)||'&mdash;'}</td></tr>`).join('')+'</tbody>';
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#view-client').classList.add('active');
@@ -3243,8 +3243,8 @@ function renderConvention(){
     +'<tbody>'+bf.map(f=>`<tr><td>${f.family}${f.ma?' <span class="hint">(MA)</span>':''}</td><td>${f.policies}</td>
       <td><b>${num0(f.points)}</b></td><td>${V.points?Math.round(f.points/V.points*100):0}%</td></tr>`).join('')+'</tbody>';
   $('#convPolTable').innerHTML=thead(['Issued','Client','Carrier','Product','Line','Premium','Annualized','Points','Exclude'])
-    +'<tbody>'+(V.policies||[]).map(p=>`<tr${p.excluded?' style="opacity:.5"':''}><td>${p.date}</td><td>${p.client||'&mdash;'}</td>
-      <td><span class="chip">${p.carrier}</span></td><td>${(p.product||'').slice(0,24)}</td><td>${p.family}</td>
+    +'<tbody>'+(V.policies||[]).map(p=>`<tr${p.excluded?' style="opacity:.5"':''}><td>${fmtDate(p.date)}</td><td>${esc(p.client)||'&mdash;'}</td>
+      <td><span class="chip">${esc(p.carrier)}</span></td><td>${esc((p.product||'').slice(0,24))}</td><td>${esc(p.family)}</td>
       <td>${fmt(p.premium)}</td><td>${fmt(p.annualized)}</td><td><b>${p.excluded?'&mdash;':num0(p.points)}</b></td>
       <td style="text-align:center;white-space:nowrap">${p.auto_replacement?'<span class="hint" title="Same client already had an earlier policy in this family" style="color:var(--gold)">repl&nbsp;</span>':''}<input type="checkbox" class="convExcl" data-policy="${encodeURIComponent(p.policy||'')}" data-auto="${p.auto_replacement?1:0}"${p.excluded?' checked':''} title="Exclude (1035 replacement, family member, or ineligible)"></td></tr>`).join('')+'</tbody>';
 }
@@ -3266,7 +3266,7 @@ function renderAudit(){
       <td>${fmt(r.printed_ytd)}</td><td class="${cls(r.diff)}">${fmt(r.diff)}</td><td class="hint">explain &rsaquo;</td></tr>`).join('')+'</tbody>';
   $('#audDropTable').innerHTML=(A.ytd_drops&&A.ytd_drops.length)
     ? thead(['Statement','Printed YTD','Prior statement','Prior YTD','Drop'])
-      +'<tbody>'+A.ytd_drops.map(d=>`<tr><td>${d.date}</td><td>${fmt(d.ytd)}</td><td>${d.prev_date}</td>
+      +'<tbody>'+A.ytd_drops.map(d=>`<tr><td>${fmtDate(d.date)}</td><td>${fmt(d.ytd)}</td><td>${fmtDate(d.prev_date)}</td>
         <td>${fmt(d.prev_ytd)}</td><td class="neg">${fmt(-d.drop)}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No YTD reversals — the printed running totals are consistent.</td></tr></tbody>';
   $('#audGapTable').innerHTML=(A.cadence_gaps&&A.cadence_gaps.length)
@@ -3277,7 +3277,7 @@ function renderAudit(){
     ? thead(['Client','Carrier','Product','Typical (median)','Latest','As of','Shortfall'])
       +'<tbody>'+A.underpaid.map(u=>`<tr><td>${esc(u.client)}</td><td><span class="chip">${esc(u.carrier)}</span></td>
         <td>${esc((u.product||'').slice(0,26))}</td><td>${fmt(u.median)}</td><td>${fmt(u.latest)}</td>
-        <td>${u.latest_date}</td><td class="neg">${fmt(-u.shortfall)}</td></tr>`).join('')+'</tbody>'
+        <td>${fmtDate(u.latest_date)}</td><td class="neg">${fmt(-u.shortfall)}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No residual payments materially below their norm.</td></tr></tbody>';
 }
 
@@ -3291,7 +3291,7 @@ function explainRecon(r,all){
   const tol=Math.max(2,(r.printed_ytd||0)*0.005);
   if(Math.abs(diff)<=tol){ reasons.push('The gap is within rounding &mdash; nothing to chase.'); }
   else {
-    (r.drops||[]).forEach(d=>reasons.push(`An <b>off-sequence statement on ${d.date}</b> dropped the printed YTD from ${fmt0(d.prev_ytd)} to ${fmt0(d.ytd)} (a ${fmt0(d.drop)} reversal). A year-to-date can't decrease, so that statement is out of sequence or paid on a separate stream &mdash; its income still counts in your net but breaks the carrier's running total.`));
+    (r.drops||[]).forEach(d=>reasons.push(`An <b>off-sequence statement on ${fmtDate(d.date)}</b> dropped the printed YTD from ${fmt0(d.prev_ytd)} to ${fmt0(d.ytd)} (a ${fmt0(d.drop)} reversal). A year-to-date can't decrease, so that statement is out of sequence or paid on a separate stream &mdash; its income still counts in your net but breaks the carrier's running total.`));
     if(r.printed_latest!=null && r.printed_latest < r.printed_ytd-1)
       reasons.push(`Your most recent statement's printed YTD (${fmt0(r.printed_latest)}) is below the year's peak (${fmt0(r.printed_ytd)}) &mdash; a sign the running total was reset or split across payment streams mid-year.`);
     // equal-and-opposite gap in another year => carrier attributed income to a different year
@@ -3556,7 +3556,7 @@ function renderRetention(){
   $('#retRiskTable').innerHTML=(R.at_risk&&R.at_risk.length)
     ? thead(['Client','Carrier','Product','At risk','Written','Days ago'])
       +'<tbody>'+R.at_risk.map(x=>`<tr><td>${esc(x.client)}</td><td><span class="chip">${esc(x.carrier)}</span></td>
-        <td>${esc((x.product||'').slice(0,30))}</td><td class="neg">${fmt(x.at_risk)}</td><td>${x.written||''}</td><td>${x.days_ago}</td></tr>`).join('')+'</tbody>'
+        <td>${esc((x.product||'').slice(0,30))}</td><td class="neg">${fmt(x.at_risk)}</td><td>${fmtDate(x.written)}</td><td>${x.days_ago}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No Medicare Advantage policies currently inside the rapid-disenrollment window.</td></tr></tbody>';
 
   const carRows=(R.by_carrier||[]);
@@ -3570,7 +3570,7 @@ function renderRetention(){
     ? thead(['Client','Carrier','Product','Family','Chargebacks','Net so far','Last residual'])
       +'<tbody>'+R.lapses.map(x=>`<tr><td>${esc(x.client)}</td><td><span class="chip">${esc(x.carrier)}</span></td>
         <td>${esc((x.product||'').slice(0,26))}</td><td>${esc(x.family)}</td><td class="neg">${fmt(x.chargebacks)}</td>
-        <td class="${cls(x.net)}">${fmt(x.net)}</td><td>${x.last_residual||'&mdash;'}</td></tr>`).join('')+'</tbody>'
+        <td class="${cls(x.net)}">${fmt(x.net)}</td><td>${fmtDate(x.last_residual)||'&mdash;'}</td></tr>`).join('')+'</tbody>'
     : '<tbody><tr><td class="hint">No lapses or chargebacks recorded.</td></tr></tbody>';
 }
 
