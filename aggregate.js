@@ -1191,13 +1191,21 @@ function buildSummary(allRecords, config) {
   const money2 = v => '$' + (Math.round(v * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cbItems = [];
   const advByCarrier = {};
+  // Count-based view (per application / policy, not premium dollars): a dollar rate is skewed by a
+  // few high-premium cases, so we also track how many distinct policies were written vs. clawed back.
+  const writtenByCarrier = {}, cbPolByCarrier = {}, allWritten = new Set(), allCbPol = new Set();
   for (const r of records) for (const it of (r.items || [])) {
-    if (it.section === 'chargebacks')
+    if (it.section === 'chargebacks') {
       cbItems.push({ date: r.date, year: r.year, carrier: it.carrier, family: productFamily(it.product),
         client: it.client, product: it.product, policy: it.policy, amount: round2(it.payable) });
-    else if (it.section === 'advances')
+      if (it.policy) { (cbPolByCarrier[it.carrier] ||= new Set()).add(it.policy); allCbPol.add(it.policy); }
+    } else if (it.section === 'advances') {
       advByCarrier[it.carrier] = (advByCarrier[it.carrier] || 0) + it.payable;
+      if (it.policy) { (writtenByCarrier[it.carrier] ||= new Set()).add(it.policy); allWritten.add(it.policy); }
+    }
   }
+  const setN = (m, k) => (m[k] ? m[k].size : 0);
+  const policiesWritten = allWritten.size, policiesChargedBack = allCbPol.size;
   const cbCar = {}, cbFam = {}, cbYr = {}, cbSer = {};
   for (const c of cbItems) {
     (cbCar[c.carrier] ||= { amount: 0, count: 0 }); cbCar[c.carrier].amount += c.amount; cbCar[c.carrier].count++;
@@ -1211,10 +1219,16 @@ function buildSummary(allRecords, config) {
     total: totalCb, count: cbItems.length,
     rate_vs_advances: totalAdvAll ? round2(Math.abs(totalCb) / totalAdvAll * 100) : null,
     total_advances: totalAdvAll,
+    // count-based (per application): how many of the policies you wrote came back
+    policies_written: policiesWritten,
+    policies_charged_back: policiesChargedBack,
+    count_rate: policiesWritten ? round2(policiesChargedBack / policiesWritten * 100) : null,
     by_year: Object.fromEntries(allYears.map(y => [y, round2(cbYr[y] || 0)])),
     by_carrier: Object.entries(cbCar).map(([carrier, v]) => ({
       carrier, amount: round2(v.amount), count: v.count, advanced: round2(advByCarrier[carrier] || 0),
       rate: advByCarrier[carrier] ? round2(Math.abs(v.amount) / advByCarrier[carrier] * 100) : null,
+      written: setN(writtenByCarrier, carrier), cb_policies: setN(cbPolByCarrier, carrier),
+      count_rate: setN(writtenByCarrier, carrier) ? round2(setN(cbPolByCarrier, carrier) / setN(writtenByCarrier, carrier) * 100) : null,
     })).sort((a, b) => a.amount - b.amount),
     by_family: Object.entries(cbFam).map(([family, v]) => ({ family, amount: round2(v.amount), count: v.count }))
       .sort((a, b) => a.amount - b.amount),
