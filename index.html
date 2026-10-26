@@ -376,8 +376,11 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
 /* book health score */
 .health-wrap{display:flex;gap:30px;align-items:center;flex-wrap:wrap}
 .health-gauge{flex:none}
-.hc-row{display:grid;grid-template-columns:160px 1fr 38px;align-items:center;gap:10px;margin-bottom:9px}
-.hc-lbl{color:var(--on-surface-var);font-weight:500;font-size:13px}
+.hc-item{margin-bottom:14px}
+.hc-item:last-child{margin-bottom:0}
+.hc-row{display:grid;grid-template-columns:160px 1fr 38px;align-items:center;gap:10px}
+.hc-detail{font-size:12.5px;color:var(--on-surface-var);line-height:1.45;margin:4px 0 0 0;padding-left:0}
+.hc-lbl{color:var(--on-surface);font-weight:600;font-size:13px}
 .hc-track{height:8px;border-radius:999px;background:color-mix(in srgb,var(--on-surface) 12%,transparent);overflow:hidden}
 .hc-fill{height:100%;border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
 .hc-val{font-family:'Space Grotesk',sans-serif;font-weight:600;text-align:right;font-size:13px}
@@ -1750,7 +1753,7 @@ function renderKpis(){
     {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring policy renewals',d:'',gold:true},
     {l:'Bonuses & overrides',v:fmt0(d.bonuses?d.bonuses.total:0),s:'trips, bonuses, overrides — not residual',d:''},
     {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
-    {l:'Pending pipeline',v:fmt0(d.pending.latest_total),s:d.pending.latest_date?('as of '+d.pending.latest_date):'none',d:''}
+    {l:'Pending commissions',v:fmt0(d.pending.count?d.pending.latest_total:0),s:d.pending.count?('approved, not yet paid'+(d.pending.latest_date?(' &middot; '+fmtDate(d.pending.latest_date)):'')):'no pending statements uploaded',d:''}
   ];
   $('#kpis').innerHTML=kpis.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div>${k.d}<div class="sub">${k.s}</div></div>`).join('');
@@ -1945,9 +1948,10 @@ function renderHealth(){
     +(lever?`Your biggest lever right now is <b>${lever.label.toLowerCase()}</b> — ${lever.detail}`:`You're strong across the board — protect it through AEP.`);
   const sfill=s=>s>=75?'#2e9e6b':s>=50?'#c0872f':'#d4694a';
   $('#healthComps').innerHTML=(H.components||[]).map(x=>{const s=x.score;
-    return `<div class="hc-row" title="${(x.detail||'').replace(/"/g,'&quot;')}"><div class="hc-lbl">${x.label}</div>
+    return `<div class="hc-item"><div class="hc-row"><div class="hc-lbl">${x.label}</div>
       <div class="hc-track"><div class="hc-fill" style="width:${s==null?0:s}%;background:${s==null?'transparent':sfill(s)}"></div></div>
-      <div class="hc-val">${s==null?'—':s}</div></div>`;}).join('');
+      <div class="hc-val">${s==null?'n/a':s}</div></div>
+      <div class="hc-detail">${esc(x.detail)}</div></div>`;}).join('');
 }
 function renderVisitBanner(){
   const el=$('#visitBanner'); if(!el||!DATA)return;
