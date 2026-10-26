@@ -233,12 +233,51 @@ function isNewFormat(text){
   return /Payable Comm\s+Writing Agent/.test(text) || /(^|\n)\s*Advances &\s*(\n|$)/.test(text);
 }
 
-// Column x-ranges (points). The ASB grid is fixed: policy ~22, client ~97,
-// product ~172, the numeric band (dates/mode/premium/comm%/payable) 247-660,
-// writing agent ~698+.
-const NF_COLS = [['policy',0,60],['client',60,168],['product',168,246],['core',246,690],['agent',690,1e9]];
-const nfCol = x => { for (const [k,a,b] of NF_COLS) if (x>=a && x<b) return k; return 'core'; };
+// Fallback column x-ranges (points) if the header can't be read: policy ~22,
+// client ~97, product ~172, numeric band (dates/mode/premium/comm%/payable)
+// 247-674, writing agent ~674+.
+const NF_COLS_DEFAULT = [['policy',0,60],['client',60,168],['product',168,246],['core',246,674],['agent',674,1e9]];
+const nfColFor = cols => x => { for (const [k,a,b] of cols) if (x>=a && x<b) return k; return 'core'; };
 const nfNorm = s => s.replace(/\s+/g,'').toUpperCase();
+
+// Derive column x-boundaries from the statement's OWN header row, so the parser
+// adapts if ASB shifts a column or adds one in a future format rather than
+// relying on fixed pixel ranges. The header labels (Policy / Client / Product /
+// Eff Date..Payable / Writing Agent) anchor each column; boundaries are the
+// midpoints between adjacent anchors (the agent boundary uses the last numeric
+// label and the agent label, since agent data aligns under "Writing", left of
+// the "Agent" word). Falls back to NF_COLS_DEFAULT when no usable header found.
+function nfDetectColumns(pages){
+  for (const runs of pages){
+    const byY={}; for (const r of runs){ const k=Math.round(r.y); (byY[k]||(byY[k]=[])).push(r); }
+    for (const y of Object.keys(byY)){
+      const parts = byY[y].sort((a,b)=>a.x-b.x);
+      const up = parts.map(p=>p.t.toUpperCase());
+      const joined = up.join(' ');
+      if (!(joined.includes('POLICY') && joined.includes('CLIENT') && joined.includes('PRODUCT'))) continue;
+      let policyX,clientX,productX,coreStartX,coreEndX,agentX;
+      for (let i=0;i<parts.length;i++){
+        const u=up[i], x=parts[i].x;
+        if (policyX==null && u.includes('POLICY')) policyX=x;
+        else if (clientX==null && u.includes('CLIENT')) clientX=x;
+        else if (productX==null && u.includes('PRODUCT')) productX=x;
+        else if (/EFF|PREM|DUE|MODE|PREMIUM|COMM|PAYABLE/.test(u)){ if(coreStartX==null)coreStartX=x; coreEndX=x; }
+        else if (/WRITING|AGENT/.test(u)){ if(agentX==null)agentX=x; }
+      }
+      if ([policyX,clientX,productX,coreStartX,coreEndX,agentX].some(v=>v==null)) continue;
+      if (!(policyX<clientX && clientX<productX && productX<coreStartX && coreEndX<agentX)) continue;
+      const mid=(a,b)=>(a+b)/2;
+      return [
+        ['policy', 0, mid(policyX,clientX)],
+        ['client', mid(policyX,clientX), mid(clientX,productX)],
+        ['product', mid(clientX,productX), mid(productX,coreStartX)],
+        ['core', mid(productX,coreStartX), mid(coreEndX,agentX)],
+        ['agent', mid(coreEndX,agentX), 1e9],
+      ];
+    }
+  }
+  return NF_COLS_DEFAULT;
+}
 
 // Gap-aware join of a column's runs into text (handles wrapped sub-lines and
 // the font's irregular intra-word advances).
@@ -292,6 +331,7 @@ function parseTextStructured(pages, text){
   const header = parseHeader(text);
   const items = [];
   const totals = { advances: 0, commission: 0, chargebacks: 0 };
+  const nfCol = nfColFor(nfDetectColumns(pages));
   let section = null;
   for (const runs of pages){
     const pls = nfPhysLines(runs);
