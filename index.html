@@ -430,9 +430,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <body>
 <div id="aurora"><b class="a1"></b><b class="a2"></b><b class="a3"></b></div>
 <div class="cmdk-ov" id="cmdkOv">
-  <div class="cmdk" role="dialog" aria-label="Command palette">
-    <input id="cmdkInput" type="text" placeholder="Search views, clients, actions&hellip;" autocomplete="off" spellcheck="false">
-    <div class="cmdk-list" id="cmdkList"></div>
+  <div class="cmdk" role="dialog" aria-modal="true" aria-label="Command palette">
+    <input id="cmdkInput" type="text" placeholder="Search views, clients, actions&hellip;" autocomplete="off" spellcheck="false"
+      role="combobox" aria-expanded="false" aria-controls="cmdkList" aria-autocomplete="list" aria-label="Search views, clients and actions">
+    <div class="cmdk-list" id="cmdkList" role="listbox" aria-label="Results"></div>
     <div class="cmdk-hint"><span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> navigate</span><span><kbd>&#8629;</kbd> open</span><span><kbd>esc</kbd> close</span></div>
   </div>
 </div>
@@ -451,7 +452,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
-  <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light"></button>
+  <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light" aria-label="Toggle dark or light theme"></button>
   <div class="holderdd" id="holderWrap" style="display:none">
     <button type="button" class="holderbtn" id="holderBtn" onclick="toggleHolderMenu(event)" aria-haspopup="listbox" aria-expanded="false" title="Which book to show (personal, LLC, or both combined)"><span class="hlbl" id="holderBtnLabel">All books combined</span><span class="holdercar"></span></button>
     <div class="holdermenu" id="holderMenu" role="listbox"></div>
@@ -461,7 +462,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 
 <!-- upload statements modal -->
 <div class="modal-overlay" id="uploadModal" onclick="if(event.target===this)closeUpload()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Upload statements">
     <div class="modal-head">
       <h3>Upload statements</h3>
       <button class="modal-x" onclick="closeUpload()" aria-label="Close">&times;</button>
@@ -1539,20 +1540,25 @@ function markActiveGroup(){
   document.querySelectorAll('#nav .navgroup').forEach(g=>
     g.classList.toggle('hasactive', !!g.querySelector('a.active')));
 }
-document.querySelectorAll('#nav a').forEach(a=>a.onclick=()=>{
-  document.querySelectorAll('#nav a').forEach(x=>x.classList.remove('active'));
-  a.classList.add('active');
+document.querySelectorAll('#nav a').forEach(a=>{
+  // nav links have no href, so make them keyboard-focusable and Enter/Space-activatable.
+  a.setAttribute('tabindex','0'); a.setAttribute('role','link');
+  a.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); a.click(); } });
+  a.onclick=()=>{
+  document.querySelectorAll('#nav a').forEach(x=>{x.classList.remove('active');x.removeAttribute('aria-current');});
+  a.classList.add('active'); a.setAttribute('aria-current','page');
   const v=a.dataset.view;
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   $('#view-'+v).classList.add('active');
   openGroup(a.closest('.navgroup'));   // null for the standalone Overview -> collapses all
   markActiveGroup();
   document.body.classList.remove('nav-open');   // close the mobile drawer after choosing a view
-});
-document.querySelectorAll('#nav .navgroup-header').forEach(h=>h.onclick=()=>{
+};});
+document.querySelectorAll('#nav .navgroup-header').forEach(h=>{ h.setAttribute('tabindex','0'); h.setAttribute('role','button');
+  h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } }); h.onclick=()=>{
   const g=h.parentElement;
   openGroup(g.classList.contains('collapsed')?g:null);
-});
+};});
 (function initNav(){
   let open=''; try{open=localStorage.getItem('navOpen')||'';}catch(e){}
   let g=open?document.querySelector(`#nav .navgroup[data-group="${open}"]`):null;
@@ -3635,8 +3641,19 @@ document.addEventListener('click',e=>{
 });
 
 // ---- statement upload ----
-function openUpload(){ $('#uploadResults').innerHTML=''; $('#uploadModal').classList.add('open'); }
-function closeUpload(){ $('#uploadModal').classList.remove('open'); }
+let _uploadPrevFocus=null;
+function openUpload(){ $('#uploadResults').innerHTML=''; const m=$('#uploadModal'); _uploadPrevFocus=document.activeElement; m.classList.add('open');
+  const x=m.querySelector('.modal-x'); if(x)setTimeout(()=>x.focus(),20); }
+function closeUpload(){ $('#uploadModal').classList.remove('open');
+  if(_uploadPrevFocus&&_uploadPrevFocus.focus){try{_uploadPrevFocus.focus();}catch(e){}} _uploadPrevFocus=null; }
+// Keep Tab focus inside an open dialog.
+function trapFocus(container,e){ if(e.key!=='Tab'||!container)return;
+  const f=[...container.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select,textarea,[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);
+  if(!f.length){e.preventDefault();return;}
+  const first=f[0],last=f[f.length-1];
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();} }
+(function(){ const m=$('#uploadModal'); if(m)m.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeUpload();} else trapFocus(m.querySelector('.modal'),e); }); })();
 function uploadRow(name,cls,msg){
   const li=document.createElement('li'); li.className='ur '+cls;
   const n=document.createElement('span'); n.className='ur-name'; n.textContent=name;
@@ -3701,22 +3718,27 @@ function cmdkCommands(){
     type:'product',label:p.key,ic:'&#9638;',sub:'product line',run:()=>gotoView('products')}));
   return views.concat(extra).concat(carriers).concat(prods).concat(clients);
 }
-function openCmdk(){ const ov=$('#cmdkOv'); if(!ov)return; ov.classList.add('open');
+let _cmdkPrevFocus=null;
+function openCmdk(){ const ov=$('#cmdkOv'); if(!ov)return; _cmdkPrevFocus=document.activeElement; ov.classList.add('open');
   const i=$('#cmdkInput'); i.value=''; cmdkRender(''); setTimeout(()=>i.focus(),20); }
-function closeCmdk(){ const ov=$('#cmdkOv'); if(ov)ov.classList.remove('open'); }
+function closeCmdk(){ const ov=$('#cmdkOv'); if(ov)ov.classList.remove('open');
+  if(_cmdkPrevFocus&&_cmdkPrevFocus.focus){try{_cmdkPrevFocus.focus();}catch(e){}} _cmdkPrevFocus=null; }
 function cmdkRender(q){
   q=(q||'').toLowerCase();
   const all=cmdkCommands();
   _cmdkItems=q?all.filter(x=>x.label.toLowerCase().includes(q)):all.filter(x=>x.type!=='client').concat(all.filter(x=>x.type==='client').slice(0,0));
   _cmdkItems=_cmdkItems.slice(0,60); _cmdkSel=0;
-  $('#cmdkList').innerHTML=_cmdkItems.map((x,i)=>`<div class="cmdk-item${i===0?' sel':''}" data-i="${i}">
+  $('#cmdkList').innerHTML=_cmdkItems.map((x,i)=>`<div class="cmdk-item${i===0?' sel':''}" id="cmdk-opt-${i}" role="option" aria-selected="${i===0}" data-i="${i}">
     <span class="ic">${x.ic}</span><span>${x.label.replace(/</g,'&lt;')}</span><span class="tag">${x.sub||x.type}</span></div>`).join('')
     ||'<div class="cmdk-item" style="opacity:.6">No matches</div>';
   [...$('#cmdkList').children].forEach(el=>{ if(!el.dataset)return;
     el.onclick=()=>cmdkRun(+el.dataset.i); el.onmousemove=()=>cmdkHi(+el.dataset.i); });
+  const inp=$('#cmdkInput'); if(inp){ inp.setAttribute('aria-expanded',_cmdkItems.length?'true':'false');
+    inp.setAttribute('aria-activedescendant',_cmdkItems.length?'cmdk-opt-0':''); }
 }
 function cmdkHi(i){ if(isNaN(i))return; _cmdkSel=i;
-  [...$('#cmdkList').children].forEach((el,j)=>el.classList.toggle('sel',j===i)); }
+  [...$('#cmdkList').children].forEach((el,j)=>{el.classList.toggle('sel',j===i); if(el.setAttribute)el.setAttribute('aria-selected',j===i?'true':'false');});
+  const inp=$('#cmdkInput'); if(inp)inp.setAttribute('aria-activedescendant','cmdk-opt-'+i); }
 function cmdkRun(i){ const x=_cmdkItems[i]; if(!x)return; closeCmdk();
   if(x.type==='view')gotoView(x.view); else if(x.run)x.run(); }
 (function(){ const i=$('#cmdkInput'); if(!i)return;
@@ -3725,6 +3747,7 @@ function cmdkRun(i){ const x=_cmdkItems[i]; if(!x)return; closeCmdk();
     if(e.key==='ArrowDown'){e.preventDefault();cmdkHi(Math.min(_cmdkSel+1,_cmdkItems.length-1));scrollSel();}
     else if(e.key==='ArrowUp'){e.preventDefault();cmdkHi(Math.max(_cmdkSel-1,0));scrollSel();}
     else if(e.key==='Enter'){e.preventDefault();cmdkRun(_cmdkSel);}
+    else if(e.key==='Tab'){e.preventDefault();}   // focus stays trapped in the palette
     else if(e.key==='Escape'){closeCmdk();} });
   function scrollSel(){ const el=$('#cmdkList').children[_cmdkSel]; if(el&&el.scrollIntoView)el.scrollIntoView({block:'nearest'}); }
   $('#cmdkOv').addEventListener('click',e=>{ if(e.target.id==='cmdkOv')closeCmdk(); });
