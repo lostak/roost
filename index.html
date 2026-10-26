@@ -451,7 +451,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     </svg>
     Roost
   </h1>
-  <button class="cmdk-trigger" onclick="openCmdk()" title="Search &amp; jump (Ctrl/Cmd-K)"><span>&#9906;</span> Search<kbd>&#8984;K</kbd></button>
+  <button class="cmdk-trigger" onclick="openCmdk()" title="Search &amp; jump"><span>&#9906;</span> Search<kbd id="cmdkKbd">&#8984;K</kbd></button>
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
@@ -1567,6 +1567,12 @@ document.querySelectorAll('#nav .navgroup-header').forEach(h=>{ h.setAttribute('
   let g=open?document.querySelector(`#nav .navgroup[data-group="${open}"]`):null;
   if(!g){const act=document.querySelector('#nav a.active'); if(act)g=act.closest('.navgroup');}
   openGroup(g,false); markActiveGroup();
+})();
+
+(function initShortcutLabel(){
+  var isMac=/Mac|iPhone|iPad|iPod/i.test(navigator.platform||navigator.userAgent||'');
+  var k=document.getElementById('cmdkKbd'); if(k)k.textContent=isMac?'⌘K':'Ctrl K';
+  var t=document.querySelector('.cmdk-trigger'); if(t)t.title='Search & jump ('+(isMac?'⌘K':'Ctrl+K')+')';
 })();
 
 function destroyCharts(){Object.values(charts).forEach(c=>c&&c.destroy());charts={};}
