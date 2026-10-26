@@ -1417,6 +1417,9 @@ function buildSummary(allRecords, config) {
   const yoy = [projections.growth_yoy, projections.observed && projections.observed.growth, bookGrowth]
     .find(v => typeof v === 'number' && isFinite(v));
   const attention = review.counts.attention;
+  // Chargeback control blends the dollar rate with the per-application rate (if known).
+  const cbCountRate = (chargebacks.count_rate != null) ? chargebacks.count_rate / 100 : null;
+  const cbBlendedRate = (cbCountRate != null) ? (cbRate + cbCountRate) / 2 : cbRate;
   // Scores are gradients, not cliffs: a low figure should read "weak" (not a flat 0), and the
   // data-quality penalty is proportional to how many statements you have.
   const dataPenalty = Math.min(100, (attention / Math.max(records.length, 1)) * 220);
@@ -1424,9 +1427,11 @@ function buildSummary(allRecords, config) {
     { key: 'persistency', label: 'Persistency', weight: 0.30,
       score: persistForScore == null ? null : clampS((persistForScore - 0.35) / 0.55 * 100),
       detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value. (Medicare Advantage members who re-enroll each year under a new policy number can read as lapsed, so this can understate a healthy book.)` },
+    // Blend the dollar rate (financial exposure) with the application rate (how many apps lapse),
+    // so a book can't look healthy on one while the other is bad.
     { key: 'chargebacks', label: 'Chargeback control', weight: 0.20,
-      score: clampS((0.15 - cbRate) / 0.15 * 100),
-      detail: `${round2(cbRate * 100)}% of advances get clawed back. Under ~3% is healthy, ~8%+ is worth attention.` },
+      score: clampS((0.15 - cbBlendedRate) / 0.15 * 100),
+      detail: `${round2(cbRate * 100)}% by premium` + (cbCountRate != null ? `, ${round2(cbCountRate * 100)}% by applications` : '') + ` get clawed back${cbCountRate != null ? ' (this score blends both)' : ''}. Under ~3% is healthy, ~8%+ is worth attention.` },
     { key: 'residual', label: 'Residual stability', weight: 0.15,
       score: clampS(residualShareNow / 0.55 * 100),
       detail: `${Math.round(residualShareNow * 100)}% of your earnings are recurring residual — income that pays without new writing.` },
