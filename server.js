@@ -198,6 +198,44 @@ function buildWorkbook(summary) {
       { header: 'Amount', key: 'amount', width: 12, money: true },
       { header: 'Writing Agents', key: 'agents', width: 32 },
     ], rows: (summary.downline ? summary.downline.policies : []) },
+    { name: 'Book Health', columns: [
+      { header: 'Driver', key: 'driver', width: 24 },
+      { header: 'Score (0-100)', key: 'score', width: 13 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Weight', key: 'weight', width: 10 },
+      { header: 'Notes', key: 'notes', width: 80 },
+    ], rows: (() => { const H = summary.health || {};
+      return [{ driver: 'OVERALL SCORE', score: (H.score != null ? H.score : ''), status: 'Grade ' + (H.grade || ''), weight: '', notes: 'Blended book health' }]
+        .concat((H.components || []).map(c => ({ driver: c.label, score: (c.score == null ? 'n/a' : c.score),
+          status: c.status || '', weight: Math.round((c.weight || 0) * 100) + '%', notes: c.detail || '' }))); })() },
+    { name: 'Chargebacks by Carrier', columns: [
+      { header: 'Carrier', key: 'carrier', width: 22 },
+      { header: 'Charged Back', key: 'charged_back', width: 14, money: true },
+      { header: 'Advanced', key: 'advanced', width: 14, money: true },
+      { header: 'Rate by Dollars %', key: 'rate_dollars', width: 16 },
+      { header: 'Policies Written', key: 'written', width: 14 },
+      { header: 'Policies Clawed Back', key: 'cb_policies', width: 18 },
+      { header: 'Rate by Applications %', key: 'rate_apps', width: 20 },
+    ], rows: ((summary.chargebacks || {}).by_carrier || []).map(r => ({ carrier: r.carrier, charged_back: r.amount,
+      advanced: r.advanced, rate_dollars: (r.rate == null ? '' : r.rate), written: r.written,
+      cb_policies: r.cb_policies, rate_apps: (r.count_rate == null ? '' : r.count_rate) })) },
+    { name: 'Retention by Carrier', columns: [
+      { header: 'Carrier', key: 'carrier', width: 22 },
+      { header: 'Policies', key: 'policies', width: 10 },
+      { header: 'Active', key: 'active', width: 9 },
+      { header: 'Lapsed', key: 'lapsed', width: 9 },
+      { header: 'Persistency %', key: 'persistency', width: 13 },
+      { header: 'Chargebacks', key: 'chargebacks', width: 13, money: true },
+      { header: 'Net', key: 'net', width: 13, money: true },
+    ], rows: ((summary.retention || {}).by_carrier || []).map(r => ({ carrier: r.key, policies: r.policies,
+      active: r.active, lapsed: r.lapsed, persistency: (r.persistency == null ? '' : Math.round(r.persistency * 100)),
+      chargebacks: r.chargebacks, net: r.net })) },
+    { name: 'Persistency by Age', columns: [
+      { header: 'Policy Age', key: 'age', width: 14 },
+      { header: 'Policies', key: 'policies', width: 10 },
+      { header: 'Still Paying %', key: 'persistency', width: 14 },
+    ], rows: (((summary.forecast || {}).persistency || {}).curve || []).map(c => ({ age: c.label,
+      policies: c.policies, persistency: (c.persistency == null ? '' : Math.round(c.persistency * 100)) })) },
   ]);
 }
 
