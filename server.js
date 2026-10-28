@@ -507,13 +507,18 @@ function handleAiKey(req, res) {
 // if CONTACT_WEBHOOK is set in the environment, also forwards it there. The recipient
 // address is never in the code — it lives in the webhook's destination / CONTACT_EMAIL env.
 // Roost is a PUBLIC repo, so it ships NO webhook secret — GitHub blocks Slack URLs in repos,
-// and Slack auto-revokes any that leak. Instead, Contact-form feedback is relayed to the
-// project's hosted HiStak endpoint, which records it server-side (and can forward it onward
-// from there — that forwarding secret lives only on the HiStak host, never here).
-// A self-hoster can override this: set FEEDBACK_RELAY to their own endpoint, or set their own
+// and Slack auto-revokes any that leak. Instead, Contact-form feedback is relayed to a public
+// catch-hook (a Make/Pipedream/Zapier webhook, or a hosted endpoint) that forwards it to Slack.
+// A self-hoster can override this with the FEEDBACK_RELAY* env vars below, or set their own
 // CONTACT_WEBHOOK_BUG / CONTACT_WEBHOOK_FEATURE / CONTACT_WEBHOOK to post to THEIR OWN
 // Slack/Discord directly instead of relaying.
-const FEEDBACK_RELAY = process.env.FEEDBACK_RELAY || 'https://<HISTAK_PUBLIC_URL>/api/contact';
+// Interim relay targets: public "catch-hook" URLs (e.g. a Make / Pipedream / Zapier webhook)
+// that forward to Slack. These are NOT secrets — the real Slack URL lives inside the no-code
+// tool — so they're safe to ship. The toggle picks the hook, so each can feed its own channel.
+// Override via env (FEEDBACK_RELAY_BUG / FEEDBACK_RELAY_FEATURE, or a single FEEDBACK_RELAY for
+// both). A value left as a <...> placeholder counts as unset, so feedback just saves locally.
+const RELAY_BUG     = process.env.FEEDBACK_RELAY_BUG     || process.env.FEEDBACK_RELAY || '<RELAY_BUG_URL>';
+const RELAY_FEATURE = process.env.FEEDBACK_RELAY_FEATURE || process.env.FEEDBACK_RELAY || '<RELAY_FEATURE_URL>';
 
 function postJson(urlStr, obj) {
   const u = new URL(urlStr);
@@ -543,10 +548,10 @@ function forwardContact(entry) {
           subject: '[Roost ' + entry.kind + '] from ' + who }, entry));
       return;
     }
-    // 2) Otherwise relay to the project's hosted endpoint (no secret shipped). Inert while the
-    //    default still holds the <HISTAK_PUBLIC_URL> placeholder.
-    if (FEEDBACK_RELAY && !FEEDBACK_RELAY.includes('<HISTAK_PUBLIC_URL>')) {
-      postJson(FEEDBACK_RELAY, { kind: entry.kind, message: entry.message,
+    // 2) Otherwise relay to the catch-hook for this kind (no secret shipped).
+    const relay = entry.kind === 'feature' ? RELAY_FEATURE : RELAY_BUG;
+    if (relay && !relay.includes('<')) {
+      postJson(relay, { kind: entry.kind, message: entry.message,
         email: entry.from_email, source: 'Roost' });
     }
   } catch {}
