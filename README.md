@@ -65,6 +65,14 @@ your machine.
   nothing else is deleted.
 - **Guided tour** — a short, skippable walkthrough teaches the app on first run
   and can be reopened anytime from the **?** button in the top bar.
+- **Color themes** — six hand-tuned accent themes (picker in the top bar), each
+  readable in both light and dark; the logo adopts the chosen theme.
+- **Policy type drill-down** — every policy is classified by line of business
+  (Medicare Advantage, Med Supp, Annuity, Life/Final Expense, etc.); click a type
+  or product in the Policies view to see all policies of that kind.
+- **Little things** — download any chart as a PNG (hover the chart), click a
+  summary KPI to jump to its detail section, a mobile back-to-top button, and a
+  Contact / feedback form (bug reports & feature requests).
 - **Earnings over time** — new business, residual, chargebacks, and net pay by
   week, month, quarter, or year, with a year-to-date running total.
 - **New business vs. residual** — separates up-front commissions from the
