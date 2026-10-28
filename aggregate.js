@@ -928,6 +928,12 @@ function buildSummary(allRecords, config) {
   const byFamily = retGroup(p => p.family);
   const active = pols.filter(p => p.status === 'Yes').length;
   const lapsed = pols.filter(p => p.status === 'No' && !p.reenrolled).length;
+  // Raw persistency counts EVERY stopped policy number as lapsed (including MA/Med Supp
+  // members who re-enrolled under a new number). The adjusted figure excludes those
+  // re-enrollments. Showing both tells the user how much of a "low" number is churn vs. a
+  // bookkeeping artifact of annual re-enrollment.
+  const lapsedRaw = pols.filter(p => p.status === 'No').length;
+  const persistencyRaw = (active + lapsedRaw) ? round2(active / (active + lapsedRaw)) : null;
   const noRes = pols.filter(p => p.status === 'No Residual').length;
   const clawback = round2(pols.reduce((s, p) => s + Math.min(0, p.chargebacks), 0)); // total money clawed back
   const cbPolicies = pols.filter(p => p.hasChargeback).length;
@@ -951,6 +957,7 @@ function buildSummary(allRecords, config) {
     latest_date: latestDate,
     totals: { policies: pols.length, active, lapsed, no_residual: noRes,
       persistency: (active + lapsed) ? round2(active / (active + lapsed)) : null,
+      persistency_raw: persistencyRaw,
       clawback, cb_policies: cbPolicies,
       rewrites: rewrites.count, true_lapses: trueLapses,
       at_risk_count: atRisk.length, at_risk_dollars: round2(atRisk.reduce((s, x) => s + x.at_risk, 0)) },
@@ -1609,24 +1616,33 @@ function buildSummary(allRecords, config) {
   // book lands in the B range and an excellent one reaches A — they reward good practice rather
   // than demanding perfection. The data penalty is proportional to how many statements you have.
   const dataPenalty = Math.min(100, (attention / Math.max(records.length, 1)) * 150);
+  const persistRawPct = persistencyRaw != null ? Math.round(persistencyRaw * 100) : null;
+  const persistAdjPct = (retention.totals.persistency != null) ? Math.round(retention.totals.persistency * 100) : null;
   const comps = [
     { key: 'persistency', label: 'Persistency', weight: 0.30,
       score: persistForScore == null ? null : clampS((persistForScore - 0.30) / 0.55 * 100),
-      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value. 85%+ is excellent. (Medicare Advantage members who re-enroll each year under a new policy number can read as lapsed, so this can understate a healthy book.)` },
+      benchmark: 'Typical 75–90%. 85%+ is excellent.',
+      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value.`
+        + ((persistRawPct != null && persistAdjPct != null && persistAdjPct !== persistRawPct) ? ` (${persistRawPct}% raw; ${persistAdjPct}% after adjusting for members who re-enroll each year under a new policy number.)` : ' (Medicare Advantage members who re-enroll under a new policy number can read as lapsed, so this can understate a healthy book.)') },
     { key: 'chargebacks', label: 'Chargeback control', weight: 0.20,
       score: clampS((0.20 - cbBlendedRate) / 0.17 * 100),
-      detail: `${round2(cbTrueRate * 100)}% by premium` + (cbCountRate != null ? `, ${round2(cbCountRate * 100)}% by applications` : '') + ` truly clawed back${cbCountRate != null ? ' (dollars weighted more than app count)' : ''} — reissued policies (rewrites) and fees excluded. Under ~4% is healthy, ~12%+ is worth attention.` },
+      benchmark: 'Healthy under ~4%; ~12%+ needs attention.',
+      detail: `${round2(cbTrueRate * 100)}% by premium` + (cbCountRate != null ? `, ${round2(cbCountRate * 100)}% by applications` : '') + ` truly clawed back${cbCountRate != null ? ' (dollars weighted more than app count)' : ''} — reissued policies (rewrites) and fees excluded.` },
     { key: 'residual', label: 'Residual stability', weight: 0.15,
       score: clampS(residualShareNow / 0.45 * 100),
+      benchmark: 'Mature books 40%+; growth books run lower (that’s fine).',
       detail: `${Math.round(residualShareNow * 100)}% of your earnings are recurring residual — income that pays without new writing. (A fast-growing book leans toward new business, which is healthy too.)` },
     { key: 'diversification', label: 'Carrier diversification', weight: 0.15,
       score: totRes > 0 ? clampS((0.75 - topShare) / 0.5 * 100) : null,
+      benchmark: 'Comfortable when the top carrier is under ~50%.',
       detail: totRes > 0 ? `Your top carrier${topCarrier ? ` (${topCarrier})` : ''} is ${Math.round(topShare * 100)}% of residual. Spreading it lowers risk and lifts the sale multiple.` : 'Not enough residual yet to assess.' },
     { key: 'growth', label: 'Growth', weight: 0.10,
       score: yoy == null ? null : clampS((yoy + 0.25) / 0.5 * 100),
+      benchmark: 'Flat-to-up year over year is healthy.',
       detail: yoy == null ? 'Need a prior year to measure growth.' : `Net income is ${yoy >= 0 ? 'up' : 'down'} ${Math.round(Math.abs(yoy) * 100)}% year over year.` },
     { key: 'data', label: 'Data completeness', weight: 0.10,
       score: clampS(100 - dataPenalty),
+      benchmark: 'Clear the Review page to reach 100%.',
       detail: attention === 0 ? 'Every statement parsed cleanly, no gaps.' : `${attention} item${attention === 1 ? '' : 's'} on the Review page out of ${records.length} statements — clearing them sharpens every number.` },
   ];
   const scored = comps.filter(c => c.score != null);

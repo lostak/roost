@@ -2154,7 +2154,7 @@ function renderHealth(){
     return `<div class="hc-item"><div class="hc-row"><div class="hc-lbl">${x.label}</div>
       <div class="hc-track"><div class="hc-fill" style="width:${s==null?0:s}%;background:${s==null?'transparent':sfill(s)}"></div></div>
       <div class="hc-val">${s==null?'n/a':s}</div></div>
-      <div class="hc-detail">${esc(x.detail)}</div></div>`;}).join('');
+      <div class="hc-detail">${esc(x.detail)}${x.benchmark?` <span style="opacity:.85">&middot; <b>Benchmark:</b> ${esc(x.benchmark)}</span>`:''}</div></div>`;}).join('');
 }
 function renderVisitBanner(){
   const el=$('#visitBanner'); if(!el||!DATA)return;
