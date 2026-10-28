@@ -1181,6 +1181,11 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3 style="margin-top:0">How your book value is calculated</h3>
           <div id="valBreakdownBody"></div>
         </div>
+        <div class="card chart-card tablecard" id="valByTypeCard" style="margin-bottom:24px">
+          <h3 style="margin-top:0">Value by line of business</h3>
+          <p class="hint">Each line of business sells at a different multiple of its annual residual &mdash; sticky Med&nbsp;Supp and Medicare Advantage renewals are worth more than thin annuity trails. Your estimate is the sum of these, not a single blanket multiple.</p>
+          <div id="valByType"></div>
+        </div>
         <div class="card" id="valWhatif" style="margin-bottom:24px">
           <h3 style="margin-top:0">What-if &mdash; your book value at different figures</h3>
           <p class="hint">Drag any lever to see where your book value lands. Nothing here is saved &mdash; it's a sandbox for "what would it take?"</p>
@@ -3686,6 +3691,13 @@ function renderValue(){
     +`Your <b>${V.new_ma_this_year||0}</b> new Medicare Advantage members written this year begin paying residual in January, adding about <b>${fmt0(V.ma_step_up_monthly||0)}/month</b> (~${fmt0((V.ma_step_up_monthly||0)*12)}/yr) to the recurring book. `
     +`This is an estimate of the recurring stream only — it excludes new business you'll write and assumes current policies persist.`;
   renderValueBreakdown(V);
+  const bt=(bv.by_type||[]);
+  if($('#valByType')) $('#valByType').innerHTML = bt.length
+    ? '<table>'+thead(['Line of business','Annual residual','Multiple','Value (mid)','Share'])+'<tbody>'
+      +bt.map(t=>`<tr><td style="text-align:left"><span class="chip">${esc(t.type)}</span></td><td>${fmt0(t.residual_annual)}</td><td>${t.mult_low}&ndash;${t.mult_high}&times;</td><td><b>${fmt0(t.mid)}</b></td><td>${bv.mid?Math.round(t.mid/bv.mid*100):0}%</td></tr>`).join('')
+      +`<tr><td style="text-align:left"><b>Total</b></td><td><b>${fmt0(V.residual_annual||0)}</b></td><td>${bv.blended_mult}&times; blended</td><td><b>${fmt0(bv.mid||0)}</b></td><td>100%</td></tr>`
+      +'</tbody></table>'
+    : '<p class="hint">Not enough recurring residual yet to value by line of business.</p>';
   initValueTools(V);
 }
 // Plain-English breakdown of what feeds the valuation.

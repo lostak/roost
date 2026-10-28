@@ -1095,6 +1095,32 @@ function buildSummary(allRecords, config) {
     cashflow.push({ label: MONTHS[mo] + " '" + String(y).slice(2), year: y, month: mo + 1,
       base: monthlyResidual, stepup: round2(stepup), amount: round2(monthlyResidual + stepup) });
   }
+  // Book value by line of business. A blanket 2–3x of annual residual over-/under-states
+  // the number because lines sell very differently: sticky Med Supp and MA renewals carry a
+  // higher multiple than thin annuity trails or Part D. We split the annual residual by each
+  // family's share of recurring residual and apply a per-line multiple, then sum.
+  const FAMILY_MULT = {
+    'Medicare Advantage': [2.0, 2.75, 3.5],
+    'Med Supp':           [2.75, 3.5, 4.0],
+    'Part D (PDP)':       [1.0, 1.5, 2.0],
+    'Hospital / Supplemental': [2.0, 2.5, 3.0],
+    'Dental / Vision':    [2.0, 2.5, 3.0],
+    'Life / Final Expense': [2.0, 2.75, 3.25],
+    'Annuity':            [1.5, 2.0, 2.5],
+    'Other':              [1.5, 2.0, 2.5],
+  };
+  const DEF_MULT = [2, 2.5, 3];
+  const totFamResid = byFamily.reduce((s, f) => s + Math.max(0, f.residual), 0);
+  const valueByType = byFamily.map(f => {
+    const share = totFamResid > 0 ? Math.max(0, f.residual) / totFamResid : 0;
+    const annual = round2(residualAnnual * share);
+    const m = FAMILY_MULT[f.key] || DEF_MULT;
+    return { type: f.key, residual_annual: annual, mult_low: m[0], mult_mid: m[1], mult_high: m[2],
+      low: round2(annual * m[0]), mid: round2(annual * m[1]), high: round2(annual * m[2]) };
+  }).filter(t => t.residual_annual > 0).sort((a, b) => b.mid - a.mid);
+  const sumV = k => round2(valueByType.reduce((s, t) => s + t[k], 0));
+  const vLow = sumV('low'), vMid = sumV('mid'), vHigh = sumV('high');
+  const blend = v => residualAnnual > 0 ? round2(v / residualAnnual) : 0;
   const value = {
     residual_annual: residualAnnual,
     inforce_policies: active,
@@ -1104,8 +1130,8 @@ function buildSummary(allRecords, config) {
     // Grounding figures for the what-if sliders and goal advisor:
     avg_residual_per_policy: active ? round2(residualAnnual / active) : 0,  // annual residual a typical active policy adds
     base_retention: retention.totals.persistency,                           // observed persistency (null if unknown)
-    book_value: { mult_low: 2, mult_mid: 2.5, mult_high: 3,
-      low: round2(residualAnnual * 2), mid: round2(residualAnnual * 2.5), high: round2(residualAnnual * 3) },
+    book_value: { mult_low: blend(vLow) || 2, mult_mid: blend(vMid) || 2.5, mult_high: blend(vHigh) || 3,
+      low: vLow, mid: vMid, high: vHigh, by_type: valueByType, blended_mult: blend(vMid) || 2.5 },
     cashflow,
     cashflow_total: round2(cashflow.reduce((s, m) => s + m.amount, 0)),
   };
