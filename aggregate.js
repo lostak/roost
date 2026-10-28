@@ -1565,27 +1565,29 @@ function buildSummary(allRecords, config) {
   const cbTrueRate = chargebacks.total_advances
     ? Math.abs((chargebacks.true_chargebacks || {}).amount || 0) / chargebacks.total_advances : 0;
   const cbCountRate = (chargebacks.true_count_rate != null) ? chargebacks.true_count_rate / 100 : null;
-  const cbBlendedRate = (cbCountRate != null) ? (cbTrueRate + cbCountRate) / 2 : cbTrueRate;
-  // Scores are gradients, not cliffs: a low figure should read "weak" (not a flat 0), and the
-  // data-quality penalty is proportional to how many statements you have.
-  const dataPenalty = Math.min(100, (attention / Math.max(records.length, 1)) * 220);
+  // Weight the dollar rate (actual financial exposure) more than the application count rate:
+  // a book can have many tiny lapsed apps without much money at risk, so the count rate alone
+  // shouldn't tank the score. Dollar 65% / count 35%.
+  const cbBlendedRate = (cbCountRate != null) ? (cbTrueRate * 0.65 + cbCountRate * 0.35) : cbTrueRate;
+  // Scores are gradients, not cliffs. Curves are calibrated against real agent books so a solid
+  // book lands in the B range and an excellent one reaches A — they reward good practice rather
+  // than demanding perfection. The data penalty is proportional to how many statements you have.
+  const dataPenalty = Math.min(100, (attention / Math.max(records.length, 1)) * 150);
   const comps = [
     { key: 'persistency', label: 'Persistency', weight: 0.30,
-      score: persistForScore == null ? null : clampS((persistForScore - 0.35) / 0.55 * 100),
-      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value. (Medicare Advantage members who re-enroll each year under a new policy number can read as lapsed, so this can understate a healthy book.)` },
-    // Blend the dollar rate (financial exposure) with the application rate (how many apps lapse),
-    // so a book can't look healthy on one while the other is bad.
+      score: persistForScore == null ? null : clampS((persistForScore - 0.30) / 0.55 * 100),
+      detail: persistForScore == null ? 'Not enough policy history yet.' : `${Math.round(persistForScore * 100)}% of policies keep paying — the single biggest driver of book value. 85%+ is excellent. (Medicare Advantage members who re-enroll each year under a new policy number can read as lapsed, so this can understate a healthy book.)` },
     { key: 'chargebacks', label: 'Chargeback control', weight: 0.20,
-      score: clampS((0.15 - cbBlendedRate) / 0.15 * 100),
-      detail: `${round2(cbTrueRate * 100)}% by premium` + (cbCountRate != null ? `, ${round2(cbCountRate * 100)}% by applications` : '') + ` truly clawed back${cbCountRate != null ? ' (this score blends both)' : ''} — reissued policies (rewrites) and fees excluded. Under ~3% is healthy, ~8%+ is worth attention.` },
+      score: clampS((0.20 - cbBlendedRate) / 0.17 * 100),
+      detail: `${round2(cbTrueRate * 100)}% by premium` + (cbCountRate != null ? `, ${round2(cbCountRate * 100)}% by applications` : '') + ` truly clawed back${cbCountRate != null ? ' (dollars weighted more than app count)' : ''} — reissued policies (rewrites) and fees excluded. Under ~4% is healthy, ~12%+ is worth attention.` },
     { key: 'residual', label: 'Residual stability', weight: 0.15,
-      score: clampS(residualShareNow / 0.55 * 100),
-      detail: `${Math.round(residualShareNow * 100)}% of your earnings are recurring residual — income that pays without new writing.` },
+      score: clampS(residualShareNow / 0.45 * 100),
+      detail: `${Math.round(residualShareNow * 100)}% of your earnings are recurring residual — income that pays without new writing. (A fast-growing book leans toward new business, which is healthy too.)` },
     { key: 'diversification', label: 'Carrier diversification', weight: 0.15,
-      score: totRes > 0 ? clampS((0.6 - topShare) / 0.4 * 100) : null,
+      score: totRes > 0 ? clampS((0.75 - topShare) / 0.5 * 100) : null,
       detail: totRes > 0 ? `Your top carrier${topCarrier ? ` (${topCarrier})` : ''} is ${Math.round(topShare * 100)}% of residual. Spreading it lowers risk and lifts the sale multiple.` : 'Not enough residual yet to assess.' },
     { key: 'growth', label: 'Growth', weight: 0.10,
-      score: yoy == null ? null : clampS((yoy + 0.15) / 0.45 * 100),
+      score: yoy == null ? null : clampS((yoy + 0.25) / 0.5 * 100),
       detail: yoy == null ? 'Need a prior year to measure growth.' : `Net income is ${yoy >= 0 ? 'up' : 'down'} ${Math.round(Math.abs(yoy) * 100)}% year over year.` },
     { key: 'data', label: 'Data completeness', weight: 0.10,
       score: clampS(100 - dataPenalty),

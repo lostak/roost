@@ -301,6 +301,18 @@ body.dark[data-accent="amber"]{--accent:#e0912f;--accent-2:#e86a9a;--accent-3:#d
 .palitem.sel .palettedot{border-color:var(--on-surface)}
 .palitem .pl{text-align:center;font-size:11px;color:var(--on-surface-var)}
 .palitem.sel .pl{color:var(--on-surface);font-weight:600}
+/* clickable summary KPIs that scroll to their detail section */
+.kpi-jump{cursor:pointer;position:relative}
+.kpi-jump::after{content:'\2193';position:absolute;top:10px;right:12px;font-size:12px;color:var(--on-surface-var);opacity:.55}
+.kpi-jump:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--glass-brd))}
+@keyframes jumpflash{0%{box-shadow:0 0 0 2px var(--accent),var(--glow)}100%{box-shadow:var(--glow)}}
+.jump-flash{animation:jumpflash 1.25s ease-out}
+/* back-to-top (mobile) */
+#toTop{position:fixed;right:16px;bottom:16px;z-index:55;width:46px;height:46px;border-radius:50%;border:none;
+  background:var(--grad-brand);color:#fff;font-size:22px;line-height:1;box-shadow:var(--glow);cursor:pointer;
+  opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .2s,transform .2s}
+#toTop.show{opacity:1;pointer-events:auto;transform:none}
+@media(min-width:641px){#toTop{display:none!important}}
 /* Base surface lives on BODY (which carries the .dark class), so it's theme-aware. The aurora
    sits just above it (z-index:0) and below the app content (.appbar/.layout are positioned above). */
 body{background:var(--surface);font-family:'Inter',Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -535,6 +547,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     </div>
   </div>
 </div>
+<button id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top" title="Back to top">&#8593;</button>
 <div class="layout">
   <div id="navBackdrop" onclick="toggleNav()"></div>
   <nav class="nav" id="nav">
@@ -983,7 +996,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <div class="card chart-card tablecard"><h3>Largest clawbacks</h3><div id="cbTop"></div></div>
         </div>
         <div class="card chart-card tablecard">
-          <h3>Rewrites &mdash; policies reissued, not lost</h3>
+          <h3 id="cbRewritesCard">Rewrites &mdash; policies reissued, not lost</h3>
           <p class="hint">When a clawback or a stopped residual is followed by a comparable product in the same line of business for the same client (e.g. a 10-year annuity reissued as a 15-year), the client stayed &mdash; it's a rewrite, not a true loss. A fresh initial commission offsets it. Residual lines that stop with no comparable replacement are counted as lapses.</p>
           <div id="cbRewriteSummary"></div>
           <div id="cbRewrites"></div>
@@ -1008,7 +1021,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3>Possible missing statements</h3>
           <div id="reviewGaps"></div>
         </div>
-        <div class="card chart-card tablecard" style="margin-bottom:24px">
+        <div class="card chart-card tablecard" id="reviewListCard" style="margin-bottom:24px">
           <h3>Statements to look at</h3>
           <div id="reviewList"></div>
         </div>
@@ -1958,10 +1971,10 @@ function renderChargebacks(){
   const kp=[
     {l:'Total charged back',v:fmt0(c.total||0),s:'all-time clawbacks',gold:true,neg:true},
     {l:'True chargebacks',v:fmt0(tc.amount||0),s:`client lost &middot; ${(tc.policies||0).toLocaleString()} ${tc.policies===1?'policy':'policies'}`,neg:true},
-    {l:'Rewrites',v:fmt0(rw.amount||0),s:`reissued, not lost &middot; ${(rw.policies||0).toLocaleString()} ${rw.policies===1?'policy':'policies'}`},
+    {l:'Rewrites',v:fmt0(rw.amount||0),s:`reissued, not lost &middot; ${(rw.policies||0).toLocaleString()} ${rw.policies===1?'policy':'policies'}`,t:'cbRewritesCard'},
     {l:'True chargeback rate',v:(c.true_count_rate!=null?c.true_count_rate.toFixed(1)+'%':'—'),s:`by applications &middot; vs ${c.count_rate!=null?c.count_rate.toFixed(1)+'%':'—'} gross`}
   ];
-  $('#cbKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+  $('#cbKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}${k.t?' kpi-jump':''}"${k.t?` onclick="scrollToSection('${k.t}')" title="Jump to details" role="button" tabindex="0"`:''}><div class="label">${k.l}</div>
     <div class="val${k.neg&&!k.gold?' neg':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
   const car=c.by_carrier||[];
   const overRate=car.some(r=>(r.rate!=null&&r.rate>100)||(r.count_rate!=null&&r.count_rate>100));
@@ -2017,12 +2030,12 @@ function renderReview(){
   // nav badge
   const badge=$('#reviewBadge'); if(badge){ if(cts.attention>0){badge.textContent=cts.attention;badge.style.display='';} else badge.style.display='none'; }
   const kp=[
-    {l:'Needs attention',v:(cts.attention||0),s:'statements + gaps',gold:(cts.attention>0)},
-    {l:'Flagged statements',v:(cts.flagged||0),s:`${cts.high||0} high priority`},
-    {l:'Possible missing',v:(cts.missing_est||0),s:`${cts.gaps||0} gap${cts.gaps===1?'':'s'} in cadence`},
+    {l:'Needs attention',v:(cts.attention||0),s:'statements + gaps',gold:(cts.attention>0),t:'reviewGapsCard'},
+    {l:'Flagged statements',v:(cts.flagged||0),s:`${cts.high||0} high priority`,t:'reviewListCard'},
+    {l:'Possible missing',v:(cts.missing_est||0),s:`${cts.gaps||0} gap${cts.gaps===1?'':'s'} in cadence`,t:'reviewGapsCard'},
     {l:'Typical cadence',v:(rv.cadence_days?rv.cadence_days+' days':'—'),s:'between pay periods'}
   ];
-  $('#reviewKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
+  $('#reviewKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}${k.t?' kpi-jump':''}"${k.t?` onclick="scrollToSection('${k.t}')" title="Jump to details" role="button" tabindex="0"`:''}><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
   const gaps=rv.gaps||[], cad=rv.cadence_days, dism=rv.dismissed_gaps||[];
   const gapsHtml=gaps.length?'<div class="revlist">'+gaps.map(g=>{const n=g.missing_est;
@@ -2975,6 +2988,10 @@ function renderDigest(){
   el.innerHTML=parts.map(p=>'&bull; '+p).join('<br>');
 }
 function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
+// Scroll a summary KPI's detail section into view with a brief highlight.
+function scrollToSection(id){const el=document.getElementById(id);if(!el)return;el.scrollIntoView({behavior:'smooth',block:'start'});el.classList.remove('jump-flash');void el.offsetWidth;el.classList.add('jump-flash');setTimeout(()=>el.classList.remove('jump-flash'),1300);}
+window.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.classList&&e.target.classList.contains('kpi-jump')){e.preventDefault();e.target.click();}});
+window.addEventListener('scroll',()=>{const b=document.getElementById('toTop');if(b)b.classList.toggle('show',window.scrollY>400);},{passive:true});
 
 // ================= GUIDED TOUR =================
 // A quick, skippable walkthrough shown on first run and reopenable any time via the
