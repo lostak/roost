@@ -517,7 +517,7 @@ function handleAiKey(req, res) {
 // tool — so they're safe to ship. The toggle picks the hook, so each can feed its own channel.
 // Override via env (FEEDBACK_RELAY_BUG / FEEDBACK_RELAY_FEATURE, or a single FEEDBACK_RELAY for
 // both). A value left as a <...> placeholder counts as unset, so feedback just saves locally.
-const RELAY_BUG     = process.env.FEEDBACK_RELAY_BUG     || process.env.FEEDBACK_RELAY || '<RELAY_BUG_URL>';
+const RELAY_BUG     = process.env.FEEDBACK_RELAY_BUG     || process.env.FEEDBACK_RELAY || 'https://hook.us2.make.com/mq1ox3k0kzukdiooomoqw3187tkdi4na';
 const RELAY_FEATURE = process.env.FEEDBACK_RELAY_FEATURE || process.env.FEEDBACK_RELAY || '<RELAY_FEATURE_URL>';
 
 function postJson(urlStr, obj) {
