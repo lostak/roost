@@ -22,8 +22,11 @@ const { buildSummary, prepareRecords } = require('./aggregate.js');
 // format) or the column-aware parser (2026 ASB format).
 function parsePdfBuffer(buf, fname){
   const text = extractText(buf);
-  return isNewFormat(text) ? parseStatementNew(extractPages(buf), text, fname)
-                           : parseStatement(text, fname);
+  const rec = isNewFormat(text) ? parseStatementNew(extractPages(buf), text, fname)
+                                : parseStatement(text, fname);
+  // No readable text at all = an image-only / scanned PDF, not an unrecognized format.
+  if (rec && (text || '').replace(/\s+/g, '').length < 40) rec.no_text = true;
+  return rec;
 }
 const ai = require('./ai.js');
 const { writeClientFolders } = require('./clients.js');
@@ -36,7 +39,7 @@ const CLIENTS_DIR = path.join(ROOT, 'Clients'); // ../Commissions/Clients
 const PORT = process.env.PORT || 5000;
 // Bump when parser.js output shape changes so cached records are re-parsed.
 // (v5: expanded carrier detection.)
-const PARSE_VERSION = 8;
+const PARSE_VERSION = 9;
 
 // ---- user configuration (downline roster, MA thresholds) ----
 function loadConfig() {

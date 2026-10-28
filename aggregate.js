@@ -1546,7 +1546,9 @@ function buildSummary(allRecords, config) {
     const computed = round2(num(r.advances_total) + num(r.residual_total) + num(r.chargebacks_total));
     const net = num(r.pay_period_net);
     if (net === 0 && computed === 0 && !n) {
-      issues.push({ code: 'empty', sev: 'high', msg: 'No commission data was parsed — the statement format may be unrecognized.' });
+      issues.push({ code: 'empty', sev: 'high', msg: r.no_text
+        ? 'This PDF has no readable text layer — it looks like a scanned or image-only file. Re-download it from the carrier portal (or re-save it as a text PDF) so its figures can be read.'
+        : 'No commission data was parsed — the statement format may be unrecognized.' });
     } else {
       const diff = round2(Math.abs(computed - net));
       const tol = Math.max(1, Math.abs(net) * 0.01);
