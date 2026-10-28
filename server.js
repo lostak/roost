@@ -493,8 +493,14 @@ function forwardContact(entry) {
   try {
     const u = new URL(hook);
     const lib = u.protocol === 'http:' ? require('http') : require('https');
-    const payload = JSON.stringify(Object.assign({ to: process.env.CONTACT_EMAIL || null,
-      subject: '[Roost ' + entry.kind + ']' }, entry));
+    const label = entry.kind === 'feature' ? 'Feature request' : 'Bug report';
+    const who = entry.from_email || 'anonymous';
+    // One body that renders anywhere: Slack reads "text", Discord reads "content",
+    // an email relay (Zapier/Make) reads "to"/"subject". Capped for Discord's 2000-char limit.
+    const text = ('Roost — ' + label + '\nFrom: ' + who + '\n\n' + (entry.message || '')).slice(0, 1900);
+    const payload = JSON.stringify(Object.assign(
+      { content: text, text: text, to: process.env.CONTACT_EMAIL || null,
+        subject: '[Roost ' + entry.kind + '] from ' + who }, entry));
     const rq = lib.request({ method: 'POST', hostname: u.hostname, port: u.port || undefined,
       path: (u.pathname || '/') + (u.search || ''),
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } },
