@@ -1059,6 +1059,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3>Possible missing statements</h3>
           <div id="reviewGaps"></div>
         </div>
+        <div class="card chart-card tablecard" id="reviewNoPayCard" style="margin-bottom:24px;display:none">
+          <h3>Weeks with no paycheck <span class="hint" style="font-weight:400;font-size:13px">&mdash; statement on file, nothing missing</span></h3>
+          <div id="reviewNoPay"></div>
+        </div>
         <div class="card chart-card tablecard" id="reviewListCard" style="margin-bottom:24px">
           <h3>Statements to look at</h3>
           <div id="reviewList"></div>
@@ -2119,7 +2123,9 @@ function renderReview(){
       <span class="npdate">${fmtDate(s.date)||'Undated'}</span><span class="neg" style="min-width:64px">${fmt0(s.net)}</span>
       <span class="chip">${reasonLabel(s.reason)}</span><span class="npfile">${esc(s.file)}</span>
     </div>`).join('')+'</div></details>':'';
-  $('#reviewGaps').innerHTML=gapsHtml+dismHtml+npHtml;
+  $('#reviewGaps').innerHTML=gapsHtml+dismHtml;
+  $('#reviewNoPay').innerHTML=npHtml;
+  { const npc=$('#reviewNoPayCard'); if(npc)npc.style.display=np.length?'':'none'; }
   const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">High priority</span>':'<span class="chip">Worth a look</span>';
   const list=rv.statements||[];
   $('#reviewList').innerHTML=list.length?'<div class="revlist">'+list.map(s=>{const hi=s.issues.some(i=>i.sev==='high');
