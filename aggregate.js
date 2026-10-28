@@ -404,6 +404,10 @@ function buildSummary(allRecords, config) {
   // in or out, so you can correct the automatic result.
   const INC = (config.downline_include || []).map(normName).filter(Boolean);
   const EXC = (config.downline_exclude || []).map(normName).filter(Boolean);
+  // Agencies / IMOs carry the top (100%) contract level on the statement — they sit ABOVE
+  // you in the hierarchy (your upline), not below. The "ever wrote at level 100" rule would
+  // otherwise flag them as your downline, so they're hardcoded out no matter the level.
+  const HOUSE_AGENTS = new Set(['AMERICANSENIORBENEFITS']);
   const allAgents = {}, autoDL = {}, agentSeen = {};
   for (const r of records) for (const it of (r.items || [])) {
     if (!secKey(it.section) || !isRealPolicy(it)) continue;
@@ -422,6 +426,7 @@ function buildSummary(allRecords, config) {
     let dl = !!autoDL[k];
     if (INC.includes(k)) dl = true;
     if (EXC.includes(k)) dl = false;
+    if (HOUSE_AGENTS.has(k)) dl = false;   // the IMO/agency is your upline, never downline
     if (dl) isDL[k] = true;
   }
   // pass 2 — attribute ONLY pure-override production to the downline.
