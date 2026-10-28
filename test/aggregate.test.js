@@ -55,6 +55,16 @@ eq(s.chargebacks.rewrites.amount, -100, 'chargebacks: ALICE\'s clawback is a rew
 ok(Math.abs(s.chargebacks.true_chargebacks.amount + s.chargebacks.rewrites.amount - s.chargebacks.total) < 0.01,
   'chargebacks: true + rewrite = total');
 
+// ---- chargeback figures stay in sync across the app ----------------------
+// The insights chargeback-rate must also exclude the fee: policy clawbacks are
+// -180 on 1400 advanced = ~0.129 (not 205/1400 if the -25 fee leaked in).
+ok(Math.abs(s.insights.stats.chargeback_rate - 0.129) < 0.005,
+  'sync: insights chargeback rate uses policy clawbacks only (fee excluded)');
+// Book Health's chargeback component scores off TRUE chargebacks (rewrites excluded).
+const cbComp = s.health.components.find(c => c.key === 'chargebacks');
+ok(cbComp && /rewrites.*excluded|excluded/.test(cbComp.detail),
+  'sync: Book Health chargeback control is based on true chargebacks (rewrites/fees excluded)');
+
 // ---- no-pay weeks counted, not flagged missing ---------------------------
 eq(s.review.counts.gaps, 0, 'review: the pending (no-pay) week counts as covered, so no false gap');
 eq(s.review.counts.no_pay, 1, 'review: the pending week is surfaced as a no-pay week');
