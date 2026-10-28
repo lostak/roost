@@ -1699,6 +1699,7 @@ function markActiveGroup(){
     g.classList.toggle('hasactive', !!g.querySelector('a.active')));
 }
 document.querySelectorAll('#nav a').forEach(a=>{
+  if(!a.dataset.view) return;   // skip non-view links (e.g. Contact/feedback) so their own onclick survives
   // nav links have no href, so make them keyboard-focusable and Enter/Space-activatable.
   a.setAttribute('tabindex','0'); a.setAttribute('role','link');
   a.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); a.click(); } });
