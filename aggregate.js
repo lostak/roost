@@ -1282,11 +1282,19 @@ function buildSummary(allRecords, config) {
   // Count-based view (per application / policy, not premium dollars): a dollar rate is skewed by a
   // few high-premium cases, so we also track how many distinct policies were written vs. clawed back.
   const writtenByCarrier = {}, cbPolByCarrier = {}, allWritten = new Set(), allCbPol = new Set();
+  // A chargeback is a policy clawback. The statement's chargeback section also carries
+  // non-policy deductions — office-expense fees and production-bonus/trip reversals —
+  // which have no policy number and a non-carrier bucket. Those are real deductions but
+  // not clawbacks, so they'd badly inflate the chargeback total and rate; keep them out
+  // of this view (they still count in each record's chargebacks_total for net reconciliation).
+  const isPolicyClawback = it => it.policy && it.product !== 'MISC'
+    && it.carrier !== 'Fees' && it.carrier !== 'Bonus / Adjustment';
   for (const r of records) for (const it of (r.items || [])) {
     if (it.section === 'chargebacks') {
+      if (!isPolicyClawback(it)) continue;
       cbItems.push({ date: r.date, year: r.year, carrier: it.carrier, family: productFamily(it.product),
         client: it.client, product: it.product, policy: it.policy, amount: round2(it.payable) });
-      if (it.policy) { (cbPolByCarrier[it.carrier] ||= new Set()).add(it.policy); allCbPol.add(it.policy); }
+      (cbPolByCarrier[it.carrier] ||= new Set()).add(it.policy); allCbPol.add(it.policy);
     } else if (it.section === 'advances') {
       advByCarrier[it.carrier] = (advByCarrier[it.carrier] || 0) + it.payable;
       if (it.policy) { (writtenByCarrier[it.carrier] ||= new Set()).add(it.policy); allWritten.add(it.policy); }

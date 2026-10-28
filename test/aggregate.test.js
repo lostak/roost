@@ -1,0 +1,62 @@
+'use strict';
+// Aggregate tests — zero dependencies, synthetic records only (no PII).
+// Run: node test/aggregate.test.js
+const assert = require('assert');
+const { buildSummary } = require('../aggregate.js');
+
+let n = 0;
+const ok = (c, m) => { assert.ok(c, m); n++; };
+const eq = (a, b, m) => { assert.strictEqual(a, b, m); n++; };
+
+const item = (section, policy, client, product, carrier, payable, premium) =>
+  ({ section, policy, client, product, carrier, premium: premium || 0, comm_pct: 0, payable,
+     agents: [{ name: 'JANE AGENT', level: 100 }] });
+
+const mk = (date, items, opts = {}) => {
+  const sum = s => items.filter(i => i.section === s).reduce((a, i) => a + i.payable, 0);
+  const adv = sum('advances'), res = sum('commission'), cb = sum('chargebacks');
+  return { file: date + '.pdf', holder: 'Jane Agent', date, year: +date.slice(0, 4),
+    pending: !!opts.pending, paid: opts.pending ? false : true,
+    no_pay_reason: opts.pending ? 'below_minimum' : null,
+    pay_period_net: opts.pending ? res : (adv + res + cb),
+    advances_total: adv, residual_total: res, chargebacks_total: cb,
+    pending_total: opts.pending ? res : 0,
+    ytd_advances: 0, ytd_commission: 0, ytd_chargebacks: 0, ytd_total: 0, items };
+};
+
+// Six consecutive weekly statements. ALICE buys an annuity (P1), it's clawed back
+// and reissued as a longer annuity (P2) = a rewrite. BOB's policy (Q9) is a true
+// chargeback. The 4th week is an "issued but unpaid" pending statement. The last
+// week also carries an office-expense FEE in the chargeback section (not a clawback).
+const recs = [
+  mk('2026-01-07', [item('advances', 'P1', 'TEST, ALICE', 'ATHENE PERF ELITE 10', 'Athene', 500, 1000)]),
+  mk('2026-01-14', [item('commission', 'P1', 'TEST, ALICE', 'ATHENE PERF ELITE 10', 'Athene', 20)]),
+  mk('2026-01-21', [item('advances', 'Q9', 'OTHER, BOB', 'HUMANA MEDADVANTAGE', 'Humana', 300)]),
+  mk('2026-01-28', [item('commission', 'P1', 'TEST, ALICE', 'ATHENE PERF ELITE 10', 'Athene', 20)], { pending: true }),
+  mk('2026-02-04', [item('chargebacks', 'P1', 'TEST, ALICE', 'ATHENE PERF ELITE 10', 'Athene', -100),
+                    item('advances', 'P2', 'TEST, ALICE', 'ATHENE PERF ELITE 15', 'Athene', 600, 1200)]),
+  mk('2026-02-11', [item('chargebacks', 'Q9', 'OTHER, BOB', 'HUMANA MEDADVANTAGE', 'Humana', -80),
+                    item('chargebacks', '', '', 'Office Expense Fee 25/350', 'Fees', -25)]),
+];
+const s = buildSummary(recs, {});
+
+// ---- rewrites ------------------------------------------------------------
+eq(s.rewrites.count, 1, 'rewrites: one rewrite detected');
+eq(s.rewrites.from_chargeback, 1, 'rewrites: it came from the initial-commission window');
+const ev = s.rewrites.events[0];
+ok(ev && ev.from_product === 'ATHENE PERF ELITE 10' && ev.to_product === 'ATHENE PERF ELITE 15',
+  'rewrites: 10-yr annuity reissued as a 15-yr is captured as from -> to');
+
+// ---- chargebacks: MISC/fees excluded, split reconciles -------------------
+eq(s.chargebacks.total, -180, 'chargebacks: only policy clawbacks counted (-100 + -80); the -25 fee is excluded');
+ok(!s.chargebacks.top.some(t => t.carrier === 'Fees'), 'chargebacks: no fee lines in the clawback list');
+eq(s.chargebacks.true_chargebacks.amount, -80, 'chargebacks: BOB is a true chargeback');
+eq(s.chargebacks.rewrites.amount, -100, 'chargebacks: ALICE\'s clawback is a rewrite');
+ok(Math.abs(s.chargebacks.true_chargebacks.amount + s.chargebacks.rewrites.amount - s.chargebacks.total) < 0.01,
+  'chargebacks: true + rewrite = total');
+
+// ---- no-pay weeks counted, not flagged missing ---------------------------
+eq(s.review.counts.gaps, 0, 'review: the pending (no-pay) week counts as covered, so no false gap');
+eq(s.review.counts.no_pay, 1, 'review: the pending week is surfaced as a no-pay week');
+
+console.log('aggregate: ' + n + ' checks passed');
