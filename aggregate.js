@@ -220,6 +220,38 @@ function buildSummary(allRecords, config) {
   const records = mergedRecs.filter(r => r.date);
   const undatedRecs = mergedRecs.filter(r => !r.date);
   const pendingRecs = cloned.filter(r => r.pending && keep(r));
+
+  // ---- shared cadence-gap analysis (one source of truth for Review AND Audit) ----
+  // Covered weeks = EVERY uploaded statement date — non-pending AND pending/no-pay, which
+  // are still issued statements. A flat, sorted, cross-year list, so a gap that straddles a
+  // year boundary (e.g. Dec 28 -> Jan 11) is detected too. Gaps use a cadence-derived
+  // threshold (not a hardcoded day count), and carry whether the user dismissed them.
+  const _gapDates = [...new Set([
+    ...records.filter(r => r.date).map(r => r.date),
+    ...pendingRecs.filter(r => r.date).map(r => r.date),
+  ])].sort();
+  const _gapDaily = [];
+  for (let i = 1; i < _gapDates.length; i++) _gapDaily.push((Date.parse(_gapDates[i]) - Date.parse(_gapDates[i - 1])) / 864e5);
+  const gapCadence = median(_gapDaily);
+  const dismissedGaps = new Set((Array.isArray(config.dismissed_gaps) ? config.dismissed_gaps : []).map(String));
+  const cadenceGapList = [];
+  if (_gapDates.length >= 4 && gapCadence > 0 && gapCadence <= 45) {
+    const stepMs = Math.round(gapCadence) * 864e5;
+    for (let i = 1; i < _gapDates.length; i++) {
+      const g = (Date.parse(_gapDates[i]) - Date.parse(_gapDates[i - 1])) / 864e5;
+      if (g <= gapCadence * 1.7) continue;
+      const key = _gapDates[i - 1] + '|' + _gapDates[i];
+      const expected = [];
+      const start = Date.parse(_gapDates[i - 1] + 'T00:00:00Z'), end = Date.parse(_gapDates[i] + 'T00:00:00Z');
+      for (let t = start + stepMs; t < end - stepMs * 0.4 && expected.length < 24; t += stepMs)
+        expected.push(new Date(t).toISOString().slice(0, 10));
+      cadenceGapList.push({ after: _gapDates[i - 1], before: _gapDates[i], days: Math.round(g),
+        missing_est: Math.max(1, expected.length || Math.round(g / gapCadence) - 1), key, expected,
+        dismissed: dismissedGaps.has(key) });
+    }
+  }
+  const activeGaps = cadenceGapList.filter(g => !g.dismissed);
+
   const reclass = reclassifyMA(records, config.ma_reclass);
   const bonusInfo = classifyBonuses(records);
 
@@ -996,21 +1028,9 @@ function buildSummary(allRecords, config) {
           drop: round2(rs[i - 1].ytd_total - rs[i].ytd_total) });
     }
   }
-  // Cadence gaps use EVERY uploaded statement date — including pending / no-pay weeks,
-  // which are still issued statements and so count as coverage. (This matches the Review
-  // page; without it a week that only has a pending statement reads as missing here even
-  // after it's been uploaded.)
-  const cadDates = {};
-  for (const r of records) if (r.date) (cadDates[r.year] ||= new Set()).add(r.date);
-  for (const r of pendingRecs) if (r.date) { const yy = Number(String(r.date).slice(0, 4)); (cadDates[yy] ||= new Set()).add(r.date); }
-  const cadenceGaps = [];
-  for (const y of Object.keys(cadDates)) {
-    const ds = [...cadDates[y]].sort();
-    for (let i = 1; i < ds.length; i++) {
-      const days = Math.round((Date.parse(ds[i]) - Date.parse(ds[i - 1])) / 86400000);
-      if (days > 14) cadenceGaps.push({ from: ds[i - 1], to: ds[i], days });
-    }
-  }
+  // Same cadence gaps the Review page uses — one source of truth, pending weeks counted,
+  // cross-year gaps included, user-dismissed gaps excluded.
+  const cadenceGaps = activeGaps.map(g => ({ from: g.after, to: g.before, days: g.days }));
   const reconciliation = allYears.map(y => {
     const rs = byYr[y] || [];
     const summed = round2(rs.reduce((s, r) => s + num(r.pay_period_net), 0));
@@ -1504,37 +1524,13 @@ function buildSummary(allRecords, config) {
     const issues = reviewFlags(r);
     if (issues.length) reviewItems.push({ file: r.file, holder: r.holder || null, date: r.date, net: num(r.pay_period_net), issues });
   }
-  // Covered pay periods include the "nothing was paid" statements (negative net
-  // after chargebacks, or a positive net below the weekly payout minimum). The
-  // carrier still issues those — usually as pending statements — and they get
-  // uploaded, so a week that has one is NOT a missing week.
-  const dates = [...new Set([
-    ...records.filter(r => r.date).map(r => r.date),
-    ...pendingRecs.filter(r => r.date).map(r => r.date),
-  ])].sort();
-  const gapsDays = [];
-  for (let i = 1; i < dates.length; i++) gapsDays.push((Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5);
-  const cadence = median(gapsDays);
-  // Gaps the user has marked "not missing" (e.g. a week with no statement issued) are remembered
-  // in config so they stop being flagged and stop dragging the data-quality score.
-  const dismissed = new Set((Array.isArray(config.dismissed_gaps) ? config.dismissed_gaps : []).map(String));
-  const gaps = [];
-  if (dates.length >= 4 && cadence > 0 && cadence <= 45) {
-    const stepMs = Math.round(cadence) * 864e5;
-    for (let i = 1; i < dates.length; i++) {
-      const g = (Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5;
-      if (g <= cadence * 1.7) continue;
-      const key = dates[i - 1] + '|' + dates[i];
-      if (dismissed.has(key)) continue;
-      // the specific dates that would fall at your cadence inside the gap — what to go look for
-      const expected = [];
-      const start = Date.parse(dates[i - 1] + 'T00:00:00Z'), end = Date.parse(dates[i] + 'T00:00:00Z');
-      for (let t = start + stepMs; t < end - stepMs * 0.4 && expected.length < 24; t += stepMs)
-        expected.push(new Date(t).toISOString().slice(0, 10));
-      gaps.push({ after: dates[i - 1], before: dates[i], days: Math.round(g),
-        missing_est: Math.max(1, expected.length || Math.round(g / cadence) - 1), key, expected });
-    }
-  }
+  // Missing-week gaps come from the one shared cadence analysis above (also used by the
+  // Audit tab) — pending/no-pay weeks count as coverage, cross-year gaps are caught, and
+  // gaps the user marked "not missing" are excluded.
+  const cadence = gapCadence;
+  const dismissed = dismissedGaps;
+  const gaps = activeGaps.map(g => ({ after: g.after, before: g.before, days: g.days,
+    missing_est: g.missing_est, key: g.key, expected: g.expected }));
   // Weeks a statement was issued but nothing was paid (negative net after
   // chargebacks, or a positive net below the weekly payout minimum). These are
   // uploaded and accounted for — surfaced so the user can see the period is
