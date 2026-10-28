@@ -1538,6 +1538,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="card tablecard">
           <table id="cliTable"></table>
         </div>
+        <div id="cliMoreBar" style="margin:12px 2px"></div>
         <div class="card chart-card tablecard">
           <h3>Likely households (shared surname)</h3>
           <p class="hint">Grouped by last name &mdash; a quick way to spot spouses and family you can review together.</p>
@@ -1566,6 +1567,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="card tablecard">
           <table id="polTable"></table>
         </div>
+        <div id="polMoreBar" style="margin:12px 2px"></div>
       </section>
 
     </div>
@@ -3608,10 +3610,11 @@ function renderClients(){
   const q=($('#cliSearch').value||'').toLowerCase();
   const rows=(C.list||[]).filter(c=>!q||(c.client+' '+c.families.join(' ')+' '+c.carriers.join(' ')).toLowerCase().includes(q));
   $('#cliTable').innerHTML=thead(['Client','Policies','Lines of business','Net earned','Active','Lapsed','Cross-sell'])
-    +'<tbody>'+rows.slice(0,500).map(c=>`<tr class="rowlink" data-client="${encodeURIComponent(c.client)}">
+    +'<tbody>'+rows.slice(0,cliLimit).map(c=>`<tr class="rowlink" data-client="${encodeURIComponent(c.client)}">
       <td><b>${esc(c.client)}</b> <span class="hint">&rsaquo;</span></td><td>${c.policies}</td><td>${c.families.map(f=>`<span class="chip">${esc(f)}</span>`).join(' ')}</td>
       <td class="${cls(c.net)}"><b>${fmt(c.net)}</b></td><td>${c.active}</td><td>${c.lapsed}</td>
       <td>${c.cross_sell?`<span style="color:var(--primary)">${c.cross_sell}</span>`:'&mdash;'}</td></tr>`).join('')+'</tbody>';
+  if($('#cliMoreBar'))$('#cliMoreBar').innerHTML=moreBarHtml('cli',Math.min(cliLimit,rows.length),rows.length);
   $('#cliHouseTable').innerHTML=thead(['Surname','People','Policies','Combined net','Members'])
     +'<tbody>'+(C.households||[]).map(h=>`<tr>
       <td><b>${h.surname}</b></td><td>${h.clients}</td><td>${h.policies}</td><td><b>${fmt(h.net)}</b></td>
@@ -3853,9 +3856,21 @@ function renderRetention(){
     : '<tbody><tr><td class="hint">No lapses or chargebacks recorded.</td></tr></tbody>';
 }
 
+// ---- table paging: show a page at a time instead of silently truncating ----
+const TABLE_PAGE=300;
+let polLimit=TABLE_PAGE, cliLimit=TABLE_PAGE;
+function moreBarHtml(which, shown, total){
+  if(total<=shown) return total>TABLE_PAGE?`<span class="hint">Showing all ${total.toLocaleString()}</span>`:'';
+  return `<span class="hint">Showing ${shown.toLocaleString()} of ${total.toLocaleString()}</span>`
+    +` <button class="btn tonal" style="padding:5px 13px;margin-left:10px" onclick="tableMore('${which}')">Show ${Math.min(TABLE_PAGE,total-shown)} more</button>`
+    +` <button class="btn ghost" style="padding:5px 13px" onclick="tableAll('${which}')">Show all</button>`;
+}
+function tableMore(w){ if(w==='pol'){polLimit+=TABLE_PAGE;renderPolicies(DATA.all_years);} else {cliLimit+=TABLE_PAGE;renderClients();} }
+function tableAll(w){ if(w==='pol'){polLimit=1e9;renderPolicies(DATA.all_years);} else {cliLimit=1e9;renderClients();} }
+
 let polFilter=null; // {field:'type'|'product', value}
-function setPolFilter(field,value){ polFilter=(polFilter&&polFilter.field===field&&polFilter.value===value)?null:{field,value}; renderPolicies(DATA.all_years); }
-function clearPolFilter(){ polFilter=null; renderPolicies(DATA.all_years); }
+function setPolFilter(field,value){ polFilter=(polFilter&&polFilter.field===field&&polFilter.value===value)?null:{field,value}; polLimit=TABLE_PAGE; renderPolicies(DATA.all_years); }
+function clearPolFilter(){ polFilter=null; polLimit=TABLE_PAGE; renderPolicies(DATA.all_years); }
 function renderPolicies(yl){
   const q=($('#polSearch').value||'').toLowerCase();
   let rows=(DATA.policies||[]).filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product+' '+(p.type||'')).toLowerCase().includes(q));
@@ -3865,13 +3880,14 @@ function renderPolicies(yl){
     ? `<div style="margin-bottom:10px">Showing <b>${esc(polFilter.field)}</b>: <span class="chip" style="cursor:pointer;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)" onclick="clearPolFilter()" title="Clear filter">${esc(polFilter.value)} &times;</span> <span class="hint">${rows.length} ${rows.length===1?'policy':'policies'}</span></div>`
     : '';
   $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Type','Product',...yl.map(String),'Total','Pmts'])
-    +'<tbody>'+rows.slice(0,400).map(p=>`<tr>
+    +'<tbody>'+rows.slice(0,polLimit).map(p=>`<tr>
       <td style="text-align:left">${esc(p.client)||'&mdash;'}</td><td style="text-align:left"><span class="chip">${esc(p.carrier)}</span></td>
       <td class="mono" style="text-align:left">${esc(p.policy)}</td>
       <td style="text-align:left"><span class="chip clickchip" data-pf="type" data-pv="${esc(p.type||'Other')}" title="Show all ${esc(p.type||'Other')} policies">${esc(p.type||'Other')}</span></td>
       <td style="text-align:left"><span class="clickchip" data-pf="product" data-pv="${esc(p.product||'')}" title="Show all policies with this product" style="text-decoration:underline;text-decoration-style:dotted;cursor:pointer">${esc((p.product||'').slice(0,34))||'&mdash;'}</span></td>
       ${yl.map(y=>`<td>${fmt(p[String(y)]||0)}</td>`).join('')}
       <td><b>${fmt(p.total)}</b></td><td>${p.payments}</td></tr>`).join('')+'</tbody>';
+  if($('#polMoreBar'))$('#polMoreBar').innerHTML=moreBarHtml('pol',Math.min(polLimit,rows.length),rows.length);
 }
 
 // ---- selectors / wiring ----
@@ -3903,7 +3919,7 @@ bindProj('#projConv','conversion',100);
 bindProj('#projRenew','renewal',100);
 bindProj('#projCB','chargeback',100);
 $('#projYears').addEventListener('input',()=>{proj.years=Number($('#projYears').value);projDraw();});
-document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);if(e.target.id==='cliSearch')renderClients();});
+document.addEventListener('input',e=>{if(e.target.id==='polSearch'){polLimit=TABLE_PAGE;renderPolicies(DATA.all_years);}if(e.target.id==='cliSearch'){cliLimit=TABLE_PAGE;renderClients();}});
 // click a Type or Product in the policies table to filter to every policy of that kind
 $('#polTable').addEventListener('click',e=>{const el=e.target.closest('[data-pf]');if(!el)return;setPolFilter(el.dataset.pf,el.dataset.pv);});
 
