@@ -1922,7 +1922,14 @@ function renderReview(){
     </div></div>`;}).join('')+'</div>'
     :'<p class="hint">No gaps detected — your pay periods look continuous.</p>';
   const dismHtml=dism.length?`<p class="hint" style="margin-top:16px">Marked as not missing: ${dism.map(k=>{const p=String(k).split('|');return `<span class="chip" style="cursor:pointer" title="Restore this gap" onclick="restoreGap('${p[0]}','${p[1]}')">${fmtDate(p[0])} &rarr; ${fmtDate(p[1])} &times;</span>`;}).join(' ')}</p>`:'';
-  $('#reviewGaps').innerHTML=gapsHtml+dismHtml;
+  const np=rv.no_pay||[];
+  const reasonLabel=r=>r==='chargebacks'?'negative after chargebacks':r==='below_minimum'?'under the weekly payout minimum':'approved, not yet paid';
+  const npHtml=np.length?`<div style="margin-top:20px"><div class="revrow-t">${np.length} week${np.length===1?'':'s'} issued a statement but paid nothing <span class="hint" style="font-weight:400">&mdash; uploaded and accounted for, not missing</span></div>
+    <div class="revlist" style="margin-top:10px">`+np.map(s=>`<div class="revrow"><div class="revrow-ic">&#8505;</div><div style="flex:1">
+      <div class="revrow-t">${fmtDate(s.date)||'Undated'} &mdash; ${fmt0(s.net)} <span class="chip" style="margin-left:6px">${reasonLabel(s.reason)}</span></div>
+      <div class="revrow-s">File: ${esc(s.file)}${s.holder?` &middot; ${titleize(s.holder)}`:''}</div>
+    </div></div>`).join('')+'</div></div>':'';
+  $('#reviewGaps').innerHTML=gapsHtml+dismHtml+npHtml;
   const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">High priority</span>':'<span class="chip">Worth a look</span>';
   const list=rv.statements||[];
   $('#reviewList').innerHTML=list.length?'<div class="revlist">'+list.map(s=>{const hi=s.issues.some(i=>i.sev==='high');

@@ -1,6 +1,10 @@
 'use strict';
 // ---- statement parser (pure JS; operates on line-structured text) ----
 
+// Carrier's weekly payout minimum: a positive net below this is not paid out and
+// carries to the next week, but a statement is still issued for the period.
+const PAYOUT_MINIMUM = 100;
+
 const DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
 const CURRENCY_G = /\$(-?[\d,]+\.\d{2})/g;
 const CURRENCY_1 = /\$(-?[\d,]+\.\d{2})/;
@@ -130,6 +134,11 @@ function sectionFor(line, current){
 function parsePending(text){
   const nm = text.match(/Pay Period:\s*\$\s*(-?[\d,]+\.\d{2})/);
   const ym = text.match(/Year To Date:\s*\$\s*(-?[\d,]+\.\d{2})/);
+  // Pending statements print the pay-period date on its own line before the
+  // "Pay Period:" total. Read it so the statement is placed by its real date
+  // rather than the filename (which can be mistyped), closing false "missing week" gaps.
+  const head = text.split(/Pay Period:/)[0];
+  const dm = head.match(DATE_RE);
   const items = []; let total = 0;
   for (const line of text.split('\n')){
     const amt = rowAmounts(line);
@@ -139,7 +148,7 @@ function parsePending(text){
   }
   return {
     pending: true,
-    header: { holder: grabHolder(text), pay_period_date: null, pay_period_net: nm ? money(nm[1]) : 0,
+    header: { holder: grabHolder(text), pay_period_date: dm ? dm[0] : null, pay_period_net: nm ? money(nm[1]) : 0,
       ytd_advances: null, ytd_commission: null, ytd_chargebacks: null,
       ytd_total: ym ? money(ym[1]) : null },
     items,
@@ -199,13 +208,27 @@ function finalizeRecord(data, fname){
   if (!d) d = dateFromFilename(fname);
   const f = x => (x == null ? 0 : round2(x));
   const st = data.sectionTotals;
+  // Whether money was actually disbursed this period. The carrier still issues a
+  // statement (and we still want it on the timeline) when nothing is paid — either
+  // the net is negative after chargebacks, or the net is a positive amount below
+  // the carrier's weekly payout minimum and carries forward. These arrive as
+  // "Pending Commission Statement" PDFs; a plain negative net counts too.
+  const netv = f(h.pay_period_net);
+  let paid = true, no_pay_reason = null;
+  if (data.pending){
+    paid = false;
+    no_pay_reason = netv < 0 ? 'chargebacks' : (netv < PAYOUT_MINIMUM ? 'below_minimum' : 'pending');
+  } else if (netv < 0){
+    paid = false; no_pay_reason = 'chargebacks';
+  }
   return {
     file: fname.replace(/^.*[\\/]/, ''),
     holder: h.holder || null,
     date: d ? iso(d) : null,
     year: d ? d.getUTCFullYear() : null,
     pending: data.pending,
-    pay_period_net: f(h.pay_period_net),
+    paid, no_pay_reason,
+    pay_period_net: netv,
     advances_total: f(st.advances),
     residual_total: f(st.commission),
     chargebacks_total: f(st.chargebacks),

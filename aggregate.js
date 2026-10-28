@@ -1371,7 +1371,14 @@ function buildSummary(allRecords, config) {
     const issues = reviewFlags(r);
     if (issues.length) reviewItems.push({ file: r.file, holder: r.holder || null, date: r.date, net: num(r.pay_period_net), issues });
   }
-  const dates = [...new Set(records.filter(r => r.date).map(r => r.date))].sort();
+  // Covered pay periods include the "nothing was paid" statements (negative net
+  // after chargebacks, or a positive net below the weekly payout minimum). The
+  // carrier still issues those — usually as pending statements — and they get
+  // uploaded, so a week that has one is NOT a missing week.
+  const dates = [...new Set([
+    ...records.filter(r => r.date).map(r => r.date),
+    ...pendingRecs.filter(r => r.date).map(r => r.date),
+  ])].sort();
   const gapsDays = [];
   for (let i = 1; i < dates.length; i++) gapsDays.push((Date.parse(dates[i]) - Date.parse(dates[i - 1])) / 864e5);
   const cadence = median(gapsDays);
@@ -1395,16 +1402,26 @@ function buildSummary(allRecords, config) {
         missing_est: Math.max(1, expected.length || Math.round(g / cadence) - 1), key, expected });
     }
   }
+  // Weeks a statement was issued but nothing was paid (negative net after
+  // chargebacks, or a positive net below the weekly payout minimum). These are
+  // uploaded and accounted for — surfaced so the user can see the period is
+  // covered and why it was $0, rather than wondering about a missing check.
+  const noPay = cloned.filter(r => keep(r) && r.date && r.paid === false)
+    .map(r => ({ file: r.file, holder: r.holder || null, date: r.date,
+      net: num(r.pay_period_net), reason: r.no_pay_reason || 'pending' }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
   const review = {
     cadence_days: cadence ? Math.round(cadence) : null,
     gaps,
     dismissed_gaps: [...dismissed],
     statements: reviewItems.sort((a, b) => ((a.date || '') < (b.date || '') ? 1 : -1)),
+    no_pay: noPay,
     counts: {
       flagged: reviewItems.length,
       high: reviewItems.filter(s => s.issues.some(i => i.sev === 'high')).length,
       gaps: gaps.length,
       missing_est: gaps.reduce((s, g) => s + g.missing_est, 0),
+      no_pay: noPay.length,
       attention: reviewItems.length + gaps.length,
     },
   };
