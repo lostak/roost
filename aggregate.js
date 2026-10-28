@@ -344,6 +344,7 @@ function buildSummary(allRecords, config) {
   const policies = [];
   for (const [policy, d] of Object.entries(polMap)) {
     const row = { policy, client: d.client, carrier: d.carrier, product: d.product,
+      type: productFamily(d.product),
       payments: d.count, total: round2(Object.values(d.years).reduce((a, b) => a + b, 0)) };
     for (const y of allYears) row[y] = round2(d.years[y] || 0);
     policies.push(row);

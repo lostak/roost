@@ -116,6 +116,9 @@ h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px
 .chart-wrap:hover .chart-dl{opacity:1}
 .chart-dl:hover{color:var(--accent);border-color:var(--accent)}
 @media(hover:none){.chart-dl{opacity:.7}}
+.clickchip{cursor:pointer}
+.chip.clickchip:hover{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent)}
+.clickchip:hover{color:var(--accent)}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}
   .navgroup-header{display:none}.navgroup-items{margin:0;padding:0;border:none}
@@ -1539,7 +1542,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <!-- POLICIES -->
       <section class="view" id="view-policies">
         <h2 class="section">Recurring residual policies</h2>
-        <input class="searchbox" id="polSearch" placeholder="Search client, carrier, policy&hellip;">
+        <input class="searchbox" id="polSearch" placeholder="Search client, carrier, policy, type&hellip;">
+        <p class="hint" style="margin:6px 2px 10px">Tip: click a <b>type</b> or <b>product</b> below to see every policy of that kind.</p>
+        <div id="polFilterBar"></div>
         <div class="card tablecard">
           <table id="polTable"></table>
         </div>
@@ -3812,13 +3817,23 @@ function renderRetention(){
     : '<tbody><tr><td class="hint">No lapses or chargebacks recorded.</td></tr></tbody>';
 }
 
+let polFilter=null; // {field:'type'|'product', value}
+function setPolFilter(field,value){ polFilter=(polFilter&&polFilter.field===field&&polFilter.value===value)?null:{field,value}; renderPolicies(DATA.all_years); }
+function clearPolFilter(){ polFilter=null; renderPolicies(DATA.all_years); }
 function renderPolicies(yl){
   const q=($('#polSearch').value||'').toLowerCase();
-  const rows=DATA.policies.filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product).toLowerCase().includes(q));
-  $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Product',...yl.map(String),'Total','Pmts'])
+  let rows=(DATA.policies||[]).filter(p=>!q||(p.client+' '+p.carrier+' '+p.policy+' '+p.product+' '+(p.type||'')).toLowerCase().includes(q));
+  if(polFilter) rows=rows.filter(p=> polFilter.field==='type' ? ((p.type||'Other')===polFilter.value) : ((p.product||'')===polFilter.value));
+  const fb=$('#polFilterBar');
+  if(fb) fb.innerHTML = polFilter
+    ? `<div style="margin-bottom:10px">Showing <b>${esc(polFilter.field)}</b>: <span class="chip" style="cursor:pointer;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)" onclick="clearPolFilter()" title="Clear filter">${esc(polFilter.value)} &times;</span> <span class="hint">${rows.length} ${rows.length===1?'policy':'policies'}</span></div>`
+    : '';
+  $('#polTable').innerHTML=thead(['Client','Carrier','Policy','Type','Product',...yl.map(String),'Total','Pmts'])
     +'<tbody>'+rows.slice(0,400).map(p=>`<tr>
-      <td>${esc(p.client)||'&mdash;'}</td><td><span class="chip">${esc(p.carrier)}</span></td>
-      <td class="mono">${esc(p.policy)}</td><td>${esc((p.product||'').slice(0,34))}</td>
+      <td style="text-align:left">${esc(p.client)||'&mdash;'}</td><td style="text-align:left"><span class="chip">${esc(p.carrier)}</span></td>
+      <td class="mono" style="text-align:left">${esc(p.policy)}</td>
+      <td style="text-align:left"><span class="chip clickchip" data-pf="type" data-pv="${esc(p.type||'Other')}" title="Show all ${esc(p.type||'Other')} policies">${esc(p.type||'Other')}</span></td>
+      <td style="text-align:left"><span class="clickchip" data-pf="product" data-pv="${esc(p.product||'')}" title="Show all policies with this product" style="text-decoration:underline;text-decoration-style:dotted;cursor:pointer">${esc((p.product||'').slice(0,34))||'&mdash;'}</span></td>
       ${yl.map(y=>`<td>${fmt(p[String(y)]||0)}</td>`).join('')}
       <td><b>${fmt(p.total)}</b></td><td>${p.payments}</td></tr>`).join('')+'</tbody>';
 }
@@ -3853,6 +3868,8 @@ bindProj('#projRenew','renewal',100);
 bindProj('#projCB','chargeback',100);
 $('#projYears').addEventListener('input',()=>{proj.years=Number($('#projYears').value);projDraw();});
 document.addEventListener('input',e=>{if(e.target.id==='polSearch')renderPolicies(DATA.all_years);if(e.target.id==='cliSearch')renderClients();});
+// click a Type or Product in the policies table to filter to every policy of that kind
+$('#polTable').addEventListener('click',e=>{const el=e.target.closest('[data-pf]');if(!el)return;setPolFilter(el.dataset.pf,el.dataset.pv);});
 
 // ---- generic click-to-sort for every table (sorts the rendered rows in place) ----
 function sortTableByHeader(th){
