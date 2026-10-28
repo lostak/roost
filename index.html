@@ -110,6 +110,12 @@ h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px
 .chart-card h3{font-size:15px;font-weight:500;margin:0 0 4px}
 .chart-card p.hint{font-size:12px;color:var(--on-surface-var);margin:0 0 14px}
 .chart-wrap{position:relative;height:340px}
+.chart-dl{position:absolute;top:2px;right:2px;z-index:3;width:28px;height:28px;border-radius:8px;border:1px solid var(--glass-brd);
+  background:color-mix(in srgb,var(--surface) 70%,transparent);color:var(--on-surface-var);cursor:pointer;font-size:14px;line-height:1;
+  opacity:0;transition:opacity .15s;backdrop-filter:blur(4px)}
+.chart-wrap:hover .chart-dl{opacity:1}
+.chart-dl:hover{color:var(--accent);border-color:var(--accent)}
+@media(hover:none){.chart-dl{opacity:.7}}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}
   .navgroup-header{display:none}.navgroup-items{margin:0;padding:0;border:none}
@@ -1841,6 +1847,20 @@ function render(){
   renderPolicies(yl);
   renderReclassNotes();
   animateCounts();
+  ensureChartTools();
+}
+// Add a hover "download PNG" button to every chart so an agent can drop any graph
+// straight into an email or report. One button per chart-wrap, created once.
+function ensureChartTools(){
+  document.querySelectorAll('.chart-wrap').forEach(w=>{
+    if(w.querySelector('.chart-dl'))return;
+    const cv=w.querySelector('canvas'); if(!cv)return;
+    const b=document.createElement('button');
+    b.className='chart-dl'; b.title='Download this chart as an image'; b.setAttribute('aria-label','Download chart'); b.innerHTML='&#8681;';
+    b.onclick=()=>{ const ch=(window.Chart&&Chart.getChart)?Chart.getChart(cv):null; if(!ch)return;
+      const a=document.createElement('a'); a.href=ch.toBase64Image('image/png',1); a.download=(cv.id||'chart')+'.png'; a.click(); };
+    w.appendChild(b);
+  });
 }
 
 function renderReclassNotes(){
