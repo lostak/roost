@@ -243,6 +243,20 @@ function buildWorkbook(summary) {
       { header: 'Still Paying %', key: 'persistency', width: 14 },
     ], rows: (((summary.forecast || {}).persistency || {}).curve || []).map(c => ({ age: c.label,
       policies: c.policies, persistency: (c.persistency == null ? '' : Math.round(c.persistency * 100)) })) },
+    { name: 'Rewrites', columns: [
+      { header: 'Origin', key: 'origin', width: 16 },
+      { header: 'Client', key: 'client', width: 22 },
+      { header: 'Line of Business', key: 'family', width: 22 },
+      { header: 'From Product', key: 'from_product', width: 26 },
+      { header: 'To Product', key: 'to_product', width: 26 },
+      { header: 'From Carrier', key: 'from_carrier', width: 18 },
+      { header: 'To Carrier', key: 'to_carrier', width: 18 },
+      { header: 'Clawed Back', key: 'clawed', width: 13, money: true },
+      { header: 'New Advance', key: 'new_advance', width: 13, money: true },
+    ], rows: ((summary.rewrites || {}).events || []).map(e => ({
+      origin: e.origin === 'initial_window' ? 'Initial window' : 'Post-residual',
+      client: e.client, family: e.family, from_product: e.from_product, to_product: e.to_product,
+      from_carrier: e.from_carrier, to_carrier: e.to_carrier, clawed: e.clawed, new_advance: e.new_advance })) },
   ]);
 }
 

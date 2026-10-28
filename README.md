@@ -52,9 +52,19 @@ your machine.
 
 - **Reads statement PDFs directly** — a custom, dependency-free PDF text
   extractor pulls the data out of each statement; no copy-paste, no manual entry.
+  Handles both the older single-line statement layout and the newer (2026) ASB
+  column layout, and the parser reads each statement's own column header so it
+  adapts if the grid shifts in a future format.
 - **In-browser upload** — drag statement PDFs onto the page and they're dated,
   named, and filed into the right year folder automatically. Duplicates are
   detected and skipped.
+- **File organizer** — the Review page can re-read every statement and rename /
+  re-file any that were named wrong or dropped in by hand (e.g. a Nov-2024
+  statement saved as `11-14-25.pdf`), filing each as `<year>/M-D-YY.pdf` from the
+  date inside the PDF. Preview first, then apply; true duplicates are removed and
+  nothing else is deleted.
+- **Guided tour** — a short, skippable walkthrough teaches the app on first run
+  and can be reopened anytime from the **?** button in the top bar.
 - **Earnings over time** — new business, residual, chargebacks, and net pay by
   week, month, quarter, or year, with a year-to-date running total.
 - **New business vs. residual** — separates up-front commissions from the
@@ -69,6 +79,17 @@ your machine.
   commissions (any writing agent who ever appears at level 100 is flagged as your
   downline) and rolls up all of their production as your override income — over
   time and by carrier, with the date each agent first joined your downline.
+- **Chargebacks vs. rewrites** — clawbacks are split into true chargebacks (the
+  client is gone) and rewrites (the policy was reissued as a comparable product in
+  the same line of business, e.g. a 10-year annuity reissued as a 15-year), so the
+  real loss rate is clear. A residual line that stops with no comparable
+  replacement is counted as a lapse; one replaced by a fresh initial commission is
+  a rewrite. The Chargebacks page lists every rewrite (from → to product/carrier).
+- **"Issued but unpaid" weeks** — when a weekly check is negative after
+  chargebacks, or a positive amount below the carrier's payout minimum, a statement
+  is still issued but nothing is paid. Roost recognizes these, shows them on the
+  Review page with the reason, and does **not** flag their week as a missing
+  statement.
 - **Projections & insights** — annualized run-rates, retention/persistence
   estimates, book-growth, carrier concentration risk, chargeback drag, AEP
   seasonality, and quarter-over-quarter momentum, surfaced as plain-language
@@ -115,7 +136,9 @@ Two ways to add a weekly statement:
   are reported as duplicates and left untouched, and the dashboard refreshes as
   soon as something new is added.
 - **By hand** — drop the PDF straight into the matching year folder under
-  `Statements/`, then click **Refresh**.
+  `Statements/`, then click **Refresh**. If you're not sure a hand-dropped file is
+  named or filed correctly, use **Review → Organize files** to re-file everything
+  by the date inside each PDF.
 
 ## Configuration
 
@@ -183,6 +206,7 @@ PDF  ──▶  pdftext.js  ──▶  parser.js  ──▶  aggregate.js  ─�
 | `GET /api/data` | The full aggregated summary as JSON. |
 | `GET /api/export` | Download the multi-sheet Excel workbook. |
 | `POST /api/upload?name=<filename>` | Upload one statement PDF (raw body). It's validated, dated, and filed automatically. |
+| `GET /api/organize` | Dry-run plan of files to rename / re-file by parsed date. Add `?apply=1` to perform it. |
 
 ### Caching
 
@@ -252,6 +276,10 @@ keyword there and restart to pull it out of the "Other" bucket.
 - **Self-healing.** Caches rebuild themselves; the statements folder is
   auto-detected with a fallback; bad files are skipped, not fatal.
 - **Config over code.** Everything you'd want to tune lives in `config.json`.
+
+> **Maintainers:** when you add a feature or a view, update this README's
+> **Features** / dashboard sections *and* the in-app guided tour (`TOUR_STEPS` in
+> `index.html`) in the same change, so both stay in sync with what the app does.
 
 ## License
 
