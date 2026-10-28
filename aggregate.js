@@ -786,6 +786,88 @@ function buildSummary(allRecords, config) {
       (q.firstAdvance && p.firstAdvance && q.firstAdvance > p.firstAdvance)));
   }
 
+  // ---- rewrite vs. lapse classification ------------------------------------
+  // A policy can leave the book two ways that look the same in the raw data but mean
+  // opposite things:
+  //   • LAPSE  — the client is gone (early chargeback with no replacement, or a
+  //              residual-paying line that simply stops) — a real loss.
+  //   • REWRITE — the client stays but the policy is reissued as a comparable product
+  //              of the same line of business (e.g. a 10-yr annuity reissued as a 15-yr),
+  //              so a fresh initial commission replaces the old one. Not a loss.
+  // We detect a rewrite as a NEWER policy for the same client in the same product family
+  // that booked its own initial commission (advance) around or after the old one ended.
+  const normCF = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const DAY_MS = 86400000;
+  const INITIAL_WINDOW_DAYS = 400;   // ~first policy year: the initial-commission / rapid-disenroll window
+  const REWRITE_SLACK_DAYS = 150;    // the replacement's initial commission may post a bit before the old clawback
+  const isoGap = (a, b) => (a && b) ? Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / DAY_MS) : null;
+  const polsByClientFam = {};
+  for (const p of pols) (polsByClientFam[normCF(p.client) + '|' + p.family] ||= []).push(p);
+  const findReplacement = (p, afterISO) => {
+    const peers = polsByClientFam[normCF(p.client) + '|' + p.family] || [];
+    let best = null;
+    for (const q of peers) {
+      if (q === p || !q.firstAdvance || !(q.advances > 0)) continue;
+      if (p.firstAdvance && q.firstAdvance <= p.firstAdvance) continue;        // the replacement must be newer business
+      if (afterISO && isoGap(afterISO, q.firstAdvance) < -REWRITE_SLACK_DAYS) continue; // its initial commission lands around/after the old one ended
+      if (!best || q.firstAdvance < best.firstAdvance) best = q;               // earliest qualifying replacement
+    }
+    return best;
+  };
+  const rewriteEvents = [];
+  const polLoss = {};          // policy# -> 'rewrite' | 'chargeback' | 'lapse'
+  for (const p of pols) {
+    p.loss_type = null; p.rewritten_into = null; p.initial_window = false;
+    const cb = p.hasChargeback;
+    const residualStop = (!cb && p.status === 'No' && !!p.lastResidual);
+    if (!cb && !residualStop) continue;                 // active / never-paid aren't losses
+    const endISO = cb ? (p.firstAdvance || p.lastResidual) : p.lastResidual;
+    const repl = findReplacement(p, endISO);
+    if (cb) {
+      // "Initial commission window" = clawed back before the policy got meaningfully past year one.
+      const span = isoGap(p.firstAdvance, p.lastResidual);
+      p.initial_window = !p.lastResidual || (span != null && span <= INITIAL_WINDOW_DAYS);
+      p.loss_type = repl ? 'rewrite' : 'chargeback';
+    } else {
+      p.loss_type = repl ? 'rewrite' : 'lapse';         // residual stopped: rewrite if replaced, else a lapse
+    }
+    if (p.policy) polLoss[p.policy] = p.loss_type;
+    if (repl) {
+      p.rewritten_into = repl.policy;
+      rewriteEvents.push({
+        client: p.client, family: p.family,
+        from_policy: p.policy, from_product: p.product, from_carrier: p.carrier,
+        to_policy: repl.policy, to_product: repl.product, to_carrier: repl.carrier,
+        carrier_changed: normCF(p.carrier) !== normCF(repl.carrier),
+        origin: cb ? 'initial_window' : 'post_residual',
+        old_end: endISO, new_start: repl.firstAdvance,
+        clawed: round2(Math.min(0, p.chargebacks)), new_advance: round2(repl.advances),
+      });
+    }
+  }
+  rewriteEvents.sort((a, b) => (a.new_start < b.new_start ? 1 : -1));
+  const rwFam = {};
+  for (const e of rewriteEvents) {
+    const f = (rwFam[e.family] ||= { family: e.family, count: 0, from_chargeback: 0, from_residual_stop: 0, new_advance: 0, clawed: 0 });
+    f.count++; f[e.origin === 'initial_window' ? 'from_chargeback' : 'from_residual_stop']++;
+    f.new_advance += e.new_advance; f.clawed += e.clawed;
+  }
+  const residualStopPols = pols.filter(p => !p.hasChargeback && p.status === 'No' && !!p.lastResidual);
+  const rewrites = {
+    count: rewriteEvents.length,
+    from_chargeback: rewriteEvents.filter(e => e.origin === 'initial_window').length,
+    from_residual_stop: rewriteEvents.filter(e => e.origin === 'post_residual').length,
+    carrier_switches: rewriteEvents.filter(e => e.carrier_changed).length,
+    new_advance: round2(rewriteEvents.reduce((s, e) => s + e.new_advance, 0)),
+    clawed_offset: round2(rewriteEvents.reduce((s, e) => s + e.clawed, 0)),
+    residual_stops: residualStopPols.length,
+    residual_stops_rewritten: residualStopPols.filter(p => p.loss_type === 'rewrite').length,
+    residual_stops_lapsed: residualStopPols.filter(p => p.loss_type === 'lapse').length,
+    by_family: Object.values(rwFam).map(f => ({ ...f, new_advance: round2(f.new_advance), clawed: round2(f.clawed) }))
+      .sort((a, b) => b.count - a.count),
+    events: rewriteEvents.slice(0, 200),
+  };
+
   const retGroup = keyFn => {
     const g = {};
     for (const p of pols) {
@@ -819,13 +901,19 @@ function buildSummary(allRecords, config) {
     .sort((a, b) => b.at_risk - a.at_risk);
   const lapses = pols.filter(p => p.hasChargeback || p.status === 'No')
     .map(p => ({ client: p.client, policy: p.policy, carrier: p.carrier, product: p.product, family: p.family,
-      chargebacks: p.chargebacks, net: p.net, last_residual: p.lastResidual }))
+      chargebacks: p.chargebacks, net: p.net, last_residual: p.lastResidual,
+      // 'rewrite' = reissued as a comparable product (not a true loss); 'chargeback' = early
+      // clawback with no replacement; 'lapse' = residual stopped with no replacement.
+      loss_type: p.loss_type || (p.reenrolled ? 'rewrite' : (p.hasChargeback ? 'chargeback' : 'lapse')),
+      rewritten_into: p.rewritten_into || null }))
     .sort((a, b) => a.chargebacks - b.chargebacks);
+  const trueLapses = pols.filter(p => p.loss_type === 'lapse').length;
   const retention = {
     latest_date: latestDate,
     totals: { policies: pols.length, active, lapsed, no_residual: noRes,
       persistency: (active + lapsed) ? round2(active / (active + lapsed)) : null,
       clawback, cb_policies: cbPolicies,
+      rewrites: rewrites.count, true_lapses: trueLapses,
       at_risk_count: atRisk.length, at_risk_dollars: round2(atRisk.reduce((s, x) => s + x.at_risk, 0)) },
     by_carrier: byCarrierRet, by_family: byFamily,
     at_risk: atRisk.slice(0, 200), lapses: lapses.slice(0, 200),
@@ -1215,14 +1303,30 @@ function buildSummary(allRecords, config) {
   }
   const totalCb = round2(cbItems.reduce((s, c) => s + c.amount, 0));
   const totalAdvAll = round2(records.reduce((s, r) => s + num(r.advances_total), 0));
+  // Split the clawback into true chargebacks (the client is gone) vs. rewrites (the
+  // policy was reissued as a comparable product, so a fresh initial commission offsets
+  // the clawback). Classification is per policy — see the rewrite block above.
+  const rewrittenPolSet = new Set(Object.keys(polLoss).filter(k => polLoss[k] === 'rewrite'));
+  let cbTrueAmt = 0, cbRewriteAmt = 0; const cbTruePols = new Set(), cbRewritePols = new Set();
+  for (const c of cbItems) {
+    const isRw = c.policy && rewrittenPolSet.has(c.policy);
+    if (isRw) { cbRewriteAmt += c.amount; if (c.policy) cbRewritePols.add(c.policy); }
+    else { cbTrueAmt += c.amount; if (c.policy) cbTruePols.add(c.policy); }
+  }
   const chargebacks = {
     total: totalCb, count: cbItems.length,
     rate_vs_advances: totalAdvAll ? round2(Math.abs(totalCb) / totalAdvAll * 100) : null,
     total_advances: totalAdvAll,
+    // Subdivision of the clawback for the initial-commission window.
+    true_chargebacks: { amount: round2(cbTrueAmt), policies: cbTruePols.size },
+    rewrites: { amount: round2(cbRewriteAmt), policies: cbRewritePols.size },
     // count-based (per application): how many of the policies you wrote came back
     policies_written: policiesWritten,
     policies_charged_back: policiesChargedBack,
+    policies_true_chargeback: cbTruePols.size,
+    policies_rewritten: cbRewritePols.size,
     count_rate: policiesWritten ? round2(policiesChargedBack / policiesWritten * 100) : null,
+    true_count_rate: policiesWritten ? round2(cbTruePols.size / policiesWritten * 100) : null,
     by_year: Object.fromEntries(allYears.map(y => [y, round2(cbYr[y] || 0)])),
     by_carrier: Object.entries(cbCar).map(([carrier, v]) => ({
       carrier, amount: round2(v.amount), count: v.count, advanced: round2(advByCarrier[carrier] || 0),
@@ -1233,7 +1337,8 @@ function buildSummary(allRecords, config) {
     by_family: Object.entries(cbFam).map(([family, v]) => ({ family, amount: round2(v.amount), count: v.count }))
       .sort((a, b) => a.amount - b.amount),
     series: Object.entries(cbSer).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount: round2(amount) })),
-    top: cbItems.slice().sort((a, b) => a.amount - b.amount).slice(0, 30),
+    top: cbItems.slice().sort((a, b) => a.amount - b.amount).slice(0, 30)
+      .map(c => ({ ...c, loss_type: (c.policy && polLoss[c.policy]) || 'chargeback' })),
   };
 
   // ---- forward-looking forecast: persistency, predicted chargebacks, projection band ----
@@ -1481,7 +1586,7 @@ function buildSummary(allRecords, config) {
     all_years: allYears,
     holders_available: holdersAvailable,
     holder_view: holderView,
-    chargebacks, review, forecast, growth, health,
+    chargebacks, review, forecast, growth, health, rewrites,
     carriers_unknown: unknownCarriers, carrier_map: carrierMap,
     retention, products, value, clients, audit, convention,
     statement_count: records.length,

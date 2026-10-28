@@ -929,6 +929,12 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <div class="card chart-card tablecard"><h3>By product line</h3><div id="cbFamily"></div></div>
           <div class="card chart-card tablecard"><h3>Largest clawbacks</h3><div id="cbTop"></div></div>
         </div>
+        <div class="card chart-card tablecard">
+          <h3>Rewrites &mdash; policies reissued, not lost</h3>
+          <p class="hint">When a clawback or a stopped residual is followed by a comparable product in the same line of business for the same client (e.g. a 10-year annuity reissued as a 15-year), the client stayed &mdash; it's a rewrite, not a true loss. A fresh initial commission offsets it. Residual lines that stop with no comparable replacement are counted as lapses.</p>
+          <div id="cbRewriteSummary"></div>
+          <div id="cbRewrites"></div>
+        </div>
       </section>
 
       <!-- REVIEW -->
@@ -1864,11 +1870,12 @@ function renderBonuses(){
 function renderChargebacks(){
   if(charts.cbTime){charts.cbTime.destroy();delete charts.cbTime;}
   const c=DATA.chargebacks||{}; const curYear=(DATA.all_years||[]).slice(-1)[0];
+  const tc=c.true_chargebacks||{amount:c.total,policies:c.policies_charged_back}; const rw=c.rewrites||{amount:0,policies:0};
   const kp=[
     {l:'Total charged back',v:fmt0(c.total||0),s:'all-time clawbacks',gold:true,neg:true},
-    {l:'Rate by dollars',v:(c.rate_vs_advances!=null?c.rate_vs_advances.toFixed(1)+'%':'—'),s:'of premium advanced'},
-    {l:'Rate by applications',v:(c.count_rate!=null?c.count_rate.toFixed(1)+'%':'—'),s:`${(c.policies_charged_back||0).toLocaleString()} of ${(c.policies_written||0).toLocaleString()} policies`},
-    {l:'This year',v:fmt0((c.by_year&&curYear!=null&&c.by_year[curYear])||0),s:(curYear!=null?curYear+' to date':''),neg:true}
+    {l:'True chargebacks',v:fmt0(tc.amount||0),s:`client lost &middot; ${(tc.policies||0).toLocaleString()} ${tc.policies===1?'policy':'policies'}`,neg:true},
+    {l:'Rewrites',v:fmt0(rw.amount||0),s:`reissued, not lost &middot; ${(rw.policies||0).toLocaleString()} ${rw.policies===1?'policy':'policies'}`},
+    {l:'True chargeback rate',v:(c.true_count_rate!=null?c.true_count_rate.toFixed(1)+'%':'—'),s:`by applications &middot; vs ${c.count_rate!=null?c.count_rate.toFixed(1)+'%':'—'} gross`}
   ];
   $('#cbKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val${k.neg&&!k.gold?' neg':''}">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
@@ -1888,13 +1895,38 @@ function renderChargebacks(){
     +fam.map(r=>`<tr><td style="text-align:left">${esc(r.family)}</td><td class="neg">${fmt(r.amount)}</td><td>${r.count}</td></tr>`).join('')
     +'</tbody></table>':'<p class="hint">No chargebacks recorded yet.</p>';
   const top=c.top||[];
-  $('#cbTop').innerHTML=top.length?'<table>'+thead(['Date','Carrier','Client','Product','Amount'])+'<tbody>'
-    +top.slice(0,15).map(r=>`<tr><td>${fmtDate(r.date)}</td><td style="text-align:left">${esc(r.carrier)}</td><td style="text-align:left">${titleize((r.client||'').slice(0,24))||'&mdash;'}</td><td style="text-align:left">${titleize((r.product||'').slice(0,26))||'&mdash;'}</td><td class="neg">${fmt(r.amount)}</td></tr>`).join('')
+  const lossChip=t=>t==='rewrite'?'<span class="chip" style="background:#d6ecd9;color:#1f6b3a">Rewrite</span>':'<span class="chip">Chargeback</span>';
+  $('#cbTop').innerHTML=top.length?'<table>'+thead(['Date','Carrier','Client','Product','Amount','Type'])+'<tbody>'
+    +top.slice(0,15).map(r=>`<tr><td>${fmtDate(r.date)}</td><td style="text-align:left">${esc(r.carrier)}</td><td style="text-align:left">${titleize((r.client||'').slice(0,24))||'&mdash;'}</td><td style="text-align:left">${titleize((r.product||'').slice(0,26))||'&mdash;'}</td><td class="neg">${fmt(r.amount)}</td><td>${lossChip(r.loss_type)}</td></tr>`).join('')
     +'</tbody></table>':'<p class="hint">No chargebacks recorded yet.</p>';
+  renderRewrites();
   const buckets=bucketSeries(GRAIN);
   charts.cbTime=new Chart($('#cbTimeChart'),{type:'bar',data:{labels:buckets.map(b=>b.label),
     datasets:[{label:'Charged back',data:buckets.map(b=>Math.round((b.chargebacks||0)*100)/100),money:true,backgroundColor:'#b3261e'}]},
     options:timeAxis(buckets,{money:true})});
+}
+function renderRewrites(){
+  const rw=DATA.rewrites||{}; const sum=$('#cbRewriteSummary'), list=$('#cbRewrites'); if(!sum||!list)return;
+  if(!rw.count){ sum.innerHTML='<p class="hint">No rewrites detected &mdash; no lapsed or stopped policies were replaced by a comparable product.</p>'; list.innerHTML=''; return; }
+  sum.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:22px;margin:4px 0 14px">
+    <div><div class="val" style="font-size:24px;font-weight:700">${rw.count}</div><div class="hint">rewrites tracked</div></div>
+    <div><div class="val" style="font-size:24px;font-weight:700">${rw.from_chargeback}</div><div class="hint">in the initial-commission window</div></div>
+    <div><div class="val" style="font-size:24px;font-weight:700">${rw.from_residual_stop}</div><div class="hint">after residual stopped</div></div>
+    <div><div class="val" style="font-size:24px;font-weight:700">${rw.carrier_switches}</div><div class="hint">switched carriers</div></div>
+    <div><div class="val" style="font-size:24px;font-weight:700">${fmt0(rw.new_advance||0)}</div><div class="hint">new initial commission from rewrites</div></div>
+    <div><div class="val" style="font-size:24px;font-weight:700">${rw.residual_stops_lapsed} / ${rw.residual_stops}</div><div class="hint">residual stops that were true lapses</div></div>
+  </div>`;
+  const ev=rw.events||[];
+  const originChip=o=>o==='initial_window'?'<span class="chip">Initial window</span>':'<span class="chip" style="background:#e5e0f5;color:#4a3b8c">Post-residual</span>';
+  list.innerHTML=ev.length?'<table>'+thead(['Replaced','Client','Line of business','From &rarr; to','Carrier','Offset'])+'<tbody>'
+    +ev.slice(0,40).map(e=>`<tr>
+      <td>${originChip(e.origin)}</td>
+      <td style="text-align:left">${titleize((e.client||'').slice(0,22))||'&mdash;'}</td>
+      <td style="text-align:left">${esc(e.family)}</td>
+      <td style="text-align:left">${esc((e.from_product||'').slice(0,22))} <span class="hint">&rarr;</span> ${esc((e.to_product||'').slice(0,22))}</td>
+      <td style="text-align:left">${e.carrier_changed?`${esc(e.from_carrier)} <span class="hint">&rarr;</span> ${esc(e.to_carrier)}`:esc(e.to_carrier)}</td>
+      <td>${e.clawed?`<span class="neg">${fmt(e.clawed)}</span> <span class="hint">&rarr;</span> `:''}${fmt0(e.new_advance)}</td>
+    </tr>`).join('')+'</tbody></table>':'';
 }
 function renderReview(){
   const rv=DATA.review||{counts:{}}; const cts=rv.counts||{};
