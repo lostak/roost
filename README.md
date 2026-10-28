@@ -60,7 +60,7 @@ your machine.
   detected and skipped.
 - **File organizer** — the Review page can re-read every statement and rename /
   re-file any that were named wrong or dropped in by hand (e.g. a Nov-2024
-  statement saved as `11-14-25.pdf`), filing each as `<year>/M-D-YY.pdf` from the
+  statement saved as `11-14-25.pdf`), filing each as `<year>/M-D-YY - Agent Name.pdf` from the
   date inside the PDF. Preview first, then apply; true duplicates are removed and
   nothing else is deleted.
 - **Guided tour** — a short, skippable walkthrough teaches the app on first run
@@ -139,7 +139,7 @@ Two ways to add a weekly statement:
 
 - **In the browser** — click **Upload** in the top bar and drop one or more
   statement PDFs (or browse to them). Each file is read, dated from its contents,
-  and filed into the correct `Statements/<year>/` folder as `M-D-YY.pdf`, so the
+  and filed into the correct `Statements/<year>/` folder as `M-D-YY - Agent Name.pdf`, so the
   name it was downloaded with doesn't matter. Files whose date is already on file
   are reported as duplicates and left untouched, and the dashboard refreshes as
   soon as something new is added.
@@ -174,7 +174,7 @@ reference material:
 ```
 Commissions/
   Statements/           commission statement PDFs, grouped by year:
-    2024/  2025/  2026/   files named M-D-YY.pdf (e.g. 7-22-26.pdf)
+    2024/  2025/  2026/   files named M-D-YY - Agent Name.pdf
   roost/                the app (this repository)
   Reports/              account & production summary exports
   Reference/            carrier compensation schedules and other reference docs

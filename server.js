@@ -312,11 +312,14 @@ function handleUpload(req, res) {
         return sendJson(res, 200, { status: 'duplicate', name: origName, filed: n, year: Y,
           message: `Already filed as ${Y}/${n}` });
 
+      // File as "M-D-YY - Agent Name.pdf" so every statement shows whose book it is (and the
+      // personal vs. LLC statement of a pair stay distinct). Falls back to "M-D-YY.pdf" only
+      // when the holder couldn't be read.
       const safeHolder = String(rec.holder || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
-      const candidates = [`${base}.pdf`];
-      if (safeHolder) candidates.push(`${base} - ${safeHolder}.pdf`);
-      for (let i = 2; i <= 20; i++) candidates.push(`${base} (${i}).pdf`);
-      const name = candidates.find(n => !fs.existsSync(path.join(dir, n))) || `${base}-${Date.now()}.pdf`;
+      const desiredBase = safeHolder ? `${base} - ${safeHolder}` : base;
+      const candidates = [`${desiredBase}.pdf`];
+      for (let i = 2; i <= 20; i++) candidates.push(`${desiredBase} (${i}).pdf`);
+      const name = candidates.find(n => !fs.existsSync(path.join(dir, n))) || `${desiredBase}-${Date.now()}.pdf`;
 
       fs.writeFileSync(path.join(dir, name), buf);
       return sendJson(res, 200, { status: 'filed', name: origName, filed: name, year: Y,
@@ -375,15 +378,20 @@ function organizeFiles(apply) {
         continue;
       }
 
-      // Build the desired name (same scheme as upload), skipping names taken by OTHER files.
-      const candidates = [`${b}.pdf`];
-      if (holder) candidates.push(`${b} - ${holder}.pdf`);
-      for (let i = 2; i <= 40; i++) candidates.push(holder ? `${b} - ${holder} (${i}).pdf` : `${b} (${i}).pdf`);
-      // If the file is already acceptably placed and named, leave it.
-      const alreadyGood = (dir === targetDir) && f.startsWith(b) && /\.pdf$/i.test(f);
+      // Desired name: "M-D-YY - Agent Name.pdf" (same scheme as upload), so every file carries
+      // the agent/holder name. Falls back to "M-D-YY.pdf" only when the holder can't be read.
+      const desiredBase = holder ? `${b} - ${holder}` : b;
+      const candidates = [`${desiredBase}.pdf`];
+      for (let i = 2; i <= 40; i++) candidates.push(`${desiredBase} (${i}).pdf`);
+      // Already good = in the right year folder AND already carrying the correct agent name.
+      // A plain "M-D-YY.pdf" with a known holder is NOT good — it gets the name added.
+      const nameNoPdf = f.replace(/\.pdf$/i, '');
+      const alreadyGood = (dir === targetDir) && (holder
+        ? (nameNoPdf === desiredBase || nameNoPdf.startsWith(desiredBase + ' ('))
+        : (f.startsWith(b) && /\.pdf$/i.test(f)));   // no holder read: leave the name as-is
       if (alreadyGood) { report.unchanged++; continue; }
       const taken = n => { const p = path.join(targetDir, n); return p !== full && fs.existsSync(p); };
-      const name = candidates.find(n => !taken(n)) || `${b}-${Date.now()}.pdf`;
+      const name = candidates.find(n => !taken(n)) || `${desiredBase}-${Date.now()}.pdf`;
       const dest = path.join(targetDir, name);
       const entry = { from: rel(full), to: rel(dest) };
       (dir === targetDir ? report.renamed : report.moved).push(entry);

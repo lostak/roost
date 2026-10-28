@@ -1037,7 +1037,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="kpis" id="reviewKpis"></div>
         <div class="card chart-card tablecard" style="margin-bottom:24px">
           <h3>Organize files</h3>
-          <p class="hint">Statements are filed as <code>&lt;year&gt;/M-D-YY.pdf</code> from the date inside each PDF. If you dropped files in by hand or a file was named wrong (e.g. a Nov-2024 statement saved as 11-14-25.pdf), this renames and re-files them correctly. True duplicates are removed; nothing else is deleted. Preview first, then apply.</p>
+          <p class="hint">Statements are filed as <code>&lt;year&gt;/M-D-YY - Agent Name.pdf</code> from the date and holder inside each PDF, so every file shows whose book it is (and the personal vs. LLC statement of a pair stay distinct). This renames and re-files anything named wrong or dropped in by hand &mdash; including adding the agent name to files that don't have it yet. True duplicates are removed; nothing else is deleted. Preview first, then apply.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             <button class="btn tonal" style="padding:7px 14px" onclick="organizePreview()"><span>&#128269;</span> Preview changes</button>
             <button class="btn" id="organizeApplyBtn" style="padding:7px 14px;display:none" onclick="organizeApply()"><span>&#10003;</span> Apply</button>
