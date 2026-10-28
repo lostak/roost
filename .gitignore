@@ -23,3 +23,6 @@ Clients/
 # Convention rules/reference documents (read-only source material, not app code)
 Convention/
 feedback.jsonl
+
+# local secrets (webhook URLs, keys) — never commit
+.env

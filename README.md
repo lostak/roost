@@ -166,6 +166,16 @@ falling back to the built-in defaults.
 | `ma_reclass.mult` | `3.5` | Medicare Advantage new-business detection. A residual-section line is treated as new business when its payable is at least this multiple of the policy's typical recurring payment. |
 | `ma_reclass.floor_min` | `80` | Floor (in dollars) below which residual lines are never reclassified, guarding small recurring amounts. |
 
+### Contact / feedback
+
+The in-app Contact form sends bug reports and feature requests to the Roost
+project (so issues reach the maintainer) — it ships with **no webhook secret** in
+the code. If you'd rather keep feedback on your own side, copy `.env.example` to
+`.env` (gitignored) and set your own Slack/Discord Incoming Webhook: use
+`CONTACT_WEBHOOK_BUG` and `CONTACT_WEBHOOK_FEATURE` to route the two toggles to
+separate channels, or a single `CONTACT_WEBHOOK` for both. Submissions are always
+saved locally to `feedback.jsonl` regardless.
+
 ## Folder layout
 
 Roost lives inside your **Commissions** folder, alongside your statements and
