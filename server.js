@@ -472,6 +472,45 @@ function handleAiKey(req, res) {
   });
 }
 
+// ---- contact / feedback ----
+// Saves a bug report or feature request to feedback.jsonl (stays on this machine) and,
+// if CONTACT_WEBHOOK is set in the environment, also forwards it there. The recipient
+// address is never in the code — it lives in the webhook's destination / CONTACT_EMAIL env.
+function forwardContact(entry) {
+  const hook = process.env.CONTACT_WEBHOOK;
+  if (!hook) return;
+  try {
+    const u = new URL(hook);
+    const lib = u.protocol === 'http:' ? require('http') : require('https');
+    const payload = JSON.stringify(Object.assign({ to: process.env.CONTACT_EMAIL || null,
+      subject: '[Roost ' + entry.kind + ']' }, entry));
+    const rq = lib.request({ method: 'POST', hostname: u.hostname, port: u.port || undefined,
+      path: (u.pathname || '/') + (u.search || ''),
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } },
+      r => { r.on('data', () => {}); r.on('end', () => {}); });
+    rq.on('error', () => {}); rq.write(payload); rq.end();
+  } catch {}
+}
+function handleContact(req, res) {
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 1e5) req.destroy(); else chunks.push(c); });
+  req.on('error', () => { try { res.end(); } catch {} });
+  req.on('end', () => {
+    try {
+      const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const kind = (o.kind === 'feature') ? 'feature' : 'bug';
+      const message = String(o.message || '').slice(0, 5000).trim();
+      if (message.length < 3) return sendJson(res, 400, { status: 'error', message: 'Please include a short description.' });
+      const entry = { at: new Date().toISOString(), kind, message, from_email: String(o.email || '').slice(0, 200).trim() };
+      try { fs.appendFileSync(path.join(HERE, 'feedback.jsonl'), JSON.stringify(entry) + '\n'); } catch {}
+      forwardContact(entry);
+      return sendJson(res, 200, { status: 'ok', message: 'Thanks — your ' + (kind === 'feature' ? 'request' : 'report') + ' was saved.' });
+    } catch (e) {
+      return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) });
+    }
+  });
+}
+
 // Marks a cadence gap as "not missing" (or restores it) in config.dismissed_gaps ["after|before"].
 function handleDismissGap(req, res) {
   const chunks = []; let size = 0;
@@ -627,6 +666,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/organize') {
       return handleOrganize(req, res);
+    }
+    if (url === '/api/contact' && req.method === 'POST') {
+      return handleContact(req, res);
     }
     if (url === '/api/downline-overrides' && req.method === 'POST') {
       return handleDownlineOverrides(req, res);
