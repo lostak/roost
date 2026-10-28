@@ -588,16 +588,6 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3 style="margin:0 0 6px">&#128203; This week</h3>
           <div id="digest" class="hint" style="font-size:14px;line-height:1.7"></div>
         </div>
-        <div class="card" id="healthCard" style="margin-bottom:24px">
-          <div class="health-wrap">
-            <div class="health-gauge" id="healthGauge"></div>
-            <div style="flex:1;min-width:250px">
-              <h3 style="margin:0 0 4px">Book health score</h3>
-              <p class="hint" id="healthLede" style="margin:0 0 14px"></p>
-              <div id="healthComps"></div>
-            </div>
-          </div>
-        </div>
         <div class="kpis" id="kpis"></div>
         <div class="card chart-card">
           <div class="controls" style="margin-bottom:10px">
@@ -615,6 +605,16 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           </div>
           <p class="hint">New business and residual per period (bars). Net paid is a year-to-date running total on the right axis that resets each January. Vertical gridlines mark quarter boundaries.</p>
           <div class="chart-wrap"><canvas id="overviewChart"></canvas></div>
+        </div>
+        <div class="card" id="healthCard" style="margin-bottom:24px">
+          <div class="health-wrap">
+            <div class="health-gauge" id="healthGauge"></div>
+            <div style="flex:1;min-width:250px">
+              <h3 style="margin:0 0 4px">Book health score</h3>
+              <p class="hint" id="healthLede" style="margin:0 0 14px"></p>
+              <div id="healthComps"></div>
+            </div>
+          </div>
         </div>
         <div class="card chart-card">
           <h3>Lifetime income</h3>
@@ -1793,8 +1793,7 @@ function renderKpis(){
     {l:'YTD net paid',v:fmt0(cur.net),s:`actual paid through ${fmtDate(cur.last_statement)}`,d:''},
     {l:'Residual income (all yrs)',v:fmt0(totalResid),s:'recurring policy renewals',d:'',gold:true},
     {l:'Bonuses & overrides',v:fmt0(d.bonuses?d.bonuses.total:0),s:'trips, bonuses, overrides — not residual',d:''},
-    {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''},
-    {l:'Pending commissions',v:fmt0(d.pending.count?d.pending.latest_total:0),s:d.pending.count?('approved, not yet paid'+(d.pending.latest_date?(' &middot; '+fmtDate(d.pending.latest_date)):'')):'no pending statements uploaded',d:''}
+    {l:`${cur.year} new business`,v:fmt0(cur.advances),s:'advances & initial',d:prev?deltaHtml(cur.advances,prev.advances):''}
   ];
   $('#kpis').innerHTML=kpis.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div>${k.d}<div class="sub">${k.s}</div></div>`).join('');
