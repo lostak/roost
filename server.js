@@ -313,6 +313,83 @@ function handleUpload(req, res) {
   });
 }
 
+// ---- organize / tidy existing statement files ----
+// Statements uploaded through the app are already filed as <year>/<M-D-YY>.pdf, but
+// files dropped into the folder by hand (or named wrong, e.g. a Nov-2024 statement
+// saved as 11-14-25.pdf) sit in the wrong place. This re-reads every statement, works
+// out where it SHOULD live from the parsed pay-period date + holder, and renames /
+// moves it there. It never deletes real data: a file that is byte-identical to one
+// already correctly filed is reported (and, when applying, the stray copy is removed
+// as a true duplicate). Call with ?apply=1 to perform; otherwise it's a dry-run plan.
+function safeHolderName(h) {
+  return String(h || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+function organizeFiles(apply) {
+  const base = statementsDir();
+  const report = { apply: !!apply, scanned: 0, moved: [], renamed: [], duplicates: [], errors: [], unchanged: 0 };
+  const dirs = [base, ...yearFolders()];
+  const seen = new Set();
+  for (const dir of dirs) {
+    let files = [];
+    try { files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.pdf')); } catch { continue; }
+    for (const f of files) {
+      const full = path.join(dir, f);
+      if (seen.has(full)) continue; seen.add(full);
+      report.scanned++;
+      let buf, rec;
+      try { buf = fs.readFileSync(full); rec = parsePdfBuffer(buf, f); }
+      catch (e) { report.errors.push({ file: f, reason: String((e && e.message) || e) }); continue; }
+      if (!rec || !rec.date) { report.errors.push({ file: f, reason: 'no statement date could be read' }); continue; }
+      const [Y, M, D] = rec.date.split('-').map(Number);
+      const b = `${M}-${D}-${String(Y).slice(2)}`;
+      const targetDir = path.join(base, String(Y));
+      const holder = safeHolderName(rec.holder);
+      const rel = p => path.relative(base, p).replace(/\\/g, '/');
+
+      // Is this file already byte-identical to a different, correctly-named file in the right dir?
+      const sameBytes = p => { try { return Buffer.compare(fs.readFileSync(p), buf) === 0; } catch { return false; } };
+      let dupOf = null;
+      try {
+        for (const n of (fs.existsSync(targetDir) ? fs.readdirSync(targetDir) : [])) {
+          const p = path.join(targetDir, n);
+          if (p !== full && n.toLowerCase().endsWith('.pdf') && n.startsWith(b) && sameBytes(p)) { dupOf = p; break; }
+        }
+      } catch {}
+      if (dupOf) {
+        report.duplicates.push({ file: rel(full), duplicate_of: rel(dupOf) });
+        if (apply && full !== dupOf) { try { fs.unlinkSync(full); } catch (e) { report.errors.push({ file: f, reason: 'could not remove duplicate: ' + e.message }); } }
+        continue;
+      }
+
+      // Build the desired name (same scheme as upload), skipping names taken by OTHER files.
+      const candidates = [`${b}.pdf`];
+      if (holder) candidates.push(`${b} - ${holder}.pdf`);
+      for (let i = 2; i <= 40; i++) candidates.push(holder ? `${b} - ${holder} (${i}).pdf` : `${b} (${i}).pdf`);
+      // If the file is already acceptably placed and named, leave it.
+      const alreadyGood = (dir === targetDir) && f.startsWith(b) && /\.pdf$/i.test(f);
+      if (alreadyGood) { report.unchanged++; continue; }
+      const taken = n => { const p = path.join(targetDir, n); return p !== full && fs.existsSync(p); };
+      const name = candidates.find(n => !taken(n)) || `${b}-${Date.now()}.pdf`;
+      const dest = path.join(targetDir, name);
+      const entry = { from: rel(full), to: rel(dest) };
+      (dir === targetDir ? report.renamed : report.moved).push(entry);
+      if (apply) {
+        try { fs.mkdirSync(targetDir, { recursive: true }); fs.renameSync(full, dest); }
+        catch (e) { report.errors.push({ file: f, reason: 'move failed: ' + e.message }); }
+      }
+    }
+  }
+  if (apply && (report.moved.length || report.renamed.length || report.duplicates.length)) {
+    CACHE = {}; saveCache();   // paths changed — rebuild the parse cache on next scan
+  }
+  return report;
+}
+function handleOrganize(req, res) {
+  const apply = /(?:^|&)apply=1(?:&|$)/.test(req.url.split('?')[1] || '');
+  try { return sendJson(res, 200, organizeFiles(apply)); }
+  catch (e) { return sendJson(res, 500, { error: String((e && e.message) || e) }); }
+}
+
 // ---- manual downline overrides ----
 // Persists the user's add/remove choices into config.json (downline_include /
 // downline_exclude) so the aggregation honours them. Body: {include:[], exclude:[]}.
@@ -533,6 +610,9 @@ const server = http.createServer((req, res) => {
     }
     if (url === '/api/upload' && req.method === 'POST') {
       return handleUpload(req, res);
+    }
+    if (url === '/api/organize') {
+      return handleOrganize(req, res);
     }
     if (url === '/api/downline-overrides' && req.method === 'POST') {
       return handleDownlineOverrides(req, res);

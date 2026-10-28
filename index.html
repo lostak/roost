@@ -942,6 +942,15 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <h2 class="section">Review &mdash; data to check</h2>
         <div class="banner">Roost flags statements that may not have parsed cleanly and pay periods that look missing, so a wrong or absent figure doesn't quietly skew your dashboard. Nothing here changes your numbers &mdash; it's a checklist. Re-upload a flagged statement, or drop a missing one in and hit Refresh.</div>
         <div class="kpis" id="reviewKpis"></div>
+        <div class="card chart-card tablecard" style="margin-bottom:24px">
+          <h3>Organize files</h3>
+          <p class="hint">Statements are filed as <code>&lt;year&gt;/M-D-YY.pdf</code> from the date inside each PDF. If you dropped files in by hand or a file was named wrong (e.g. a Nov-2024 statement saved as 11-14-25.pdf), this renames and re-files them correctly. True duplicates are removed; nothing else is deleted. Preview first, then apply.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <button class="btn tonal" style="padding:7px 14px" onclick="organizePreview()"><span>&#128269;</span> Preview changes</button>
+            <button class="btn" id="organizeApplyBtn" style="padding:7px 14px;display:none" onclick="organizeApply()"><span>&#10003;</span> Apply</button>
+          </div>
+          <div id="organizeResult"></div>
+        </div>
         <div class="card chart-card tablecard" id="reviewGapsCard" style="margin-bottom:24px">
           <h3>Possible missing statements</h3>
           <div id="reviewGaps"></div>
@@ -2084,6 +2093,32 @@ async function dismissGap(after,before){
 }
 async function restoreGap(after,before){
   try{ await fetch('/api/dismiss-gap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({after,before,undismiss:true})}); loadData(true); }catch(e){}
+}
+function renderOrganize(rep,applied){
+  const el=$('#organizeResult'), btn=$('#organizeApplyBtn'); if(!el)return;
+  const changes=(rep.moved||[]).length+(rep.renamed||[]).length+(rep.duplicates||[]).length;
+  if(!changes&&!(rep.errors||[]).length){ el.innerHTML=`<p class="hint">All ${rep.scanned||0} files are correctly named and filed. Nothing to change.</p>`; if(btn)btn.style.display='none'; return; }
+  const rows=[];
+  (rep.renamed||[]).forEach(x=>rows.push(['Rename',x.from,x.to]));
+  (rep.moved||[]).forEach(x=>rows.push(['Move',x.from,x.to]));
+  (rep.duplicates||[]).forEach(x=>rows.push(['Duplicate'+(applied?' removed':''),x.file,'same as '+x.duplicate_of]));
+  const errs=(rep.errors||[]);
+  el.innerHTML=(applied?`<p class="hint" style="color:#2e7d46">Done &mdash; ${changes} file${changes===1?'':'s'} updated.</p>`:`<p class="hint">${changes} change${changes===1?'':'s'} to apply, out of ${rep.scanned} files. Review then click Apply.</p>`)
+    +'<table style="margin-top:8px">'+thead(['Action','File','Destination'])+'<tbody>'
+    +rows.slice(0,100).map(r=>`<tr><td style="text-align:left"><span class="chip">${r[0]}</span></td><td style="text-align:left">${esc(r[1])}</td><td style="text-align:left">${esc(r[2])}</td></tr>`).join('')
+    +'</tbody></table>'
+    +(errs.length?`<p class="hint" style="margin-top:8px;color:#b3261e">${errs.length} couldn't be read: ${errs.slice(0,6).map(e=>esc(e.file)).join(', ')}</p>`:'');
+  if(btn)btn.style.display=applied?'none':'';
+}
+async function organizePreview(){
+  $('#organizeResult').innerHTML='<p class="hint">Scanning&hellip;</p>';
+  try{ const r=await fetch('/api/organize'); renderOrganize(await r.json(),false); }
+  catch(e){ $('#organizeResult').innerHTML='<p class="hint" style="color:#b3261e">Could not scan files.</p>'; }
+}
+async function organizeApply(){
+  $('#organizeResult').innerHTML='<p class="hint">Applying&hellip;</p>'; $('#organizeApplyBtn').style.display='none';
+  try{ const r=await fetch('/api/organize?apply=1'); renderOrganize(await r.json(),true); loadData(true); }
+  catch(e){ $('#organizeResult').innerHTML='<p class="hint" style="color:#b3261e">Could not apply changes.</p>'; }
 }
 function renderForecast(){
   const f=DATA.forecast; if(!f)return;
