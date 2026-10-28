@@ -488,7 +488,12 @@ function handleAiKey(req, res) {
 // if CONTACT_WEBHOOK is set in the environment, also forwards it there. The recipient
 // address is never in the code — it lives in the webhook's destination / CONTACT_EMAIL env.
 function forwardContact(entry) {
-  const hook = process.env.CONTACT_WEBHOOK;
+  // Route by the toggle: feature requests -> CONTACT_WEBHOOK_FEATURE, bug reports -> CONTACT_WEBHOOK_BUG.
+  // Falls back to a single CONTACT_WEBHOOK if the per-kind one isn't set.
+  const hook = (entry.kind === 'feature'
+      ? process.env.CONTACT_WEBHOOK_FEATURE
+      : process.env.CONTACT_WEBHOOK_BUG)
+    || process.env.CONTACT_WEBHOOK;
   if (!hook) return;
   try {
     const u = new URL(hook);
