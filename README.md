@@ -169,12 +169,13 @@ falling back to the built-in defaults.
 ### Contact / feedback
 
 The in-app Contact form sends bug reports and feature requests to the Roost
-project (so issues reach the maintainer) — it ships with **no webhook secret** in
-the code. If you'd rather keep feedback on your own side, copy `.env.example` to
-`.env` (gitignored) and set your own Slack/Discord Incoming Webhook: use
-`CONTACT_WEBHOOK_BUG` and `CONTACT_WEBHOOK_FEATURE` to route the two toggles to
-separate channels, or a single `CONTACT_WEBHOOK` for both. Submissions are always
-saved locally to `feedback.jsonl` regardless.
+project (so issues reach the maintainer). Roost ships **no webhook secret** — a
+public repo can't safely hold one — so it relays submissions to the project's
+hosted endpoint. If you'd rather keep feedback on your own side, copy
+`.env.example` to `.env` (gitignored) and set your own Slack/Discord Incoming
+Webhook: `CONTACT_WEBHOOK_BUG` and `CONTACT_WEBHOOK_FEATURE` route the two toggles
+to separate channels, or a single `CONTACT_WEBHOOK` covers both. Either way,
+submissions are also saved locally to `feedback.jsonl`.
 
 ## Folder layout
 

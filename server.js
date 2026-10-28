@@ -506,11 +506,13 @@ function handleAiKey(req, res) {
 // Saves a bug report or feature request to feedback.jsonl (stays on this machine) and,
 // if CONTACT_WEBHOOK is set in the environment, also forwards it there. The recipient
 // address is never in the code — it lives in the webhook's destination / CONTACT_EMAIL env.
-// Default public feedback relay: the project's hosted HiStak endpoint. Roost is a PUBLIC
-// repo, so it ships NO Slack/webhook secret. A self-hosted Roost with no CONTACT_WEBHOOK* of
-// its own sends feedback here; the hosted HiStak holds the real Slack URL (as its own env
-// secret) and forwards it. Override with FEEDBACK_RELAY, or point CONTACT_WEBHOOK* at your
-// own Slack/Discord to keep feedback on your side instead.
+// Roost is a PUBLIC repo, so it ships NO webhook secret — GitHub blocks Slack URLs in repos,
+// and Slack auto-revokes any that leak. Instead, Contact-form feedback is relayed to the
+// project's hosted HiStak endpoint, which records it server-side (and can forward it onward
+// from there — that forwarding secret lives only on the HiStak host, never here).
+// A self-hoster can override this: set FEEDBACK_RELAY to their own endpoint, or set their own
+// CONTACT_WEBHOOK_BUG / CONTACT_WEBHOOK_FEATURE / CONTACT_WEBHOOK to post to THEIR OWN
+// Slack/Discord directly instead of relaying.
 const FEEDBACK_RELAY = process.env.FEEDBACK_RELAY || 'https://<HISTAK_PUBLIC_URL>/api/contact';
 
 function postJson(urlStr, obj) {
@@ -525,7 +527,7 @@ function postJson(urlStr, obj) {
 }
 
 function forwardContact(entry) {
-  // 1) If this install has its OWN webhook, send straight there (toggle picks the channel).
+  // 1) If this install set its OWN webhook, post straight there (toggle picks the channel).
   const direct = (entry.kind === 'feature'
       ? process.env.CONTACT_WEBHOOK_FEATURE
       : process.env.CONTACT_WEBHOOK_BUG)
@@ -534,19 +536,18 @@ function forwardContact(entry) {
     if (direct) {
       const label = entry.kind === 'feature' ? 'Feature request' : 'Bug report';
       const who = entry.from_email || 'anonymous';
-      // One body that renders anywhere: Slack reads "text", Discord reads "content",
-      // an email relay reads "to"/"subject". Capped for Discord's 2000-char limit.
+      // Renders anywhere: Slack reads "text", Discord "content", an email relay "to"/"subject".
       const text = (label + ' — via Roost\nFrom: ' + who + '\n\n' + (entry.message || '')).slice(0, 1900);
       postJson(direct, Object.assign(
         { content: text, text: text, to: process.env.CONTACT_EMAIL || null,
           subject: '[Roost ' + entry.kind + '] from ' + who }, entry));
       return;
     }
-    // 2) Otherwise relay to the project's hosted endpoint (no secret shipped). Skipped while
-    //    the default still holds the <HISTAK_PUBLIC_URL> placeholder.
+    // 2) Otherwise relay to the project's hosted endpoint (no secret shipped). Inert while the
+    //    default still holds the <HISTAK_PUBLIC_URL> placeholder.
     if (FEEDBACK_RELAY && !FEEDBACK_RELAY.includes('<HISTAK_PUBLIC_URL>')) {
       postJson(FEEDBACK_RELAY, { kind: entry.kind, message: entry.message,
-        email: entry.from_email, source: 'Roost (self-host)' });
+        email: entry.from_email, source: 'Roost' });
     }
   } catch {}
 }
