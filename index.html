@@ -473,10 +473,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn ghost" id="navToggle" onclick="toggleNav()" aria-label="Menu" title="Menu">&#9776;</button>
   <h1 class="brand">
     <svg class="mark" viewBox="-5 -8 86 102" width="26" height="31" aria-hidden="true">
-      <rect x="0"  y="52" width="16" height="36" rx="8" fill="#00838a"/>
-      <rect x="24" y="34" width="16" height="54" rx="8" fill="#00696e"/>
-      <rect x="50" y="16" width="16" height="72" rx="8" fill="#c0872f"/>
-      <ellipse cx="58" cy="12" rx="12" ry="14" fill="#e0a94a"/>
+      <rect x="0"  y="52" width="16" height="36" rx="8" fill="var(--accent-3)"/>
+      <rect x="24" y="34" width="16" height="54" rx="8" fill="var(--accent-2)"/>
+      <rect x="50" y="16" width="16" height="72" rx="8" fill="var(--accent)"/>
+      <ellipse cx="58" cy="12" rx="12" ry="14" fill="var(--accent)"/>
     </svg>
     Roost
   </h1>
@@ -486,7 +486,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
   <button class="btn ghost" onclick="startTour()" title="Take the tour" aria-label="Take the tour">&#63;</button>
   <div style="position:relative;display:inline-flex">
-    <button class="btn ghost" onclick="togglePalette(event)" title="Color theme" aria-label="Color theme">&#127912;</button>
+    <button class="btn ghost" onclick="togglePalette(event)" title="Color theme" aria-label="Color theme">&#9672;</button>
     <div class="palettepop" id="palettePop"></div>
   </div>
   <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light" aria-label="Toggle dark or light theme"></button>
@@ -541,13 +541,13 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
     <a data-view="review"><span class="ic">&#9873;</span><span class="lbl">Review</span><span class="navbadge" id="reviewBadge" style="display:none"></span></a>
     <a data-view="grow"><span class="ic">&#9650;</span><span class="lbl">Grow</span></a>
-    <a data-view="insights"><span class="ic">&#10024;</span><span class="lbl">AI Insights</span></a>
+    <a data-view="projections"><span class="ic">&#9651;</span><span class="lbl">Projections</span></a>
     <div class="navgroup" data-group="production">
       <div class="navgroup-header"><span class="lbl">Production</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
         <a data-view="newbusiness"><span class="ic">&#10022;</span><span class="lbl">New Business</span></a>
         <a data-view="residuals"><span class="ic">&#8734;</span><span class="lbl">Residual Income</span></a>
-        <a data-view="cumulative"><span class="ic">&#8599;</span><span class="lbl">Cumulative</span></a>
+        <a data-view="cumulative"><span class="ic">&#8599;&#65038;</span><span class="lbl">Cumulative</span></a>
         <a data-view="carriers"><span class="ic">&#9707;</span><span class="lbl">By Carrier</span></a>
         <a data-view="products"><span class="ic">&#9638;</span><span class="lbl">By Product</span></a>
         <a data-view="bonuses"><span class="ic">&#9733;</span><span class="lbl">Bonuses</span></a>
@@ -557,26 +557,26 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="book">
       <div class="navgroup-header"><span class="lbl">Book &amp; clients</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
-        <a data-view="clients"><span class="ic">&#9787;</span><span class="lbl">Clients</span></a>
-        <a data-view="retention"><span class="ic">&#9851;</span><span class="lbl">Retention</span></a>
-        <a data-view="value"><span class="ic">&#9878;</span><span class="lbl">Book Value</span></a>
+        <a data-view="clients"><span class="ic">&#9787;&#65038;</span><span class="lbl">Clients</span></a>
+        <a data-view="retention"><span class="ic">&#9851;&#65038;</span><span class="lbl">Retention</span></a>
+        <a data-view="value"><span class="ic">&#9878;&#65038;</span><span class="lbl">Book Value</span></a>
       </div>
     </div>
     <div class="navgroup" data-group="planning">
       <div class="navgroup-header"><span class="lbl">Planning</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
-        <a data-view="projections"><span class="ic">&#9650;</span><span class="lbl">Projections</span></a>
         <a data-view="forecast"><span class="ic">&#9673;</span><span class="lbl">Forecast</span></a>
         <a data-view="goals"><span class="ic">&#9873;</span><span class="lbl">Goals</span></a>
         <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
         <a data-view="taxes"><span class="ic">&#167;</span><span class="lbl">Taxes</span></a>
-        <a data-view="cashflow"><span class="ic">&#128197;</span><span class="lbl">Cash Flow</span></a>
-        <a data-view="convention"><span class="ic">&#127942;</span><span class="lbl">Convention</span></a>
+        <a data-view="cashflow"><span class="ic">&#8645;</span><span class="lbl">Cash Flow</span></a>
+        <a data-view="convention"><span class="ic">&#9819;</span><span class="lbl">Convention</span></a>
       </div>
     </div>
     <div class="navgroup" data-group="analysis">
       <div class="navgroup-header"><span class="lbl">Analysis</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="insights"><span class="ic">&#10038;</span><span class="lbl">AI Insights</span></a>
         <a data-view="compare"><span class="ic">&#8646;</span><span class="lbl">Comparison</span></a>
         <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
       </div>
@@ -585,7 +585,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <div class="navgroup-header"><span class="lbl">Records</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
         <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
-        <a data-view="audit"><span class="ic">&#9888;</span><span class="lbl">Audit</span></a>
+        <a data-view="audit"><span class="ic">&#9888;&#65038;</span><span class="lbl">Audit</span></a>
       </div>
     </div>
   </nav>
@@ -599,8 +599,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div style="max-width:860px;margin:16px auto 0">
           <div class="card" style="text-align:center;padding:40px 28px 34px">
             <svg viewBox="-6 -10 88 108" width="58" height="70" aria-hidden="true" style="margin-bottom:6px">
-              <rect x="0" y="52" width="16" height="36" rx="8" fill="#00838a"/><rect x="24" y="34" width="16" height="54" rx="8" fill="#00696e"/>
-              <rect x="50" y="16" width="16" height="72" rx="8" fill="#c0872f"/><ellipse cx="58" cy="12" rx="12" ry="14" fill="#e0a94a"/></svg>
+              <rect x="0" y="52" width="16" height="36" rx="8" fill="var(--accent-3)"/><rect x="24" y="34" width="16" height="54" rx="8" fill="var(--accent-2)"/>
+              <rect x="50" y="16" width="16" height="72" rx="8" fill="var(--accent)"/><ellipse cx="58" cy="12" rx="12" ry="14" fill="var(--accent)"/></svg>
             <h2 style="margin:6px 0 6px;font-size:28px">Welcome to Roost</h2>
             <p class="hint" style="max-width:52ch;margin:0 auto 22px;font-size:15px">Add your commission-statement PDFs and Roost turns them into a live picture of your book &mdash; income over time, residuals, retention, goals, and taxes. Your files never need a special name.</p>
             <button class="btn" onclick="openUpload()"><span>&#8613;</span> Add your first statement</button>
@@ -1038,7 +1038,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         </div>
         <div class="card" style="margin-bottom:24px">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h3 style="margin:0;flex:1">Summary of where you stand</h3>
-            <button class="btn" id="aiSumBtn" onclick="aiSummarize()">&#10024; Summarize my book</button></div>
+            <button class="btn" id="aiSumBtn" onclick="aiSummarize()">&#10038; Summarize my book</button></div>
           <div id="aiSummary" style="margin-top:14px"></div>
         </div>
         <div class="card">
@@ -1114,7 +1114,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           </div>
         </div>
         <div class="card chart-card tablecard">
-          <h3>&#9888; At-risk: Medicare Advantage in the rapid-disenrollment window</h3>
+          <h3>&#9888;&#65038; At-risk: Medicare Advantage in the rapid-disenrollment window</h3>
           <p class="hint">Written within ~90 days &mdash; a disenrollment here reverses the entire initial commission shown.</p>
           <table id="retRiskTable"></table>
         </div>
@@ -1232,7 +1232,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <h2 class="section" style="margin-top:28px">What's working &amp; where to focus</h2>
         <div class="ins-grid">
           <div class="ins-col"><h3>&#9989; Working</h3><div id="insWorking"></div></div>
-          <div class="ins-col"><h3>&#9888; Watch</h3><div id="insWatch"></div></div>
+          <div class="ins-col"><h3>&#9888;&#65038; Watch</h3><div id="insWatch"></div></div>
           <div class="ins-col"><h3>&#127919; Focus</h3><div id="insFocus"></div></div>
         </div>
       </section>
@@ -1473,7 +1473,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <div id="audReconDetail" style="display:none;margin-top:16px;padding:16px 18px;border-radius:12px;background:var(--surface-2);font-size:14px;line-height:1.65"></div>
         </div>
         <div class="card chart-card tablecard">
-          <h3>&#9888; Off-sequence statements (YTD went backwards)</h3>
+          <h3>&#9888;&#65038; Off-sequence statements (YTD went backwards)</h3>
           <p class="hint">A printed year-to-date can't decrease. These statements are out of sequence or on a different stream &mdash; worth reconciling with the carrier.</p>
           <table id="audDropTable"></table>
         </div>
@@ -1588,7 +1588,7 @@ function themeColors(){
 function applyTheme(t){
   document.body.classList.toggle('dark',t==='dark');
   const b=document.getElementById('themeBtn');
-  if(b)b.innerHTML=(t==='dark')?'<span>&#9728;</span> Light':'<span>&#9789;</span> Dark';
+  if(b)b.innerHTML=(t==='dark')?'<span>&#9728;&#65038;</span> Light':'<span>&#9789;&#65038;</span> Dark';
   themeColors();
   try{localStorage.setItem('theme',t);}catch(e){}
 }
@@ -2027,7 +2027,7 @@ function renderReview(){
   const gaps=rv.gaps||[], cad=rv.cadence_days, dism=rv.dismissed_gaps||[];
   const gapsHtml=gaps.length?'<div class="revlist">'+gaps.map(g=>{const n=g.missing_est;
     const chips=(g.expected||[]).map(d=>`<span class="chip">${fmtDate(d)}</span>`).join(' ');
-    return `<div class="revrow"><div class="revrow-ic">&#9888;</div><div style="flex:1">
+    return `<div class="revrow"><div class="revrow-ic">&#9888;&#65038;</div><div style="flex:1">
       <div class="revrow-t">About ${n} statement${n===1?'':'s'} may be missing between ${fmtDate(g.after)} and ${fmtDate(g.before)}.</div>
       <div class="revrow-s">That's a ${g.days}-day gap${cad?`, while your pay periods usually run about every ${cad} days`:''}.${chips?' The pay periods that would fall in the gap:':''}</div>
       ${chips?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0">${chips}</div>`:''}
@@ -2049,7 +2049,7 @@ function renderReview(){
   const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">High priority</span>':'<span class="chip">Worth a look</span>';
   const list=rv.statements||[];
   $('#reviewList').innerHTML=list.length?'<div class="revlist">'+list.map(s=>{const hi=s.issues.some(i=>i.sev==='high');
-    return `<div class="revrow"><div class="revrow-ic ${hi?'bad':''}">${hi?'&#9888;':'&#8505;'}</div><div style="flex:1">
+    return `<div class="revrow"><div class="revrow-ic ${hi?'bad':''}">${hi?'&#9888;&#65038;':'&#8505;'}</div><div style="flex:1">
       <div class="revrow-t">${fmtDate(s.date)||'Undated statement'} &mdash; paid ${fmt0(s.net)}</div>
       <div class="revrow-s">File: ${s.file}${s.holder?` &middot; ${titleize(s.holder)}`:''}</div>
       <ul class="revissues">${s.issues.map(i=>`<li>${sev(i.sev)} <span>${i.msg}</span></li>`).join('')}</ul>
@@ -3347,7 +3347,7 @@ function renderConvention(){
   const bar=(pct,color)=>`<div style="height:12px;border-radius:8px;background:var(--surface-3);overflow:hidden;margin:5px 0 2px"><div style="height:100%;width:${Math.max(0,Math.min(100,Math.round(pct*100)))}%;background:${color};transition:width .3s"></div></div>`;
   const GREEN='#2e7d5b', GOLD='#c0872f';
   if(!V.levels){
-    $('#convTarget').innerHTML='<p class="hint">&#9888; Convention level targets aren\'t loaded yet &mdash; <b>restart Roost</b> (close the console window and relaunch) so the server picks up the latest update, then pick your level here.</p>';
+    $('#convTarget').innerHTML='<p class="hint">&#9888;&#65038; Convention level targets aren\'t loaded yet &mdash; <b>restart Roost</b> (close the console window and relaunch) so the server picks up the latest update, then pick your level here.</p>';
   }else if(!lt){
     $('#convTarget').innerHTML='<p class="hint">Select your contract level above to see the production you need to qualify. It saves to your profile (roost/config.json), so you only set it once.</p>';
   }else{
@@ -3393,7 +3393,7 @@ function renderConvention(){
   $('#convKpis').innerHTML=kp.map(k=>`<div class="card kpi${k.gold?' gold':''}"><div class="label">${k.l}</div>
     <div class="val">${k.v}</div><div class="sub">${k.s}</div></div>`).join('');
   // checklist
-  const ok='<span style="color:#2e7d5b;font-weight:700">&#10003;</span>', no='<span class="neg" style="font-weight:700">&#10007;</span>', warn='<span style="color:var(--amber);font-weight:700">&#9888;</span>', dot='<span class="hint">&#9675;</span>';
+  const ok='<span style="color:#2e7d5b;font-weight:700">&#10003;</span>', no='<span class="neg" style="font-weight:700">&#10007;</span>', warn='<span style="color:var(--amber);font-weight:700">&#9888;&#65038;</span>', dot='<span class="hint">&#9675;</span>';
   const rows=[];
   rows.push(`${V.apps>=V.apps_needed?ok:no} <b>${V.apps} of ${V.apps_needed}</b> issued applications`);
   rows.push(`${V.nonma_rule_met?ok:no} At least 50% of credit from non-MA lines &mdash; you're at <b>${V.nonma_share!=null?Math.round(V.nonma_share*100):0}%</b> (${num0(V.points_nonma)} non-MA of ${num0(V.points)})`);
@@ -3916,7 +3916,7 @@ function cmdkCommands(){
     {type:'action',label:'Toggle dark / light theme',ic:'&#9681;',run:toggleTheme},
     {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'}];
   const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({
-    type:'client',label:c.client,ic:'&#9787;',sub:'client',run:()=>{gotoView('clients');if(typeof openClient==='function')openClient(c.client);}}));
+    type:'client',label:c.client,ic:'&#9787;&#65038;',sub:'client',run:()=>{gotoView('clients');if(typeof openClient==='function')openClient(c.client);}}));
   const carriers=((DATA&&DATA.retention&&DATA.retention.by_carrier)||[]).map(c=>({
     type:'carrier',label:c.key,ic:'&#9707;',sub:'carrier',run:()=>gotoView('carriers')}));
   const prods=((DATA&&DATA.products&&DATA.products.by_family)||[]).map(p=>({
@@ -3969,7 +3969,7 @@ let _aiAnomsLoaded=false;
 function renderAnoms(j){
   const a=(j&&j.anomalies)||[];
   const setup=$('#aiSetup'); if(setup&&j&&'configured' in j)setup.style.display=j.configured?'none':'block';
-  $('#aiAnoms').innerHTML=a.length?'<div class="revlist">'+a.map(x=>`<div class="revrow"><div class="revrow-ic ${x.severity==='high'?'bad':''}">${x.severity==='high'?'&#9888;':'&#8505;'}</div><div style="flex:1"><div class="revrow-s" style="font-size:14px;color:var(--on-surface)">${aiText(x.text)}</div></div></div>`).join('')+'</div>'
+  $('#aiAnoms').innerHTML=a.length?'<div class="revlist">'+a.map(x=>`<div class="revrow"><div class="revrow-ic ${x.severity==='high'?'bad':''}">${x.severity==='high'?'&#9888;&#65038;':'&#8505;'}</div><div style="flex:1"><div class="revrow-s" style="font-size:14px;color:var(--on-surface)">${aiText(x.text)}</div></div></div>`).join('')+'</div>'
     :'<p class="hint">Nothing unusual right now — your book looks steady.</p>';
 }
 async function saveAiKey(){
