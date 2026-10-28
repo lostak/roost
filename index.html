@@ -455,6 +455,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
+  <button class="btn ghost" onclick="startTour()" title="Take the tour" aria-label="Take the tour">&#63;</button>
   <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light" aria-label="Toggle dark or light theme"></button>
   <div class="holderdd" id="holderWrap" style="display:none">
     <button type="button" class="holderbtn" id="holderBtn" onclick="toggleHolderMenu(event)" aria-haspopup="listbox" aria-expanded="false" title="Which book to show (personal, LLC, or both combined)"><span class="hlbl" id="holderBtnLabel">All books combined</span><span class="holdercar"></span></button>
@@ -479,6 +480,25 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <ul class="upload-results" id="uploadResults"></ul>
     <div class="modal-foot">
       <button class="btn ghost" onclick="closeUpload()">Close</button>
+    </div>
+  </div>
+</div>
+<!-- guided tour -->
+<div class="modal-overlay" id="tourModal" onclick="if(event.target===this)endTour()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Roost tour" style="max-width:480px">
+    <div class="modal-head">
+      <h3 id="tourTitle">Welcome to Roost</h3>
+      <button class="modal-x" onclick="endTour()" aria-label="Close tour">&times;</button>
+    </div>
+    <div id="tourIcon" style="font-size:34px;line-height:1;margin:2px 0 10px">&#129433;</div>
+    <p id="tourBody" style="margin:0 0 14px;line-height:1.55;color:var(--on-surface)"></p>
+    <div id="tourDots" style="display:flex;gap:6px;margin-bottom:14px"></div>
+    <div class="modal-foot" style="justify-content:space-between">
+      <button class="btn ghost" onclick="endTour()">Skip</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn ghost" id="tourBack" onclick="tourStep(-1)">Back</button>
+        <button class="btn" id="tourNext" onclick="tourStep(1)">Next</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2901,6 +2921,35 @@ function renderDigest(){
 }
 function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
 
+// ================= GUIDED TOUR =================
+// A quick, skippable walkthrough shown on first run and reopenable any time via the
+// "?" button. Keep TOUR_STEPS in sync when adding a major feature or view.
+const TOUR_STEPS=[
+  {ic:'&#129433;',t:'Welcome to Roost',b:'Roost turns your weekly commission statements into a dashboard &mdash; what you earn, what renews, what gets clawed back, and what your book is worth. Here’s a 60-second tour. You can skip anytime and reopen it with the <b>?</b> button up top.'},
+  {ic:'&#8613;',t:'Add your statements',b:'Hit <b>Upload</b> and drop in your statement PDFs (or point Roost at your statements folder). Each PDF is read and filed automatically by its own date &mdash; name them anything. New ASB statement formats are handled too.',view:null},
+  {ic:'&#9632;',t:'Overview',b:'Your home base: earnings over time, new business vs recurring residual, and a snapshot of where you stand this year.',view:'overview'},
+  {ic:'&#9873;',t:'Review &mdash; keep the data clean',b:'Roost flags statements that may not have parsed, weeks that look missing, and weeks where a statement was issued but nothing was paid (small or negative checks). <b>Organize files</b> here renames and re-files anything named wrong. Nothing here changes your numbers.',view:'review'},
+  {ic:'&#8630;',t:'Chargebacks &amp; rewrites',b:'See what’s being clawed back and why. Roost separates <b>true chargebacks</b> (the client is gone) from <b>rewrites</b> (the policy was reissued as a comparable product &mdash; the client stayed), so your real loss rate is clear.',view:'chargebacks'},
+  {ic:'&#9650;',t:'Grow',b:'Prioritized plays to grow the book: cross-sell gaps (clients missing dental, final-expense, etc.) and where new enrollments pay off most.',view:'grow'},
+  {ic:'&#128302;',t:'Forecast &amp; Book Health',b:'Forward-looking estimates from your own history &mdash; persistency, predicted chargebacks, and a projection band. The <b>Book Health</b> score on the Overview grades the drivers that make a book valuable.',view:'forecast'},
+  {ic:'&#128176;',t:'What your book is worth',b:'Book Value estimates what your recurring book could sell for, with what-if sliders and a goal-by-date advisor. Find it under <b>Business</b> in the menu.',view:'value'},
+  {ic:'&#9906;',t:'Find anything fast',b:'Press <b>Ctrl&nbsp;K</b> (or &#8984;K on a Mac) to jump to any view, client, or action. The <b>book selector</b> up top switches between your personal, LLC, or combined books. <b>Export Excel</b> hands you the whole workbook.'},
+  {ic:'&#9989;',t:'You’re set',b:'That’s the tour. Upload a statement to get started &mdash; and reopen this anytime with the <b>?</b> button. Happy selling!'},
+];
+let _tourI=0;
+function startTour(){ _tourI=0; renderTour(); const m=$('#tourModal'); m.classList.add('open'); }
+function endTour(){ const m=$('#tourModal'); if(m)m.classList.remove('open'); try{localStorage.setItem('roost.tourSeen','1');}catch(e){} }
+function tourStep(d){ _tourI+=d; if(_tourI<0)_tourI=0; if(_tourI>=TOUR_STEPS.length){ endTour(); return; } renderTour(); }
+function renderTour(){
+  const s=TOUR_STEPS[_tourI]; if(!s)return;
+  if(s.view) try{ gotoView(s.view); }catch(e){}
+  $('#tourIcon').innerHTML=s.ic; $('#tourTitle').innerHTML=s.t; $('#tourBody').innerHTML=s.b;
+  $('#tourDots').innerHTML=TOUR_STEPS.map((_,i)=>`<span style="width:7px;height:7px;border-radius:50%;background:${i===_tourI?'var(--accent)':'color-mix(in srgb,var(--on-surface) 22%,transparent)'}"></span>`).join('');
+  $('#tourBack').style.visibility=_tourI===0?'hidden':'visible';
+  $('#tourNext').textContent=_tourI===TOUR_STEPS.length-1?'Done':'Next';
+}
+function maybeFirstRunTour(){ let seen=false; try{seen=!!localStorage.getItem('roost.tourSeen');}catch(e){} if(!seen) setTimeout(startTour,600); }
+
 // ================= EXPENSES & TRUE PROFIT =================
 const EXP_CATS=[['leads','Leads'],['marketing','Marketing'],['eo','E&O / licensing'],['crm','CRM / software'],['staff','Staff / VA'],['other','Other']];
 let EXP_YEAR=null;
@@ -3909,7 +3958,7 @@ async function aiAsk(){
 }
 (function(){const a=document.querySelector('#nav a[data-view="insights"]'); if(a)a.addEventListener('click',loadInsights);})();
 
-loadData();
+loadData().then(maybeFirstRunTour).catch(()=>maybeFirstRunTour());
 </script>
 </body>
 </html>
