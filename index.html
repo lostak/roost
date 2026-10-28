@@ -275,6 +275,32 @@ body.dark{
   /* brighter text so nothing is lost against the glass + aurora */
   --on-surface:#edf3f2; --on-surface-var:#c6d1d0;
 }
+/* ---- selectable accent themes ------------------------------------------------
+   Each is tuned for BOTH light and dark: light accents stay deep enough that white
+   button text reads well; dark accents stay vivid without going pale/washed-out.
+   Only the accent trio + brand gradient + focus ring change; surfaces are untouched,
+   so every theme keeps the same contrast. Default (teal) needs no override. */
+body[data-accent="ocean"]{--accent:#1f6fe0;--accent-2:#6d5cff;--accent-3:#0bb6d6;--grad-brand:linear-gradient(115deg,#1f6fe0,#4a63e8 54%,#6d5cff);--ring:rgba(31,111,224,.5)}
+body.dark[data-accent="ocean"]{--accent:#5a93f5;--accent-2:#8a7cf0;--accent-3:#3fb4e0;--grad-brand:linear-gradient(115deg,#3f9bf0,#5a82f0 52%,#8a7cf0);--ring:rgba(90,147,245,.6)}
+body[data-accent="indigo"]{--accent:#6a4fe0;--accent-2:#9450e0;--accent-3:#4a63e8;--grad-brand:linear-gradient(115deg,#4a63e8,#6a4fe0 52%,#a24fe0);--ring:rgba(106,79,224,.5)}
+body.dark[data-accent="indigo"]{--accent:#8a7cf5;--accent-2:#a85cf0;--accent-3:#6f78f5;--grad-brand:linear-gradient(115deg,#6f78f5,#8a6cf0 52%,#a85cf0);--ring:rgba(138,124,245,.6)}
+body[data-accent="emerald"]{--accent:#0e9d6b;--accent-2:#1f9e8f;--accent-3:#4f9a2e;--grad-brand:linear-gradient(115deg,#4f9a2e,#0e9d6b 55%,#179ab0);--ring:rgba(14,157,107,.5)}
+body.dark[data-accent="emerald"]{--accent:#2fc8a0;--accent-2:#3aaed0;--accent-3:#4fbf5a;--grad-brand:linear-gradient(115deg,#35c07a,#2fc0a8 52%,#3aaed0);--ring:rgba(47,200,160,.6)}
+body[data-accent="rose"]{--accent:#d1457f;--accent-2:#b04ab0;--accent-3:#e0653a;--grad-brand:linear-gradient(115deg,#e0653a,#d1457f 54%,#9a4fe0);--ring:rgba(209,69,127,.5)}
+body.dark[data-accent="rose"]{--accent:#f0608f;--accent-2:#cf6ce0;--accent-3:#f0774a;--grad-brand:linear-gradient(115deg,#f0567f,#e0589e 52%,#a86ce0);--ring:rgba(240,96,143,.6)}
+body[data-accent="amber"]{--accent:#c87518;--accent-2:#d1457f;--accent-3:#b0842a;--grad-brand:linear-gradient(115deg,#b0842a,#c87518 52%,#d1457f);--ring:rgba(200,117,24,.5)}
+body.dark[data-accent="amber"]{--accent:#e0912f;--accent-2:#e86a9a;--accent-3:#d98a2a;--grad-brand:linear-gradient(115deg,#e0822a,#e0582a 52%,#d14f7a);--ring:rgba(224,130,47,.6)}
+.palettepop{position:absolute;top:calc(100% + 8px);right:0;z-index:60;background:var(--glass);backdrop-filter:blur(18px);
+  border:1px solid var(--glass-brd);border-radius:16px;box-shadow:var(--shadow-2);padding:14px;display:none;min-width:232px}
+.palettepop.open{display:block}
+.palettepop .pptitle{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-var);margin:0 2px 10px}
+.palettepop .pprow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
+.palitem{display:flex;flex-direction:column;gap:6px;align-items:stretch;cursor:pointer}
+.palettedot{height:38px;border-radius:11px;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.palitem:hover .palettedot{border-color:color-mix(in srgb,var(--on-surface) 40%,transparent)}
+.palitem.sel .palettedot{border-color:var(--on-surface)}
+.palitem .pl{text-align:center;font-size:11px;color:var(--on-surface-var)}
+.palitem.sel .pl{color:var(--on-surface);font-weight:600}
 /* Base surface lives on BODY (which carries the .dark class), so it's theme-aware. The aurora
    sits just above it (z-index:0) and below the app content (.appbar/.layout are positioned above). */
 body{background:var(--surface);font-family:'Inter',Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -459,6 +485,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
   <button class="btn ghost" onclick="startTour()" title="Take the tour" aria-label="Take the tour">&#63;</button>
+  <div style="position:relative;display:inline-flex">
+    <button class="btn ghost" onclick="togglePalette(event)" title="Color theme" aria-label="Color theme">&#127912;</button>
+    <div class="palettepop" id="palettePop"></div>
+  </div>
   <button class="btn ghost" id="themeBtn" onclick="toggleTheme()" title="Toggle dark / light" aria-label="Toggle dark or light theme"></button>
   <div class="holderdd" id="holderWrap" style="display:none">
     <button type="button" class="holderbtn" id="holderBtn" onclick="toggleHolderMenu(event)" aria-haspopup="listbox" aria-expanded="false" title="Which book to show (personal, LLC, or both combined)"><span class="hlbl" id="holderBtnLabel">All books combined</span><span class="holdercar"></span></button>
@@ -1564,6 +1594,29 @@ function applyTheme(t){
 }
 function toggleTheme(){applyTheme(document.body.classList.contains('dark')?'light':'dark'); if(DATA)render();}
 function toggleNav(){document.body.classList.toggle('nav-open');}
+
+// ---- accent themes: curated presets that read well in light AND dark ----
+const ACCENTS=[
+  {id:'teal',name:'Teal',sw:'linear-gradient(135deg,#00b3a4,#2d7bf4,#6d5cff)'},
+  {id:'ocean',name:'Ocean',sw:'linear-gradient(135deg,#1f6fe0,#4a63e8,#6d5cff)'},
+  {id:'indigo',name:'Indigo',sw:'linear-gradient(135deg,#4a63e8,#6a4fe0,#a24fe0)'},
+  {id:'emerald',name:'Emerald',sw:'linear-gradient(135deg,#4f9a2e,#0e9d6b,#179ab0)'},
+  {id:'rose',name:'Rose',sw:'linear-gradient(135deg,#e0653a,#d1457f,#9a4fe0)'},
+  {id:'amber',name:'Amber',sw:'linear-gradient(135deg,#b0842a,#c87518,#d1457f)'},
+];
+function applyAccent(id){
+  if(!id||id==='teal') delete document.body.dataset.accent; else document.body.dataset.accent=id;
+  try{localStorage.setItem('roost.accent',id||'teal');}catch(e){}
+  const pop=$('#palettePop'); if(pop&&pop.classList.contains('open'))renderPalette();
+  if(DATA)try{render();}catch(e){}
+}
+function renderPalette(){
+  const cur=(document.body.dataset.accent)||'teal';
+  $('#palettePop').innerHTML='<div class="pptitle">Color theme</div><div class="pprow">'+ACCENTS.map(a=>`<div class="palitem${a.id===cur?' sel':''}" onclick="applyAccent('${a.id}')" title="${a.name}"><div class="palettedot" style="background:${a.sw}"></div><div class="pl">${a.name}</div></div>`).join('')+'</div>';
+}
+function togglePalette(e){ if(e)e.stopPropagation(); const p=$('#palettePop'); if(!p)return; renderPalette(); p.classList.toggle('open'); }
+document.addEventListener('click',e=>{ const p=$('#palettePop'); if(p&&p.classList.contains('open')&&!e.target.closest('#palettePop')&&!(e.target.closest('button')&&/127912/.test(e.target.closest('button').innerHTML||''))) p.classList.remove('open'); });
+(function(){let a;try{a=localStorage.getItem('roost.accent');}catch(e){} if(a&&a!=='teal')document.body.dataset.accent=a;})();
 (function(){let t;try{t=localStorage.getItem('theme');}catch(e){}
   if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
   applyTheme(t);})();
