@@ -96,4 +96,22 @@ const sr = parseStatementNew([shifted], NTEXT, '3-12-26.pdf');
 eq(sr.advances_total, 120, 'adaptive: totals unchanged when the column grid shifts');
 eq(sr.items[0] && sr.items[0].client, 'WELLS, AMY', 'adaptive: client still reassembled after shift');
 
+// ---- 5. New format: single-date office-fee rows (chargebacks section) parse ----------
+// Fee/adjustment rows have ONE date and no mode letter (e.g. "03/20/2025 $0.00 0.000 $-136.95").
+// They must still be read so the chargeback total — and the net reconciliation — are right.
+const feePage = [
+  run(21.7, 330, 'Chargebacks &'), run(21.7, 324, 'Expense'), run(21.7, 318, 'Adjustments'),
+  run(21.7, 300, 'Policy #'), run(96.9, 300, 'Client Name'), run(172, 300, 'Product'),
+  run(247.2, 300, 'Eff Date'), run(472.6, 300, 'Premium'), run(547.7, 300, 'Comm %'), run(622.9, 300, 'Payable Comm'), run(725.5, 300, 'Agent'),
+  run(172, 285, 'Office Expense Fee'), run(247.2, 285, '03/20/2025'),
+  run(472.6, 285, '$0.00'), run(547.7, 285, '0.000'), run(622.9, 285, '$-136.95'),
+];
+const fTEXT = ['Commission Statement', 'Jane Agent', 'Pay Period (03/27/2025): $-136.95',
+  'YTD Chargebacks & Expense Adjustments: $-100.00', 'Chargebacks & Expense Adjustments',
+  'Policy # Client Name Product Eff Date Prem Due Mode Premium Comm % Payable Comm Writing Agent'].join('\n');
+const fr = parseStatementNew([feePage], fTEXT, '3-27-25.pdf');
+eq(fr.items.length, 1, 'fee row: single-date office-fee line is parsed');
+eq(fr.items[0] && fr.items[0].payable, -136.95, 'fee row: payable captured');
+eq(fr.chargebacks_total, -136.95, 'fee row: counted in the chargebacks total (so net reconciles)');
+
 console.log('parser: ' + n + ' checks passed');

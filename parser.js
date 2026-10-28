@@ -328,7 +328,14 @@ function nfSection(text){
   if (n.includes('CHARGEBACK') || (n.includes('EXPENSE') && n.includes('ADJUSTMENT'))) return 'chargebacks';
   return null;
 }
-const NF_ANCHOR = /\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+[A-Z]\b/;
+// A data row is any line with a date AND the premium / comm% / payable number triple.
+// Policy rows have two dates + a mode letter; office-expense-fee and adjustment rows in the
+// chargebacks section have only ONE date and no mode (e.g. "03/20/2025 $0.00 0.000 $-136.95"),
+// so matching on the number triple (not two-dates-plus-mode) catches both.
+const NF_DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
+const NF_CORE_RE = /\$?-?[\d,]+\.\d{2}\s+\d+\.\d+\s+\$?-?[\d,]+\.\d{2}/;
+const nfIsRow = s => NF_DATE_RE.test(s) && NF_CORE_RE.test(s);
+const NF_ANCHOR = { test: s => nfIsRow(s) };
 
 function makeItemNew(section, cells){
   const policy = nfCellText(cells.policy);
