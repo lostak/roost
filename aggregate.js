@@ -986,7 +986,7 @@ function buildSummary(allRecords, config) {
   // payments that dropped well below a policy's own norm (possible carrier error)?
   const nonPending = records.filter(r => !r.pending).sort((a, b) => (a.date < b.date ? -1 : 1));
   const byYr = {}; for (const r of nonPending) (byYr[r.year] ||= []).push(r);
-  const ytdDrops = [], cadenceGaps = [];
+  const ytdDrops = [];
   for (const y of Object.keys(byYr)) {
     const rs = byYr[y];
     for (let i = 1; i < rs.length; i++) {
@@ -994,8 +994,21 @@ function buildSummary(allRecords, config) {
         ytdDrops.push({ date: rs[i].date, ytd: round2(rs[i].ytd_total),
           prev_date: rs[i - 1].date, prev_ytd: round2(rs[i - 1].ytd_total),
           drop: round2(rs[i - 1].ytd_total - rs[i].ytd_total) });
-      const days = Math.round((Date.parse(rs[i].date) - Date.parse(rs[i - 1].date)) / 86400000);
-      if (days > 14) cadenceGaps.push({ from: rs[i - 1].date, to: rs[i].date, days });
+    }
+  }
+  // Cadence gaps use EVERY uploaded statement date — including pending / no-pay weeks,
+  // which are still issued statements and so count as coverage. (This matches the Review
+  // page; without it a week that only has a pending statement reads as missing here even
+  // after it's been uploaded.)
+  const cadDates = {};
+  for (const r of records) if (r.date) (cadDates[r.year] ||= new Set()).add(r.date);
+  for (const r of pendingRecs) if (r.date) { const yy = Number(String(r.date).slice(0, 4)); (cadDates[yy] ||= new Set()).add(r.date); }
+  const cadenceGaps = [];
+  for (const y of Object.keys(cadDates)) {
+    const ds = [...cadDates[y]].sort();
+    for (let i = 1; i < ds.length; i++) {
+      const days = Math.round((Date.parse(ds[i]) - Date.parse(ds[i - 1])) / 86400000);
+      if (days > 14) cadenceGaps.push({ from: ds[i - 1], to: ds[i], days });
     }
   }
   const reconciliation = allYears.map(y => {
