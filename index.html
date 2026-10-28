@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Roost — commission &amp; residual intelligence</title>
+<title>Roost</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Roboto+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -119,6 +119,17 @@ h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px
 .clickchip{cursor:pointer}
 .chip.clickchip:hover{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent)}
 .clickchip:hover{color:var(--accent)}
+/* collapsible "issued but paid nothing" list — compact by default, scrolls when open */
+.nopay{margin-top:18px}
+.nopay>summary{cursor:pointer;padding:10px 2px;font-weight:600;list-style:none;font-size:14px}
+.nopay>summary::-webkit-details-marker{display:none}
+.nopay>summary::before{content:'\25B8';display:inline-block;margin-right:9px;transition:transform .15s;color:var(--on-surface-var)}
+.nopay[open]>summary::before{transform:rotate(90deg)}
+.nopay-list{max-height:320px;overflow:auto;margin-top:6px;border:1px solid var(--outline-var);border-radius:12px}
+.nopay-row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12.5px;border-bottom:1px solid var(--outline-var)}
+.nopay-row:last-child{border-bottom:none}
+.nopay-row .npdate{min-width:96px;font-weight:600}
+.nopay-row .npfile{flex:1;text-align:right;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}
   .navgroup-header{display:none}.navgroup-items{margin:0;padding:0;border:none}
@@ -2103,11 +2114,11 @@ function renderReview(){
   const dismHtml=dism.length?`<p class="hint" style="margin-top:16px">Marked as not missing: ${dism.map(k=>{const p=String(k).split('|');return `<span class="chip" style="cursor:pointer" title="Restore this gap" onclick="restoreGap('${p[0]}','${p[1]}')">${fmtDate(p[0])} &rarr; ${fmtDate(p[1])} &times;</span>`;}).join(' ')}</p>`:'';
   const np=rv.no_pay||[];
   const reasonLabel=r=>r==='chargebacks'?'negative after chargebacks':r==='below_minimum'?'under the weekly payout minimum':'approved, not yet paid';
-  const npHtml=np.length?`<div style="margin-top:20px"><div class="revrow-t">${np.length} week${np.length===1?'':'s'} issued a statement but paid nothing <span class="hint" style="font-weight:400">&mdash; uploaded and accounted for, not missing</span></div>
-    <div class="revlist" style="margin-top:10px">`+np.map(s=>`<div class="revrow"><div class="revrow-ic">&#8505;</div><div style="flex:1">
-      <div class="revrow-t">${fmtDate(s.date)||'Undated'} &mdash; ${fmt0(s.net)} <span class="chip" style="margin-left:6px">${reasonLabel(s.reason)}</span></div>
-      <div class="revrow-s">File: ${esc(s.file)}${s.holder?` &middot; ${titleize(s.holder)}`:''}</div>
-    </div></div>`).join('')+'</div></div>':'';
+  const npHtml=np.length?`<details class="nopay"><summary><b>${np.length}</b> week${np.length===1?'':'s'} issued a statement but paid nothing <span class="hint" style="font-weight:400">&mdash; uploaded &amp; accounted for, not missing</span></summary>
+    <div class="nopay-list">`+np.map(s=>`<div class="nopay-row" title="File: ${esc(s.file)}${s.holder?` · ${titleize(s.holder)}`:''}">
+      <span class="npdate">${fmtDate(s.date)||'Undated'}</span><span class="neg" style="min-width:64px">${fmt0(s.net)}</span>
+      <span class="chip">${reasonLabel(s.reason)}</span><span class="npfile">${esc(s.file)}</span>
+    </div>`).join('')+'</div></details>':'';
   $('#reviewGaps').innerHTML=gapsHtml+dismHtml+npHtml;
   const sev=s=>s==='high'?'<span class="chip" style="background:#f3d1cd;color:#8c1d18">High priority</span>':'<span class="chip">Worth a look</span>';
   const list=rv.statements||[];
