@@ -126,25 +126,46 @@ function isBonusLine(it) {
 }
 function classifyBonuses(records) {
   let count = 0, dollars = 0;
+  const TRIP_RE = /1099|TRIP/i;
+  const isTripText = it => TRIP_RE.test(`${it.policy || ''} ${it.client || ''} ${it.product || ''}`);
+  let tripImputed = 0;
   for (const r of records) {
     for (const it of (r.items || [])) {
+      // ASB 1099 trips are booked as an imputed-value income line AND an offsetting reversal in
+      // the chargebacks section the same week (net $0 cash). It's a reward you're taxed on, not
+      // cash commission — and the reversal isn't a real policy clawback. Carve BOTH legs into a
+      // 'trip' bucket so trips don't inflate bonus income and the reversal doesn't dirty your
+      // chargebacks. Net is untouched (the legs cancel); the imputed value surfaces in
+      // Convention and the tax base.
       if (it.section === 'commission' && it.payable > 0 && isBonusLine(it)) {
-        it.section = 'bonus'; it.bonus_kind = bonusKind(it);
+        if (isTripText(it)) { it.section = 'trip'; it.bonus_kind = 'Trip / 1099 incentive'; }
+        else { it.section = 'bonus'; it.bonus_kind = bonusKind(it); }
         count++; dollars += it.payable;
+      } else if (it.section === 'chargebacks' && isTripText(it)) {
+        it.section = 'trip'; it.bonus_kind = 'Trip / 1099 incentive';  // the offsetting reversal
       }
     }
     // recompute all section totals from items so downstream stays consistent
-    let adv = 0, res = 0, cbk = 0, bon = 0;
+    let adv = 0, res = 0, cbk = 0, bon = 0, trip = 0, tripPos = 0;
     for (const it of (r.items || [])) {
       if (it.section === 'advances') adv += it.payable;
       else if (it.section === 'commission') res += it.payable;
       else if (it.section === 'chargebacks') cbk += it.payable;
       else if (it.section === 'bonus') bon += it.payable;
+      else if (it.section === 'trip') { trip += it.payable; if (it.payable > 0) tripPos += it.payable; }
     }
     r.advances_total = round2(adv); r.residual_total = round2(res);
     r.chargebacks_total = round2(cbk); r.bonus_total = round2(bon);
+    r.trip_total = round2(trip);           // net trip effect (~0 when offset) — identity preserved
+    r.trip_imputed = round2(tripPos);      // imputed 1099 value you won (for Convention + tax)
+    tripImputed += tripPos;
+    // Any residual (non-offset) trip cash is still carved out of reported net, per "not income".
+    if (Math.abs(trip) > 0.005) {
+      if (r.pay_period_net_raw == null) r.pay_period_net_raw = r.pay_period_net;
+      r.pay_period_net = round2((r.pay_period_net || 0) - trip);
+    }
   }
-  return { count, dollars: round2(dollars) };
+  return { count, dollars: round2(dollars), tripImputed: round2(tripImputed) };
 }
 
 // Combine statements that share a pay-period date into one record. Agents who run an LLC
@@ -166,6 +187,9 @@ function mergeByPeriod(recs) {
       ex.chargebacks_total = round2((ex.chargebacks_total || 0) + (r.chargebacks_total || 0));
       ex.pending_total = round2((ex.pending_total || 0) + (r.pending_total || 0));
       ex.bonus_total = sumN(ex.bonus_total, r.bonus_total);
+      ex.trip_total = sumN(ex.trip_total, r.trip_total);
+      if (r.pay_period_net_raw != null || ex.pay_period_net_raw != null)
+        ex.pay_period_net_raw = round2((ex.pay_period_net_raw != null ? ex.pay_period_net_raw : ex.pay_period_net) + (r.pay_period_net_raw != null ? r.pay_period_net_raw : r.pay_period_net));
       ex.ytd_advances = sumN(ex.ytd_advances, r.ytd_advances);
       ex.ytd_commission = sumN(ex.ytd_commission, r.ytd_commission);
       ex.ytd_chargebacks = sumN(ex.ytd_chargebacks, r.ytd_chargebacks);
@@ -282,6 +306,23 @@ function buildSummary(allRecords, config) {
     series: Object.entries(bSeries).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, amount]) => ({ date, amount: round2(amount) })),
     top: bonusItems.slice().sort((a, b) => b.amount - a.amount).slice(0, 30),
     items: bonusItems.slice().sort((a, b) => (a.date < b.date ? 1 : -1)),
+  };
+
+  // ---- trips / 1099 incentives ----
+  // The imputed value you won (positive legs only; the offsetting reversal is excluded).
+  // Carved out of income/chargebacks; surfaced here and added back into the tax base, since
+  // the imputed value IS taxable 1099 income.
+  const tripItems = [];
+  for (const r of records) for (const it of (r.items || [])) if (it.section === 'trip' && it.payable > 0)
+    tripItems.push({ date: r.date, year: r.year, carrier: it.carrier, client: it.client,
+      product: it.product, amount: round2(it.payable) });
+  const tByYear = {};
+  for (const t of tripItems) tByYear[t.year] = (tByYear[t.year] || 0) + t.amount;
+  const trips = {
+    total: round2(tripItems.reduce((s, t) => s + t.amount, 0)),   // imputed value won
+    count: tripItems.length,
+    by_year: Object.fromEntries(allYears.map(y => [y, round2(tByYear[y] || 0)])),
+    items: tripItems.slice().sort((a, b) => (a.date < b.date ? 1 : -1)),
   };
 
   // ---- per-year rollups (with authoritative YTD from latest statement) ----
@@ -1052,6 +1093,8 @@ function buildSummary(allRecords, config) {
       residual: round2(rs.reduce((s, r) => s + num(r.residual_total), 0)),
       chargebacks: round2(rs.reduce((s, r) => s + num(r.chargebacks_total), 0)),
       bonus: round2(rs.reduce((s, r) => s + num(r.bonus_total), 0)),
+      // imputed 1099 trip value: in the printed YTD, but carved out of cash net — explains that gap
+      trip: round2(rs.reduce((s, r) => s + num(r.trip_total), 0)),
     };
     const withYtd = rs.filter(r => r.ytd_total != null);
     const latest = withYtd.length ? withYtd[withYtd.length - 1] : null;  // rs is date-sorted
@@ -1679,6 +1722,7 @@ function buildSummary(allRecords, config) {
     runrate,
     reclass,
     bonuses,
+    trips,
     downline,
     projections,
     insights,

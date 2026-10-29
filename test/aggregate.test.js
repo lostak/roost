@@ -69,4 +69,23 @@ ok(cbComp && /rewrites.*excluded|excluded/.test(cbComp.detail),
 eq(s.review.counts.gaps, 0, 'review: the pending (no-pay) week counts as covered, so no false gap');
 eq(s.review.counts.no_pay, 1, 'review: the pending week is surfaced as a no-pay week');
 
+// ---- trips / 1099 incentives: carved out of income AND chargebacks (net $0) ----
+// ASB books a trip as an imputed-value income line plus an offsetting reversal the same week.
+// It's taxable value you won, not cash — so it must not inflate bonus income, must not count
+// as a chargeback, and must leave net untouched. The imputed value surfaces under trips.
+const tripRecs = [
+  mk('2026-03-06', [
+    item('advances', 'A1', 'SMITH, JO', 'HUMANA MEDADVANTAGE', 'Humana', 300),
+    item('commission', '1099MISC_TRIPS', 'TRIPS, 1099MISC', 'MISC', 'Bonus / Adjustment', 7000),
+    item('chargebacks', '1099MISC_TRIPS', 'TRIPS, 1099MISC', 'MISC', 'Bonus / Adjustment', -7000),
+  ]),
+];
+const st = buildSummary(tripRecs, {});
+eq(st.trips.total, 7000, 'trips: imputed value = the positive 1099 leg');
+eq(st.trips.count, 1, 'trips: one trip earned');
+ok(!(st.bonuses.by_kind || []).some(k => /trip|1099/i.test(k.kind)), 'trips: not counted as a bonus kind');
+eq(st.bonuses.total, 0, 'trips: bonus income excludes the trip');
+eq(st.chargebacks.total, 0, 'trips: the offsetting reversal is NOT counted as a chargeback');
+eq((st.years.find(y => y.year === 2026) || {}).net, 300, 'trips: net is cash only (300) — the trip nets to zero');
+
 console.log('aggregate: ' + n + ' checks passed');

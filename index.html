@@ -1067,7 +1067,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <!-- BONUSES -->
       <section class="view" id="view-bonuses">
         <h2 class="section">Bonuses &amp; overrides</h2>
-        <div class="banner">Trips, production bonuses, agency overrides and earnings adjustments show up in the statement's commission section but aren't recurring policy residual. Roost separates them here (and excludes them from your residual and income figures) so one-off payouts don't distort the trend. Note: some trip / 1099 lines are non-cash &mdash; booked as income and offset by a matching chargeback the same week (net $0) &mdash; so this total can exceed the actual bonus cash received.</div>
+        <div class="banner">Production bonuses, agency overrides and earnings adjustments show up in the statement's commission section but aren't recurring policy residual. Roost separates them here (and excludes them from your residual and income figures) so one-off payouts don't distort the trend. 1099 trip / incentive rewards are handled separately on the <b>Convention</b> tab &mdash; they're imputed value you're taxed on (booked as income and offset by a matching reversal the same week, net $0 cash), not a cash bonus, so they're kept out of both bonuses and chargebacks.</div>
         <div class="kpis" id="bonusKpis"></div>
         <div class="grid2">
           <div class="card chart-card">
@@ -1481,6 +1481,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <div id="convTarget" style="margin-top:14px"></div>
         </div>
         <div class="kpis" id="convKpis"></div>
+        <div class="card" id="convTripsCard" style="margin-bottom:24px;display:none">
+          <h3 style="margin-top:0">&#9992;&#65038; Trips &amp; incentives earned <span class="hint" style="font-weight:400">&mdash; the reward, not cash income</span></h3>
+          <div id="convTrips"></div>
+        </div>
         <div class="card" style="margin-bottom:24px">
           <h3 style="margin-top:0">Qualification checklist</h3>
           <div id="convChecklist" style="font-size:14px;line-height:1.9"></div>
@@ -3689,6 +3693,16 @@ function renderConvention(){
   rows.push(`${dot} E&amp;O coverage in place and under contract at convention`);
   rows.push(`${dot} Excludes replacements of ASB-endorsed policies and policies on family members (not auto-detected here)`);
   $('#convChecklist').innerHTML=rows.map(r=>`<div>${r}</div>`).join('');
+  // trips & incentives earned (imputed 1099 value — carved out of income + chargebacks, shown here)
+  (function(){
+    const tr=DATA.trips||{items:[],total:0}; const card=$('#convTripsCard'); if(!card)return;
+    if(!tr.items||!tr.items.length){ card.style.display='none'; return; }
+    card.style.display='';
+    const taxRough=Math.round((tr.total||0)*0.30);
+    const rows2=tr.items.map(t=>`<div class="nopay-row"><span class="npdate">${fmtDate(t.date)}</span><span style="min-width:90px;font-weight:600">${fmt0(t.amount)}</span><span class="npfile">1099 incentive &mdash; taxable</span></div>`).join('');
+    $('#convTrips').innerHTML=`<p class="hint" style="margin:0 0 12px">You earned <b>${fmt0(tr.total)}</b> in trip / incentive rewards &mdash; imputed 1099 value you're taxed on, not cash commission. Roost keeps it out of your income and chargebacks (it nets to zero on the statement); the real cost is the tax, roughly <b>${fmt0(taxRough)}</b> set aside at a ~30% blended rate. The experience was the reward.</p>
+      <div class="nopay-list">${rows2}</div>`;
+  })();
   // two production graphs: personal and downline, each vs its level target
   function convProg(id,series,target,color){
     const win=V.window||{start:'2026-02-01',end:'2027-01-31'};
@@ -3774,7 +3788,8 @@ function explainRecon(r,all){
   const head=`<b>${r.year}:</b> summed pay-period net <b>${fmt0(r.summed_net)}</b> vs. highest printed year-to-date <b>${fmt0(r.printed_ytd)}</b> &mdash; a difference of <b class="${cls(diff)}">${fmt0(diff)}</b>`
     +(r.printed_ytd?` (${Math.abs(Math.round((r.pct||0)*100))}%)`:'')+`.`;
   const breakdown=`Your ${r.year} net is: new business ${fmt0(c.advances)}, residual ${fmt0(c.residual)}, chargebacks ${fmt0(c.chargebacks)}`
-    +(c.bonus?`, bonuses/trips ${fmt0(c.bonus)}`:'')+`.`;
+    +(c.bonus?`, bonuses ${fmt0(c.bonus)}`:'')+`.`
+    +(c.trip?` Separately, ${fmt0(c.trip)} of 1099 trip value sits in the printed YTD but is carved out of your cash net.`:'');
   const reasons=[];
   const tol=Math.max(2,(r.printed_ytd||0)*0.005);
   if(Math.abs(diff)<=tol){ reasons.push('The gap is within rounding &mdash; nothing to chase.'); }
@@ -3785,8 +3800,10 @@ function explainRecon(r,all){
     // equal-and-opposite gap in another year => carrier attributed income to a different year
     const opp=(all||[]).find(o=>o.year!==r.year && Math.abs(o.diff+diff)<Math.max(2,Math.abs(diff)*0.05));
     if(opp) reasons.push(`This is almost exactly offset by <b>${fmt0(opp.diff)} in ${opp.year}</b>. The carrier's running total attributed that income to a different calendar year than your pay-period nets did &mdash; the two years reconcile when viewed together.`);
+    if(c.trip && Math.abs(c.trip)>1 && Math.abs(diff+c.trip)<Math.max(2,Math.abs(diff)*0.5))
+      reasons.push(`The printed YTD includes ${fmt0(c.trip)} of imputed 1099 trip value, which Roost carves out of your cash net (a reward you're taxed on, not cash paid) &mdash; that accounts for the gap.`);
     if(c.bonus && Math.abs(c.bonus)>1 && Math.abs(Math.abs(diff)-Math.abs(c.bonus))<Math.abs(diff)*0.5)
-      reasons.push(`Bonuses/trips of ${fmt0(c.bonus)} sit in your net, but a carrier's printed YTD usually tracks only the core commission stream &mdash; that alone explains much of the gap.`);
+      reasons.push(`Bonuses of ${fmt0(c.bonus)} sit in your net, but a carrier's printed YTD usually tracks only the core commission stream &mdash; that alone explains much of the gap.`);
     reasons.push(diff>0
       ? `Because your net is <b>higher</b> than the printed YTD, you were paid income the running total didn't fully capture &mdash; typically a separate stream or the off-sequence statement above.`
       : `Because your net is <b>lower</b> than the printed YTD, the printed figure likely includes a stream or timing your pay-period nets haven't fully accrued into this year.`);
