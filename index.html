@@ -1801,10 +1801,13 @@ document.querySelectorAll('#nav a').forEach(a=>{
 document.querySelectorAll('#nav .navgroup-header').forEach(h=>{ h.setAttribute('tabindex','0'); h.setAttribute('role','button');
   h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } }); h.onclick=(e)=>{
   const g=h.parentElement;
-  // chevron toggles expand/collapse; the label opens this category's overview hub
+  // chevron always toggles expand/collapse
   if(e&&e.target&&e.target.classList.contains('arrow')){ openGroup(g.classList.contains('collapsed')?g:null); return; }
   const hub=g.querySelector('.navgroup-items a[data-view]');
-  if(hub){ hub.click(); } else { openGroup(g.classList.contains('collapsed')?g:null); }
+  if(g.classList.contains('collapsed')){ if(hub){hub.click();}else{openGroup(g);} }   // collapsed -> open + show its hub
+  else if(hub && hub.classList.contains('active')){ openGroup(null); }                  // already open AND on its hub -> collapse
+  else if(hub){ hub.click(); }                                                          // open but viewing a sub-page -> jump to hub
+  else { openGroup(null); }
 };});
 (function initNav(){
   let open=''; try{open=localStorage.getItem('navOpen')||'';}catch(e){}
