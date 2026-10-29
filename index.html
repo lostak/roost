@@ -586,7 +586,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="seg" id="contactKind" style="margin-bottom:12px">
       <button data-k="bug" class="on">Bug report</button><button data-k="feature">Feature request</button><button data-k="dev" id="contactDevBtn" style="display:none">Dev</button>
     </div>
-    <textarea id="contactMsg" rows="5" placeholder="What happened, or what would you like to see?" style="width:100%;box-sizing:border-box;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--glass-brd);background:var(--surface-2);color:var(--on-surface);font-family:inherit;font-size:14px"></textarea>
+    <textarea id="contactMsg" rows="5" placeholder="What happened?" style="width:100%;box-sizing:border-box;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--glass-brd);background:var(--surface-2);color:var(--on-surface);font-family:inherit;font-size:14px"></textarea>
     <input id="contactEmail" type="email" placeholder="Your email (optional, if you want a reply)" style="width:100%;box-sizing:border-box;margin-top:10px;padding:9px 10px;border-radius:10px;border:1px solid var(--glass-brd);background:var(--surface-2);color:var(--on-surface);font-size:14px">
     <div id="contactMsgOut" class="hint" style="min-height:18px;margin-top:8px"></div>
     <div class="modal-foot">
@@ -3222,12 +3222,13 @@ function devLockClick(){
   }
   openContact();
 }
+function contactPH(k){ return k==='feature'?'What would you like to see?':k==='dev'?'What do you want?':'What happened?'; }
 let _contactKind='bug';
-function openContact(){ _contactKind='bug'; $('#contactMsg').value=''; $('#contactEmail').value=''; $('#contactMsgOut').textContent='';
+function openContact(){ _contactKind='bug'; $('#contactMsg').value=''; $('#contactMsg').placeholder=contactPH('bug'); $('#contactEmail').value=''; $('#contactMsgOut').textContent='';
   document.querySelectorAll('#contactKind button').forEach(b=>b.classList.toggle('on',b.dataset.k==='bug'));
   $('#contactSend').disabled=false; $('#contactModal').classList.add('open'); document.body.classList.remove('nav-open'); setTimeout(()=>$('#contactMsg').focus(),50); }
 function closeContact(){ $('#contactModal').classList.remove('open'); }
-document.addEventListener('click',e=>{const b=e.target.closest('#contactKind button');if(!b)return;_contactKind=b.dataset.k;document.querySelectorAll('#contactKind button').forEach(x=>x.classList.toggle('on',x===b));});
+document.addEventListener('click',e=>{const b=e.target.closest('#contactKind button');if(!b)return;_contactKind=b.dataset.k;document.querySelectorAll('#contactKind button').forEach(x=>x.classList.toggle('on',x===b));const t=$('#contactMsg');if(t)t.placeholder=contactPH(_contactKind);});
 async function sendContact(){
   const message=($('#contactMsg').value||'').trim(); const out=$('#contactMsgOut');
   if(message.length<3){ out.style.color='#d4694a'; out.textContent='Please add a short description.'; return; }
