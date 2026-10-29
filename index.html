@@ -2119,7 +2119,7 @@ function renderReview(){
   const dismHtml=dism.length?`<p class="hint" style="margin-top:16px">Marked as not missing: ${dism.map(k=>{const p=String(k).split('|');return `<span class="chip" style="cursor:pointer" title="Restore this gap" onclick="restoreGap('${p[0]}','${p[1]}')">${fmtDate(p[0])} &rarr; ${fmtDate(p[1])} &times;</span>`;}).join(' ')}</p>`:'';
   const np=rv.no_pay||[];
   const reasonLabel=r=>r==='chargebacks'?'negative after chargebacks':r==='below_minimum'?'under the weekly payout minimum':'approved, not yet paid';
-  const npHtml=np.length?`<details class="nopay"><summary><b>${np.length}</b> week${np.length===1?'':'s'} issued a statement but paid nothing <span class="hint" style="font-weight:400">&mdash; uploaded &amp; accounted for, not missing</span></summary>
+  const npHtml=np.length?`<details class="nopay"><summary><b>${np.length}</b> week${np.length===1?'':'s'} issued a statement but paid nothing</summary>
     <div class="nopay-list">`+np.map(s=>`<div class="nopay-row" title="File: ${esc(s.file)}${s.holder?` · ${titleize(s.holder)}`:''}">
       <span class="npdate">${fmtDate(s.date)||'Undated'}</span><span class="neg" style="min-width:64px">${fmt0(s.net)}</span>
       <span class="chip">${reasonLabel(s.reason)}</span><span class="npfile">${esc(s.file)}</span>
