@@ -130,6 +130,16 @@ h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px
 .nopay-row:last-child{border-bottom:none}
 .nopay-row .npdate{min-width:96px;font-weight:600}
 .nopay-row .npfile{flex:1;text-align:right;color:var(--on-surface-var);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* category hub (per-group overview landing) */
+.hubgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-top:20px}
+.hubcard{display:block;text-align:left;cursor:pointer;background:var(--surface-1);border:1px solid var(--glass-brd);border-radius:16px;padding:16px 18px;transition:transform .1s,border-color .15s,box-shadow .15s}
+.hubcard:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--glass-brd))}
+.hubcard .hc-top{display:flex;align-items:center;gap:10px}
+.hubcard .hc-ic{font-size:17px;width:22px;text-align:center}
+.hubcard .hc-t{font-weight:600;font-size:15px;flex:1}
+.hubcard .hc-arrow{color:var(--on-surface-var);transition:transform .12s}
+.hubcard:hover .hc-arrow{transform:translateX(3px);color:var(--accent)}
+.hubcard .hc-d{color:var(--on-surface-var);font-size:12.5px;margin-top:7px;line-height:1.45}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}
   .navgroup-header{display:none}.navgroup-items{margin:0;padding:0;border:none}
@@ -593,6 +603,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="production">
       <div class="navgroup-header"><span class="lbl">Production</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="cat-production" title="Production overview"><span class="ic">&#8862;</span><span class="lbl">Overview</span></a>
         <a data-view="newbusiness"><span class="ic">&#10022;</span><span class="lbl">New Business</span></a>
         <a data-view="residuals"><span class="ic">&#8734;</span><span class="lbl">Residual Income</span></a>
         <a data-view="cumulative"><span class="ic">&#8599;&#65038;</span><span class="lbl">Cumulative</span></a>
@@ -605,6 +616,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="outlook">
       <div class="navgroup-header"><span class="lbl">Outlook</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="cat-outlook" title="Outlook overview"><span class="ic">&#8862;</span><span class="lbl">Overview</span></a>
         <a data-view="grow"><span class="ic">&#9650;</span><span class="lbl">Grow</span></a>
         <a data-view="projections"><span class="ic">&#9651;</span><span class="lbl">Projections</span></a>
         <a data-view="forecast"><span class="ic">&#9673;</span><span class="lbl">Forecast</span></a>
@@ -614,6 +626,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="book">
       <div class="navgroup-header"><span class="lbl">Book &amp; clients</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="cat-book" title="Book &amp; clients overview"><span class="ic">&#8862;</span><span class="lbl">Overview</span></a>
         <a data-view="clients"><span class="ic">&#9787;&#65038;</span><span class="lbl">Clients</span></a>
         <a data-view="retention"><span class="ic">&#9851;&#65038;</span><span class="lbl">Retention</span></a>
         <a data-view="value"><span class="ic">&#9878;&#65038;</span><span class="lbl">Book Value</span></a>
@@ -622,6 +635,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="money">
       <div class="navgroup-header"><span class="lbl">Money</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="cat-money" title="Money overview"><span class="ic">&#8862;</span><span class="lbl">Overview</span></a>
         <a data-view="expenses"><span class="ic">&#9662;</span><span class="lbl">Expenses</span></a>
         <a data-view="taxes"><span class="ic">&#167;</span><span class="lbl">Taxes</span></a>
         <a data-view="cashflow"><span class="ic">&#8645;</span><span class="lbl">Cash Flow</span></a>
@@ -631,6 +645,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="analysis">
       <div class="navgroup-header"><span class="lbl">Analysis</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="cat-analysis" title="Analysis overview"><span class="ic">&#8862;</span><span class="lbl">Overview</span></a>
         <a data-view="insights"><span class="ic">&#10038;</span><span class="lbl">AI Insights</span></a>
         <a data-view="compare"><span class="ic">&#8646;</span><span class="lbl">Comparison</span></a>
         <a data-view="downline"><span class="ic">&#9782;</span><span class="lbl">Downline</span></a>
@@ -639,6 +654,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="navgroup" data-group="records">
       <div class="navgroup-header"><span class="lbl">Records</span><span class="arrow">&#9662;</span></div>
       <div class="navgroup-items">
+        <a data-view="cat-records" title="Records overview"><span class="ic">&#8862;</span><span class="lbl">Overview</span></a>
         <a data-view="policies"><span class="ic">&#9776;</span><span class="lbl">Policies</span></a>
         <a data-view="audit"><span class="ic">&#9888;&#65038;</span><span class="lbl">Audit</span></a>
       </div>
@@ -670,6 +686,73 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           </div>
         </div>
       </div>
+
+      <!-- CATEGORY HUBS (per-group overview landings) -->
+      <section class="view" id="view-cat-production">
+        <h2 class="section">Production &mdash; overview</h2>
+        <p class="hint" style="margin:-4px 0 0">What you've earned and what clawed back. Open any area for the detail.</p>
+        <div class="kpis" id="hubKpis-production" style="margin-top:18px"></div>
+        <div class="hubgrid">
+          <div class="hubcard" onclick="gotoView('newbusiness')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#10022;</span><span class="hc-t">New Business</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Up-front commissions on newly written policies.</div></div>
+          <div class="hubcard" onclick="gotoView('residuals')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#8734;</span><span class="hc-t">Residual Income</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Recurring renewal income that keeps paying.</div></div>
+          <div class="hubcard" onclick="gotoView('cumulative')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#8599;&#65038;</span><span class="hc-t">Cumulative</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Your running lifetime total over time.</div></div>
+          <div class="hubcard" onclick="gotoView('carriers')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9707;</span><span class="hc-t">By Carrier</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Production split across your carriers.</div></div>
+          <div class="hubcard" onclick="gotoView('products')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9638;</span><span class="hc-t">By Product</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Production by line of business.</div></div>
+          <div class="hubcard" onclick="gotoView('bonuses')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9733;</span><span class="hc-t">Bonuses</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Trip incentives, production bonuses, overrides.</div></div>
+          <div class="hubcard" onclick="gotoView('chargebacks')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#8630;</span><span class="hc-t">Chargebacks</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Clawbacks when policies lapse or rewrite.</div></div>
+        </div>
+      </section>
+      <section class="view" id="view-cat-outlook">
+        <h2 class="section">Outlook &mdash; overview</h2>
+        <p class="hint" style="margin:-4px 0 0">Where your book is heading and what to do about it.</p>
+        <div class="kpis" id="hubKpis-outlook" style="margin-top:18px"></div>
+        <div class="hubgrid">
+          <div class="hubcard" onclick="gotoView('grow')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9650;</span><span class="hc-t">Grow</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Your biggest opportunities right now.</div></div>
+          <div class="hubcard" onclick="gotoView('projections')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9651;</span><span class="hc-t">Projections</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Model where your residual income is heading.</div></div>
+          <div class="hubcard" onclick="gotoView('forecast')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9673;</span><span class="hc-t">Forecast</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">The near-term trend of your net pay.</div></div>
+          <div class="hubcard" onclick="gotoView('goals')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9873;</span><span class="hc-t">Goals</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Set income targets and track the pace.</div></div>
+        </div>
+      </section>
+      <section class="view" id="view-cat-book">
+        <h2 class="section">Book &amp; clients &mdash; overview</h2>
+        <p class="hint" style="margin:-4px 0 0">Who you serve, what's sticking, and what the book is worth.</p>
+        <div class="kpis" id="hubKpis-book" style="margin-top:18px"></div>
+        <div class="hubgrid">
+          <div class="hubcard" onclick="gotoView('clients')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9787;&#65038;</span><span class="hc-t">Clients</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Households, cross-sell, and who you serve.</div></div>
+          <div class="hubcard" onclick="gotoView('retention')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9851;&#65038;</span><span class="hc-t">Retention</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Persistency and what's lapsing.</div></div>
+          <div class="hubcard" onclick="gotoView('value')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9878;&#65038;</span><span class="hc-t">Book Value</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">What your in-force book is worth.</div></div>
+        </div>
+      </section>
+      <section class="view" id="view-cat-money">
+        <h2 class="section">Money &mdash; overview</h2>
+        <p class="hint" style="margin:-4px 0 0">Income to plan around, and the tools to plan with.</p>
+        <div class="kpis" id="hubKpis-money" style="margin-top:18px"></div>
+        <div class="hubgrid">
+          <div class="hubcard" onclick="gotoView('expenses')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9662;</span><span class="hc-t">Expenses</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Track business costs against income.</div></div>
+          <div class="hubcard" onclick="gotoView('taxes')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#167;</span><span class="hc-t">Taxes</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Estimate what to set aside on 1099 income.</div></div>
+          <div class="hubcard" onclick="gotoView('cashflow')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#8645;</span><span class="hc-t">Cash Flow</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Money in vs. out over time.</div></div>
+          <div class="hubcard" onclick="gotoView('convention')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9819;</span><span class="hc-t">Convention</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Progress toward carrier trips &amp; incentives.</div></div>
+        </div>
+      </section>
+      <section class="view" id="view-cat-analysis">
+        <h2 class="section">Analysis &mdash; overview</h2>
+        <p class="hint" style="margin:-4px 0 0">Deeper reads on your book &mdash; plain-English, comparative, and hierarchy.</p>
+        <div class="kpis" id="hubKpis-analysis" style="margin-top:18px"></div>
+        <div class="hubgrid">
+          <div class="hubcard" onclick="gotoView('insights')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#10038;</span><span class="hc-t">AI Insights</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Plain-English read of your book and anomalies.</div></div>
+          <div class="hubcard" onclick="gotoView('compare')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#8646;</span><span class="hc-t">Comparison</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Compare periods, carriers, or products.</div></div>
+          <div class="hubcard" onclick="gotoView('downline')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9782;</span><span class="hc-t">Downline</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Override income from agents under you.</div></div>
+        </div>
+      </section>
+      <section class="view" id="view-cat-records">
+        <h2 class="section">Records &mdash; overview</h2>
+        <p class="hint" style="margin:-4px 0 0">The underlying rows &mdash; every policy, and anything worth a second look.</p>
+        <div class="kpis" id="hubKpis-records" style="margin-top:18px"></div>
+        <div class="hubgrid">
+          <div class="hubcard" onclick="gotoView('policies')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9776;</span><span class="hc-t">Policies</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Every policy, searchable and sortable.</div></div>
+          <div class="hubcard" onclick="gotoView('audit')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">&#9888;&#65038;</span><span class="hc-t">Audit</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">Statements and figures worth a second look.</div></div>
+        </div>
+      </section>
 
       <!-- OVERVIEW -->
       <section class="view active" id="view-overview">
@@ -1719,9 +1802,12 @@ document.querySelectorAll('#nav a').forEach(a=>{
   document.body.classList.remove('nav-open');   // close the mobile drawer after choosing a view
 };});
 document.querySelectorAll('#nav .navgroup-header').forEach(h=>{ h.setAttribute('tabindex','0'); h.setAttribute('role','button');
-  h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } }); h.onclick=()=>{
+  h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } }); h.onclick=(e)=>{
   const g=h.parentElement;
-  openGroup(g.classList.contains('collapsed')?g:null);
+  // chevron toggles expand/collapse; the label opens this category's overview hub
+  if(e&&e.target&&e.target.classList.contains('arrow')){ openGroup(g.classList.contains('collapsed')?g:null); return; }
+  const hub=g.querySelector('.navgroup-items a[data-view]');
+  if(hub){ hub.click(); } else { openGroup(g.classList.contains('collapsed')?g:null); }
 };});
 (function initNav(){
   let open=''; try{open=localStorage.getItem('navOpen')||'';}catch(e){}
@@ -1868,6 +1954,7 @@ function render(){
   renderDigest();
   renderHealth();
   renderKpis();
+  renderHubs();
   renderOverviewTrend();
   renderLifetime();
   renderYearTable();
@@ -3060,6 +3147,30 @@ function renderDigest(){
   }
   el.innerHTML=parts.map(p=>'&bull; '+p).join('<br>');
 }
+// Category hubs: fill each group's overview KPI strip from the loaded summary (defensively).
+function renderHubs(){
+  if(!DATA) return;
+  const Y=(DATA.years||[]).slice(-1)[0]||{};
+  const V=DATA.value||{}, R=((DATA.retention||{}).totals)||{}, C=DATA.clients||{};
+  const m=v=>(v===undefined||v===null||isNaN(v))?'—':fmt0(v);
+  const n=v=>(v===undefined||v===null)?'—':v;
+  const pct=v=>(v===undefined||v===null||isNaN(v))?'—':Math.round(v*100)+'%';
+  const kpi=(l,val,s)=>`<div class="card kpi"><div class="label">${l}</div><div class="val">${val}</div><div class="sub">${s||''}</div></div>`;
+  const strips={
+    production:[['New business',m(Y.advances),'this year'],['Residual',m(Y.residual),'this year'],['Bonuses',m(Y.bonus),'this year'],['Chargebacks',m(Y.chargebacks),'this year']],
+    outlook:[['Annual residual',m(V.residual_annual),'run-rate'],['Monthly residual',m(V.monthly_residual),'in-force'],['In-force policies',n(V.inforce_policies),'paying residual']],
+    book:[['Clients',n(C.count),(C.household_count!=null?C.household_count+' households':'')],['Active policies',n(R.active),(R.policies!=null?'of '+R.policies:'')],['Persistency',pct(R.persistency),'in-force rate'],['Avg net / client',m(C.avg_net),'lifetime']],
+    money:[['Net income',m(Y.net),'this year'],['Gross',m(Y.gross),'before chargebacks']],
+    records:[['Policies',n(R.policies),'all-time'],['Active',n(R.active),'paying'],['Lapsed',n(R.lapsed),'no longer paying']]
+  };
+  ['production','outlook','book','money','analysis','records'].forEach(g=>{
+    const el=document.getElementById('hubKpis-'+g); if(!el) return;
+    const rows=strips[g];
+    const anyReal=rows&&rows.some(r=>r[1]!=='—');
+    el.innerHTML=anyReal?rows.map(r=>kpi(r[0],r[1],r[2])).join(''):'';
+    el.style.display=anyReal?'':'none';
+  });
+}
 function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
 // Scroll a summary KPI's detail section into view with a brief highlight.
 function scrollToSection(id){const el=document.getElementById(id);if(!el)return;el.scrollIntoView({behavior:'smooth',block:'start'});el.classList.remove('jump-flash');void el.offsetWidth;el.classList.add('jump-flash');setTimeout(()=>el.classList.remove('jump-flash'),1300);}
@@ -4050,7 +4161,10 @@ function animateCounts(){
 let _cmdkSel=0,_cmdkItems=[];
 function cmdkCommands(){
   const views=[...document.querySelectorAll('#nav a[data-view]')].map(a=>({
-    type:'view',label:a.querySelector('.lbl').textContent.trim(),view:a.dataset.view,
+    type:'view',
+    // category-hub links all read "Overview"; use their title ("X overview") so the palette is unambiguous
+    label:(a.dataset.view||'').indexOf('cat-')===0 ? (a.getAttribute('title')||a.querySelector('.lbl').textContent.trim()) : a.querySelector('.lbl').textContent.trim(),
+    view:a.dataset.view,
     ic:(a.querySelector('.ic')||{}).textContent||'&#9632;'}));
   const extra=[{type:'action',label:'Upload statements',ic:'&#8613;',run:openUpload},
     {type:'action',label:'Refresh data',ic:'&#8635;',run:()=>loadData(true)},
