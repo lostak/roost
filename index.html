@@ -1719,15 +1719,12 @@ let holderView=(function(){try{return localStorage.getItem('roost.holderView')||
 function setHolderView(v){holderView=v||'__all__';try{localStorage.setItem('roost.holderView',holderView);}catch(e){}loadData(true);}
 // ---- theme (dark / light) ----
 let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
-// Anchor tooltips to the TOP of the hovered bar/point (not the moving cursor), site-wide.
+// Hover/tooltip tracks the cursor's actual position (both axes) and highlights the single
+// nearest data element — accurate regardless of bar orientation (e.g. tall negative bars).
+// The tooltip box is positioned at that nearest element, next to the cursor.
 if(window.Chart&&Chart.Tooltip){
-  Chart.Tooltip.positioners.topBar=function(items){
-    if(!items||!items.length)return false;
-    let x=0,minY=Infinity;
-    for(const it of items){const p=it.element.tooltipPosition();x+=p.x;if(p.y<minY)minY=p.y;}
-    return {x:x/items.length, y:minY};
-  };
-  Chart.defaults.plugins.tooltip.position='topBar';
+  Chart.defaults.interaction={mode:'nearest',intersect:false,axis:'xy'};
+  Chart.defaults.plugins.tooltip.position='nearest';
   Chart.defaults.plugins.tooltip.caretPadding=8;
 }
 function themeColors(){
@@ -1885,7 +1882,7 @@ function bucketSeries(grain,src){
 function timeAxis(buckets,opt){
   opt=opt||{}; const money=opt.money!==false, stacked=!!opt.stacked;
   const qc=GRIDQ, faint='rgba(0,0,0,0)';
-  return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  return {responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false,axis:'xy'},
     scales:{
       x:{stacked,grid:{color:c=>{const b=buckets[c.index];return b&&b.qStart?qc:faint;},drawTicks:true,tickLength:6},
         ticks:{autoSkip:true,maxRotation:0,autoSkipPadding:12}},
@@ -1899,7 +1896,7 @@ function baropts(stacked,horizontal){
   const valAxis={stacked:!!stacked,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}};
   const catAxis={stacked:!!stacked,grid:{display:false},ticks:{autoSkip:false}};
   return{responsive:true,maintainAspectRatio:false,
-    indexAxis:horizontal?'y':'x',interaction:{mode:'index',intersect:false},
+    indexAxis:horizontal?'y':'x',interaction:{mode:'nearest',intersect:false,axis:'xy'},
     scales:horizontal?{x:valAxis,y:catAxis}:{x:catAxis,y:valAxis},
     plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>{const v=c.parsed[horizontal?'x':'y'];
       return c.dataset.label+': '+(c.dataset.money===false?Number(v).toLocaleString():fmt(v));}}}}};}
@@ -2766,7 +2763,7 @@ function renderCmpTable(labels,datasets){
 function cmpOptions(stacked,horizontal,money,buckets){
   const qc=GRIDQ,faint='rgba(0,0,0,0)';
   const xgrid=(buckets&&!horizontal)?{color:c=>{const b=buckets[c.index];return b&&b.qStart?qc:faint;}}:{display:false};
-  return{responsive:true,maintainAspectRatio:false,indexAxis:horizontal?'y':'x',interaction:{mode:'index',intersect:false},
+  return{responsive:true,maintainAspectRatio:false,indexAxis:horizontal?'y':'x',interaction:{mode:'nearest',intersect:false,axis:'xy'},
     scales:{x:{stacked:!!stacked,grid:xgrid,
         ticks:horizontal?{callback:v=>money?'$'+Number(v).toLocaleString():Number(v).toLocaleString()}:{autoSkip:true,maxRotation:0,autoSkipPadding:12}},
       y:{stacked:!!stacked,grid:{color:GRID},
@@ -2878,7 +2875,7 @@ function projDraw(){
     {label:'Range',data:consLine,borderColor:'transparent',backgroundColor:hexA(color,.15),fill:'-1',pointRadius:0,spanGaps:true},
     {label,data:baseLine,borderColor:color,backgroundColor:color,tension:.25,pointRadius:3,fill:false,
       segment:{borderDash:ctx=>ctx.p0DataIndex>=nH-1?[6,4]:undefined}}
-  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false,axis:'xy'},
     scales:{x:{grid:{color:c=>c.index===nH-1?GRIDBOUND:GRID}},
       y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
     plugins:{legend:{position:'bottom',labels:{filter:i=>i.text!=='Optimistic'}},
@@ -2989,7 +2986,7 @@ function renderGoals(){
   const cumDs=[{label:'Cumulative net',data:cumActual,borderColor:COLORS.resid,backgroundColor:COLORS.resid,tension:.2,pointRadius:2,fill:false}];
   if(goal)cumDs.push({label:'Required pace',data:cumReq,borderColor:hexA(COLORS.nb,.9),borderDash:[6,4],backgroundColor:'transparent',pointRadius:0,fill:false});
   charts.goalCum=new Chart($('#goalCumChart'),{type:'line',data:{labels:buckets.map(b=>b.label),datasets:cumDs},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false,axis:'xy'},
       scales:{x:{grid:{color:GRID}},y:{ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
       plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
 
@@ -3081,7 +3078,7 @@ function renderGoalTraj(){
   $('#goalTrajTitle').textContent=(mode==='apps'?'Applications trajectory':title==='Goal trajectory'?'Goal trajectory':title);
   $('#goalTrajHint').innerHTML=hint;
   charts.goalTraj=new Chart($('#goalTrajChart'),{type:'line',data:{labels,datasets},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false,axis:'xy'},
       scales:{x:{grid:{color:c2=>c2.index===lastIdx?GRIDBOUND:GRID},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:13}},
         y:{ticks:{callback:v=>yMoney?'$'+Number(v).toLocaleString():Number(v).toLocaleString()},grid:{color:GRID}}},
       plugins:{legend:{position:'bottom'},
@@ -3647,7 +3644,7 @@ function renderConvention(){
     if(target)ds.push({label:'Required pace to qualify',data:reqLine,borderColor:'#d64545',borderWidth:2.5,borderDash:[8,5],pointRadius:0,fill:false});
     const maxY=Math.max(...actLine.filter(x=>x!=null),target||0)*1.05;
     return new Chart($(id),{type:'line',data:{labels,datasets:ds},
-      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false,axis:'xy'},
         scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:12}},
           y:{beginAtZero:true,suggestedMax:maxY,ticks:{callback:v=>Number(v).toLocaleString()},grid:{color:GRID}}},
         plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y==null?'—':num0(c.parsed.y)+' pts')}}}}});
@@ -3810,7 +3807,7 @@ function renderValue(){
   charts.valCash=new Chart($('#valCashChart'),{type:'bar',data:{labels:cf.map(m=>m.label),datasets:[
     {label:'Current run-rate',data:cf.map(m=>m.base),backgroundColor:COLORS.resid},
     {label:'New MA step-up',data:cf.map(m=>m.stepup),backgroundColor:COLORS.nb}
-  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false,axis:'xy'},
     scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'$'+Number(v).toLocaleString()},grid:{color:GRID}}},
     plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y)}}}}});
   const mr=V.ma_renewal;
