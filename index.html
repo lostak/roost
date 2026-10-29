@@ -140,6 +140,29 @@ h2.section{font-size:16px;font-weight:500;color:var(--on-surface-var);margin:8px
 .hubcard .hc-arrow{color:var(--on-surface-var);transition:transform .12s}
 .hubcard:hover .hc-arrow{transform:translateX(3px);color:var(--accent)}
 .hubcard .hc-d{color:var(--on-surface-var);font-size:12.5px;margin-top:7px;line-height:1.45}
+/* welcome / home */
+.wel-hero{background:var(--grad-brand);color:#fff;border-radius:22px;padding:28px 26px 26px;box-shadow:var(--shadow-2);position:relative;overflow:hidden}
+.wel-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(360px 200px at 90% -30%,rgba(255,255,255,.2),transparent 70%);pointer-events:none}
+.wel-hero>*{position:relative}
+.wel-verdict{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);padding:6px 14px;border-radius:999px;margin-bottom:16px}
+.wel-verdict .dot{width:8px;height:8px;border-radius:50%;background:#8bf0bd;box-shadow:0 0 0 3px rgba(139,240,189,.3)}
+.wel-hlabel{font-size:14px;opacity:.85;margin:0 0 3px}
+.wel-num{font-size:clamp(38px,8vw,54px);font-weight:800;letter-spacing:-1.6px;line-height:1}
+.wel-num .rng{font-size:13.5px;font-weight:600;opacity:.82;margin-left:10px;letter-spacing:0}
+.wel-sub{font-size:15px;opacity:.93;margin:14px 0 0;max-width:42ch;line-height:1.5}
+.wel-sub b,.wel-story b{color:#fff;font-weight:800}
+.wel-story{font-size:14.5px;line-height:1.6;margin:18px 0 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.18);opacity:.95}
+.wel-cta{display:inline-flex;align-items:center;gap:8px;margin-top:22px;background:#fff;color:var(--primary);border:none;border-radius:12px;padding:12px 20px;cursor:pointer;font:inherit;font-weight:700;box-shadow:0 12px 26px -12px rgba(0,0,0,.4);transition:transform .12s}
+.wel-cta:hover{transform:translateY(-2px)}
+.wel-sectlab{font-size:12px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:var(--on-surface-var);margin:28px 2px 12px}
+.wel-trip{background:var(--surface-1);border:1px solid var(--glass-brd);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+.wel-trip .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.wel-trip h3{margin:0;font-size:16px;color:var(--on-surface)}
+.wel-trip .chk{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}
+.wel-trip .chk .chip{font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 11px;background:var(--surface-2);color:var(--on-surface-var)}
+.wel-trip .chk .chip.ok{background:color-mix(in srgb,var(--pos) 18%,transparent);color:var(--pos)}
+.welchip{font-size:13px;font-weight:600;color:var(--on-surface);background:var(--surface-1);border:1px solid var(--glass-brd);border-radius:999px;padding:8px 14px;cursor:pointer;transition:border-color .15s,color .15s}
+.welchip:hover{border-color:var(--accent);color:var(--accent)}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.nav{flex-basis:60px}.nav .lbl{display:none}
   .navgroup-header{display:none}.navgroup-items{margin:0;padding:0;border:none}
@@ -599,7 +622,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <div class="layout">
   <div id="navBackdrop" onclick="toggleNav()"></div>
   <nav class="nav" id="nav">
-    <a data-view="overview" class="active"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
+    <a data-view="welcome" class="active"><span class="ic">&#9750;</span><span class="lbl">Home</span></a>
+    <a data-view="overview"><span class="ic">&#9632;</span><span class="lbl">Overview</span></a>
     <a data-view="review"><span class="ic">&#9873;</span><span class="lbl">Review</span><span class="navbadge" id="reviewBadge" style="display:none"></span></a>
     <div class="navgroup" data-group="production">
       <div class="navgroup-header"><span class="lbl">Production</span><span class="arrow">&#9662;</span></div>
@@ -688,6 +712,39 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         </div>
       </div>
 
+      <!-- WELCOME / HOME (narrated landing; the full dashboard is one tap away) -->
+      <section class="view active" id="view-welcome">
+        <div class="wel-hero">
+          <span class="wel-verdict"><span class="dot"></span> <span id="welVerdict">Your book at a glance</span></span>
+          <p class="wel-hlabel">Your book of business is worth</p>
+          <div class="wel-num"><span id="welNum">&mdash;</span> <span class="rng" id="welRange"></span></div>
+          <p class="wel-sub" id="welSub"></p>
+          <p class="wel-story" id="welStory"></p>
+          <button class="wel-cta" onclick="gotoView('overview')">Open the full dashboard &rarr;</button>
+        </div>
+        <div class="wel-sectlab">Money on the table</div>
+        <div class="hubgrid" id="welMoney" style="margin-top:0"></div>
+        <div class="wel-sectlab" id="welTripLab">The finish line</div>
+        <div class="wel-trip" id="welTrip">
+          <div class="row"><h3>&#9992;&#65038; ASB 2027 convention trip</h3></div>
+          <div class="chk" id="welTripChips"></div>
+          <p class="hint" id="welTripNote" style="margin:12px 2px 0"></p>
+        </div>
+        <div class="wel-sectlab">The numbers</div>
+        <div class="kpis" id="welKpis"></div>
+        <div class="wel-sectlab">Dig deeper</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="welchip" onclick="gotoView('newbusiness')">Production</button>
+          <button class="welchip" onclick="gotoView('projections')">Projections</button>
+          <button class="welchip" onclick="gotoView('value')">Book Value</button>
+          <button class="welchip" onclick="gotoView('clients')">Clients</button>
+          <button class="welchip" onclick="gotoView('retention')">Retention</button>
+          <button class="welchip" onclick="gotoView('chargebacks')">Chargebacks</button>
+          <button class="welchip" onclick="gotoView('taxes')">Taxes</button>
+          <button class="welchip" onclick="gotoView('review')">Review</button>
+        </div>
+      </section>
+
       <!-- CATEGORY HUBS (per-group overview landings) -->
       <section class="view" id="view-cat-production">
         <h2 class="section">Production &mdash; overview</h2>
@@ -756,7 +813,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       </section>
 
       <!-- OVERVIEW -->
-      <section class="view active" id="view-overview">
+      <section class="view" id="view-overview">
         <div class="card" id="digestCard" style="margin-bottom:24px;border-left:4px solid var(--primary)">
           <h3 style="margin:0 0 6px">&#128203; This week</h3>
           <div id="digest" class="hint" style="font-size:14px;line-height:1.7"></div>
@@ -2010,6 +2067,7 @@ function render(){
   renderHealth();
   renderKpis();
   renderHubs();
+  renderWelcome();
   if(DATA&&DATA.dev_unlocked&&!_devUnlocked)_setDevLock(true);   // restore persisted dev mode
   renderOverviewTrend();
   renderLifetime();
@@ -3226,6 +3284,61 @@ function renderHubs(){
     el.innerHTML=anyReal?rows.map(r=>kpi(r[0],r[1],r[2])).join(''):'';
     el.style.display=anyReal?'':'none';
   });
+}
+// Welcome / home: narrates the book in plain English from the same data the dashboard uses.
+function renderWelcome(){
+  if(!DATA) return;
+  const V=DATA.value||{}, bv=V.book_value||{}, R=((DATA.retention||{}).totals)||{};
+  const Y=(DATA.years||[]).slice(-1)[0]||{};
+  const conv=DATA.convention||{}, growth=DATA.growth||{}, audit=DATA.audit||{};
+  const money=v=>(v==null||isNaN(v))?'—':fmt0(v);
+  const set=(id,html)=>{const el=document.getElementById(id); if(el)el.innerHTML=html;};
+  // hero number = mid book value, with the low–high range
+  set('welNum', bv.mid!=null?money(bv.mid):'—');
+  set('welRange', (bv.low!=null&&bv.high!=null)?('range '+money(bv.low)+'–'+money(bv.high)):'');
+  const moRes=V.monthly_residual, stepUp=V.ma_step_up_monthly, newMA=V.new_ma_this_year;
+  set('welSub', moRes!=null
+    ? `That's <b>${money(moRes)}/mo</b> in residual that keeps paying whether or not you write another policy`
+      + ((stepUp>0&&newMA>0)?`, and it's climbing about <b>${money(stepUp)}/mo</b> as this year's ${newMA} new MA plans step up.` : '.')
+    : '');
+  // verdict + story
+  const pers=R.persistency, persPct=pers!=null?Math.round(pers*100):null, persLow=pers!=null&&pers<0.6;
+  set('welVerdict', (bv.mid>0?"You're building a real, sellable asset":"Here's where your book stands"));
+  const story=[];
+  if(Y.net!=null) story.push(`You've been paid <b>${money(Y.net)}</b> so far in ${Y.year}.`);
+  if(persPct!=null) story.push(persLow
+    ? `The one thing to watch: retention is at <b>${persPct}%</b> — lifting it compounds faster than your next few sales.`
+    : `Retention is holding at <b>${persPct}%</b>.`);
+  if(conv.days_left>0&&conv.apps!=null) story.push(`And you've got <b>${conv.apps}</b> apps toward the convention trip with ${conv.days_left} days left.`);
+  set('welStory', story.join(' '));
+  // money on the table — real opportunities + flagged items
+  const cards=[];
+  if((audit.underpaid||[]).length){ const n=audit.underpaid.length;
+    const sum=audit.underpaid.reduce((a,u)=>a+Math.abs(Number(u.shortfall)||0),0);
+    cards.push({t:`${n} residual${n>1?'s':''} below the usual norm`+(sum>0.5?` · ~${money(sum)} short`:''), d:'A carrier may have underpaid — worth a check against the statement.', view:'audit', ic:'$'}); }
+  (growth.suggestions||[]).slice(0,3).forEach(s=>cards.push({t:s.title||'Opportunity', d:(s.body||'').replace(/<[^>]*>/g,'').slice(0,118), view:'grow', ic:'+'}));
+  if(R.at_risk_count>0) cards.push({t:`${R.at_risk_count} at lapse risk · ${money(Math.abs(R.at_risk_dollars||0))} residual`, d:"Haven't paid in a couple of cycles — save them before a chargeback hits.", view:'retention', ic:'!'});
+  set('welMoney', cards.length
+    ? cards.map(c=>`<div class="hubcard" onclick="gotoView('${c.view}')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">${c.ic}</span><span class="hc-t">${esc(c.t)}</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">${esc(c.d)}</div></div>`).join('')
+    : '<p class="hint">Nothing flagged right now — your book looks clean.</p>');
+  // trip
+  const tripCard=document.getElementById('welTrip'), tripLab=document.getElementById('welTripLab');
+  if(conv.days_left!=null&&conv.window){
+    const appsOk=conv.apps!=null&&conv.apps_needed!=null&&conv.apps>=conv.apps_needed, nonmaOk=!!conv.nonma_rule_met;
+    set('welTripChips',
+      (conv.apps!=null?`<span class="chip ${appsOk?'ok':''}">${appsOk?'✓ ':''}Apps ${conv.apps}/${conv.apps_needed}</span>`:'')
+      +(conv.nonma_share!=null?`<span class="chip ${nonmaOk?'ok':''}">${nonmaOk?'✓ ':''}Non-MA ${Math.round(conv.nonma_share*100)}%</span>`:'')
+      +`<span class="chip">${conv.days_left} days left</span>`);
+    set('welTripNote', conv.level!=null?'' : 'Set your contract level on the <b>Convention</b> tab to track your production target.');
+    if(tripCard)tripCard.style.display=''; if(tripLab)tripLab.style.display='';
+  } else { if(tripCard)tripCard.style.display='none'; if(tripLab)tripLab.style.display='none'; }
+  // the numbers
+  set('welKpis', [
+    ['Net paid · '+(Y.year||''), money(Y.net), 'actual, this year'],
+    ['New business', money(Y.advances), 'up-front'],
+    ['Residual run-rate', (V.residual_annual!=null?money(V.residual_annual)+'/yr':'—'), 'recurring'],
+    ['Persistency', (persPct!=null?persPct+'%':'—'), persLow?'needs attention':'in-force rate']
+  ].map(k=>`<div class="card kpi"><div class="label">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join(''));
 }
 function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
 // Scroll a summary KPI's detail section into view with a brief highlight.
