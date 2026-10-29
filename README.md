@@ -170,12 +170,15 @@ falling back to the built-in defaults.
 
 The in-app Contact form sends bug reports and feature requests to the Roost
 project (so issues reach the maintainer). Roost ships **no webhook secret** — a
-public repo can't safely hold one — so it relays submissions to the project's
-hosted endpoint. If you'd rather keep feedback on your own side, copy
-`.env.example` to `.env` (gitignored) and set your own Slack/Discord Incoming
-Webhook: `CONTACT_WEBHOOK_BUG` and `CONTACT_WEBHOOK_FEATURE` route the two toggles
-to separate channels, or a single `CONTACT_WEBHOOK` covers both. Either way,
-submissions are also saved locally to `feedback.jsonl`.
+public repo can't safely hold one (GitHub blocks it and Slack auto-revokes leaked
+webhooks) — so it relays submissions to a no-code catch-hook (a Make webhook) that
+forwards them to the project's Slack. The catch-hook URL isn't a secret; the real
+Slack URL lives inside Make. If you'd rather keep feedback on your own side, copy
+`.env.example` to `.env` (gitignored) and either point `FEEDBACK_RELAY_BUG` /
+`FEEDBACK_RELAY_FEATURE` at your own catch-hooks, or set your own Slack/Discord
+Incoming Webhook directly via `CONTACT_WEBHOOK_BUG` / `CONTACT_WEBHOOK_FEATURE`
+(or a single `CONTACT_WEBHOOK` for both). Either way, submissions are also saved
+locally to `feedback.jsonl`.
 
 ## Folder layout
 
