@@ -1727,6 +1727,51 @@ if(window.Chart&&Chart.Tooltip){
   Chart.defaults.interaction={mode:'nearest',intersect:false,axis:'xy'};
   Chart.defaults.plugins.tooltip.position='nearest';
   Chart.defaults.plugins.tooltip.caretPadding=8;
+  // Note an outlier right in the tooltip of the point you're hovering.
+  Chart.defaults.plugins.tooltip.callbacks=Chart.defaults.plugins.tooltip.callbacks||{};
+  Chart.defaults.plugins.tooltip.callbacks.afterLabel=function(ctx){
+    try{
+      const set=outlierIndices(ctx.dataset.data); if(!set||!set.has(ctx.dataIndex)) return '';
+      const v=_numAt(ctx.dataset.data[ctx.dataIndex]);
+      return '⚠ unusually ' + (v>=set._median ? 'high' : 'low') + ' vs. the rest';
+    }catch(e){ return ''; }
+  };
+}
+// ---- outlier detection (shared by the flag plugin + the tooltip note) ----
+// Conservative 3xIQR ("far out") rule so only dramatic spikes get flagged, not normal spread.
+function _numAt(v){ return (v&&typeof v==='object') ? (v.y!==undefined?v.y:v.x) : v; }
+function outlierIndices(data){
+  if(!Array.isArray(data)) return null;
+  const nums=data.map(_numAt).filter(n=>typeof n==='number'&&isFinite(n));
+  if(nums.length<5) return null;
+  const s=[...nums].sort((a,b)=>a-b);
+  const q=p=>{const i=(s.length-1)*p, lo=Math.floor(i), hi=Math.ceil(i); return s[lo]+(s[hi]-s[lo])*(i-lo);};
+  const q1=q(.25), q3=q(.75), iqr=q3-q1;
+  if(!(iqr>0)) return null;
+  const loB=q1-3*iqr, hiB=q3+3*iqr, med=q(.5);
+  const set=new Set();
+  data.forEach((v,i)=>{const n=_numAt(v); if(typeof n==='number'&&isFinite(n)&&(n<loB||n>hiB)) set.add(i);});
+  if(!set.size) return null;
+  set._median=med; return set;
+}
+if(window.Chart){
+  Chart.register({ id:'outlierFlag',
+    afterDatasetsDraw(chart){
+      const t=chart.config.type; if(t!=='bar'&&t!=='line') return;
+      const ctx=chart.ctx;
+      chart.data.datasets.forEach((ds,di)=>{
+        const meta=chart.getDatasetMeta(di); if(meta.hidden) return;
+        const set=outlierIndices(ds.data); if(!set) return;
+        set.forEach(i=>{
+          const el=meta.data[i]; if(!el) return;
+          const p=el.tooltipPosition?el.tooltipPosition():{x:el.x,y:el.y};
+          ctx.save();
+          ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2);
+          ctx.lineWidth=2; ctx.strokeStyle='#e0a400'; ctx.stroke();
+          ctx.restore();
+        });
+      });
+    }});
 }
 function themeColors(){
   const dark=document.body.classList.contains('dark');
