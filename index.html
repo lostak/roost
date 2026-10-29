@@ -1737,8 +1737,11 @@ if(window.Chart&&Chart.Tooltip){
   Chart.defaults.plugins.tooltip.callbacks.afterLabel=function(ctx){
     try{
       const set=outlierIndices(ctx.dataset.data); if(!set||!set.has(ctx.dataIndex)) return '';
-      const v=_numAt(ctx.dataset.data[ctx.dataIndex]);
-      return '⚠ unusually ' + (v>=set._median ? 'high' : 'low') + ' vs. the rest';
+      const v=_numAt(ctx.dataset.data[ctx.dataIndex]); const med=set._median;
+      const dir = v>=med ? 'high' : 'low';
+      let mult='';
+      if(med && Math.sign(v)===Math.sign(med)){ const r=Math.abs(v/med); if(r>=1.5) mult=' — about '+(r>=10?Math.round(r):r.toFixed(1))+'× the typical'; }
+      return ['⚠ Outlier: unusually '+dir+mult+'.', 'Most periods here are much '+(dir==='high'?'lower':'higher')+' — treat this spike with care.'];
     }catch(e){ return ''; }
   };
 }
@@ -1771,8 +1774,9 @@ if(window.Chart){
           const el=meta.data[i]; if(!el) return;
           const p=el.tooltipPosition?el.tooltipPosition():{x:el.x,y:el.y};
           ctx.save();
-          ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2);
-          ctx.lineWidth=2; ctx.strokeStyle='#e0a400'; ctx.stroke();
+          ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.fillStyle='rgba(224,164,0,.16)'; ctx.fill();   // soft halo
+          ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.lineWidth=2; ctx.strokeStyle='#e0a400'; ctx.stroke();  // ring
+          ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,Math.PI*2); ctx.fillStyle='#e0a400'; ctx.fill();                 // core dot
           ctx.restore();
         });
       });
