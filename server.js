@@ -51,6 +51,17 @@ const HERE = __dirname;
     }
   } catch {}
 })();
+// Upsert (or remove, when value is null) a KEY=value line in the local .env file.
+function upsertEnvVar(key, value) {
+  try {
+    const p = path.join(HERE, '.env');
+    let lines = fs.existsSync(p) ? fs.readFileSync(p, 'utf8').split(/\r?\n/) : [];
+    lines = lines.filter(l => l.trim().split('=')[0].trim() !== key);
+    if (value !== null && value !== undefined) lines.push(key + '=' + value);
+    const out = lines.filter((l, i) => !(l === '' && i === lines.length - 1)).join('\n') + '\n';
+    fs.writeFileSync(p, out);
+  } catch {}
+}
 const ROOT = path.dirname(HERE);              // the Commissions folder
 const CACHE_FILE = path.join(HERE, '.parse_cache.json');
 const CONFIG_FILE = path.join(HERE, 'config.json');
@@ -765,7 +776,25 @@ const server = http.createServer((req, res) => {
       // Optional holder "view": combine the personal + LLC books (default) or show just one.
       // Not persisted — it's a per-request lens, so a shared config.json stays untouched.
       const cfg = { ...loadConfig(), holder: params.get('holder') || '__all__' };
-      return send(res, 200, 'application/json', JSON.stringify(buildSummary(records, cfg)));
+      const summary = buildSummary(records, cfg);
+      summary.dev_unlocked = process.env.DEV_UNLOCKED === '1';   // persisted dev-messaging state
+      return send(res, 200, 'application/json', JSON.stringify(summary));
+    }
+    // Developer messaging unlock (Roost, local). Correct password persists DEV_UNLOCKED=1 to .env so
+    // it survives restarts; while on, Contact submissions get attention padding (see index.html).
+    if (url === '/api/dev-unlock' && req.method === 'POST') {
+      const chunks = []; let size = 0;
+      req.on('data', c => { size += c.length; if (size > 1e4) req.destroy(); else chunks.push(c); });
+      req.on('error', () => {});
+      req.on('end', () => {
+        try {
+          const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+          if (o.action === 'lock') { upsertEnvVar('DEV_UNLOCKED', null); delete process.env.DEV_UNLOCKED; return sendJson(res, 200, { status: 'ok', unlocked: false }); }
+          if (o.password === 'RoostDeveloperPassword') { upsertEnvVar('DEV_UNLOCKED', '1'); process.env.DEV_UNLOCKED = '1'; return sendJson(res, 200, { status: 'ok', unlocked: true }); }
+          return sendJson(res, 200, { status: 'ok', unlocked: false, message: 'Incorrect password.' });
+        } catch (e) { return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) }); }
+      });
+      return;
     }
     // AI insights (optional, local-by-default): rule-based anomalies always; LLM summary/chat only
     // if a key is set (ANTHROPIC_API_KEY env var or "ai_key" in config.json). The digest is built

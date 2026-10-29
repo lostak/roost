@@ -584,7 +584,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="modal-head"><h3>Contact / feedback</h3><button class="modal-x" onclick="closeContact()" aria-label="Close">&times;</button></div>
     <p class="hint" style="margin:0 0 12px">Found a bug or have an idea? Send it along.</p>
     <div class="seg" id="contactKind" style="margin-bottom:12px">
-      <button data-k="bug" class="on">Bug report</button><button data-k="feature">Feature request</button><button data-k="dev" id="contactDevBtn" style="display:none">Dev</button>
+      <button data-k="bug" class="on">Bug report</button><button data-k="feature">Feature request</button>
     </div>
     <textarea id="contactMsg" rows="5" placeholder="What happened?" style="width:100%;box-sizing:border-box;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--glass-brd);background:var(--surface-2);color:var(--on-surface);font-family:inherit;font-size:14px"></textarea>
     <input id="contactEmail" type="email" placeholder="Your email (optional, if you want a reply)" style="width:100%;box-sizing:border-box;margin-top:10px;padding:9px 10px;border-radius:10px;border:1px solid var(--glass-brd);background:var(--surface-2);color:var(--on-surface);font-size:14px">
@@ -1458,9 +1458,39 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <!-- CONVENTION -->
       <section class="view" id="view-convention">
         <h2 class="section">Convention tracker &mdash; ASB 2027 incentive trip</h2>
-        <div class="banner">Qualification runs <b>Feb 1, 2026 &ndash; Jan 31, 2027</b> (Nassau, Bahamas, Jun 10&ndash;14, 2027). Points are earned on new, issued annualized premium: Med Supp 125% (AARP/UHC flat 1,500), Medicare Advantage 2,000/policy, annuities 15% of premium, life &amp; LTC / supplemental health 250%. Part D and under-65 medical don't count. You also need <b>25+ issued applications</b> and at least <b>50% of credit from non-MA</b> lines. Each level qualifies on <b>downline OR personal</b> production. These are Roost's estimates from your statements &mdash; ASB's official tally governs.</div>
+        <div class="kpis" id="convKpis"></div>
+        <div class="grid2">
+          <div class="card chart-card">
+            <h3>Personal production toward qualifying</h3>
+            <p class="hint">Cumulative points from business <b>you personally wrote</b>, against your level's personal-production target (dashed).</p>
+            <div class="chart-wrap"><canvas id="convPersonalChart"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <h3>Combined production toward qualifying</h3>
+            <p class="hint">Your share <b>plus downline</b> production, against your level's combined (downline) target (dashed).</p>
+            <div class="chart-wrap"><canvas id="convDownlineChart"></canvas></div>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3>Points by line of business</h3>
+          <p class="hint">Where your credit comes from &mdash; gold is Medicare Advantage, which can be at most half your total.</p>
+          <div class="chart-wrap"><canvas id="convFamChart"></canvas></div>
+        </div>
+        <div class="card" id="convTripsCard" style="margin-bottom:24px;display:none">
+          <h3 style="margin-top:0">&#9992;&#65038; Trips &amp; incentives earned <span class="hint" style="font-weight:400">&mdash; the reward, not cash income</span></h3>
+          <div id="convTrips"></div>
+        </div>
         <div class="card" style="margin-bottom:24px">
-          <div class="controls" style="gap:14px;flex-wrap:wrap">
+          <h3 style="margin-top:0">Qualification checklist</h3>
+          <div id="convChecklist" style="font-size:14px;line-height:1.9"></div>
+        </div>
+        <div class="card chart-card tablecard">
+          <h3>By product family</h3>
+          <table id="convFamTable"></table>
+        </div>
+        <div class="card" style="margin-bottom:24px">
+          <h3 style="margin-top:0">Settings &amp; qualification rules</h3>
+          <div class="controls" style="gap:14px;flex-wrap:wrap;margin-top:6px">
             <span class="lbl-inline">My contract level</span>
             <select id="convLevel" class="sel"></select>
             <span class="lbl-inline">Issue&rarr;payment lag (days)</span>
@@ -1479,36 +1509,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           </div>
           <p class="hint" style="margin:12px 2px 0">Only <b>your</b> share of each policy counts &mdash; the percentage paid to you (100% minus the other agents' cuts). Anything under a name you check counts toward you.</p>
           <div id="convTarget" style="margin-top:14px"></div>
-        </div>
-        <div class="kpis" id="convKpis"></div>
-        <div class="card" id="convTripsCard" style="margin-bottom:24px;display:none">
-          <h3 style="margin-top:0">&#9992;&#65038; Trips &amp; incentives earned <span class="hint" style="font-weight:400">&mdash; the reward, not cash income</span></h3>
-          <div id="convTrips"></div>
-        </div>
-        <div class="card" style="margin-bottom:24px">
-          <h3 style="margin-top:0">Qualification checklist</h3>
-          <div id="convChecklist" style="font-size:14px;line-height:1.9"></div>
-        </div>
-        <div class="grid2">
-          <div class="card chart-card">
-            <h3>Personal production toward qualifying</h3>
-            <p class="hint">Cumulative points from business <b>you personally wrote</b>, against your level's personal-production target (dashed).</p>
-            <div class="chart-wrap"><canvas id="convPersonalChart"></canvas></div>
-          </div>
-          <div class="card chart-card">
-            <h3>Combined production toward qualifying</h3>
-            <p class="hint">Your share <b>plus downline</b> production, against your level's combined (downline) target (dashed).</p>
-            <div class="chart-wrap"><canvas id="convDownlineChart"></canvas></div>
-          </div>
-        </div>
-        <div class="card chart-card">
-          <h3>Points by line of business</h3>
-          <p class="hint">Where your credit comes from &mdash; gold is Medicare Advantage, which can be at most half your total.</p>
-          <div class="chart-wrap"><canvas id="convFamChart"></canvas></div>
-        </div>
-        <div class="card chart-card tablecard">
-          <h3>By product family</h3>
-          <table id="convFamTable"></table>
+          <p class="hint" style="margin:14px 2px 0;line-height:1.7"><b>How qualification works:</b> Runs <b>Feb 1, 2026 &ndash; Jan 31, 2027</b> (Nassau, Bahamas, Jun 10&ndash;14, 2027). Points are earned on new, issued annualized premium: Med Supp 125% (AARP/UHC flat 1,500), Medicare Advantage 2,000/policy, annuities 15% of premium, life &amp; LTC / supplemental health 250%. Part D and under-65 medical don't count. You also need <b>25+ issued applications</b> and at least <b>50% of credit from non-MA</b> lines. Each level qualifies on <b>downline OR personal</b> production. These are Roost's estimates &mdash; ASB's official tally governs.</p>
         </div>
         <div class="card chart-card tablecard">
           <h3>Qualifying policies</h3>
@@ -2005,6 +2006,7 @@ function render(){
   renderHealth();
   renderKpis();
   renderHubs();
+  if(DATA&&DATA.dev_unlocked&&!_devUnlocked)_setDevLock(true);   // restore persisted dev mode
   renderOverviewTrend();
   renderLifetime();
   renderYearTable();
@@ -3257,21 +3259,30 @@ function renderTour(){
 function maybeFirstRunTour(){ let seen=false; try{seen=!!localStorage.getItem('roost.tourSeen');}catch(e){} if(!seen) setTimeout(startTour,600); }
 
 // ================= CONTACT / FEEDBACK =================
-// Developer-only messaging (Roost). The password is intentionally in source: anyone reading
-// the public repo "qualifies", and this only unlocks a padded message to the same bug channel.
+// Developer messaging (Roost, local). Entering the password turns on "dev mode": every Contact
+// submission (bug OR feature) gets attention padding for Slack, routed to its normal channel.
+// The state persists to .env server-side, so it survives restarts — enter it once. The password
+// is intentionally in source (public repo); anyone who reads it "qualifies".
 let _devUnlocked=false;
-function devLockClick(){
-  if(!_devUnlocked){
-    const p=prompt('Developer password:');
-    if(p===null) return;
-    if(p!=='RoostDeveloperPassword'){ alert('Incorrect password.'); return; }
-    _devUnlocked=true;
-    const lk=document.getElementById('devLock'); if(lk){lk.innerHTML='&#128275;'; lk.title='Developer messaging unlocked';}
-    const db=document.getElementById('contactDevBtn'); if(db)db.style.display='';
-  }
-  openContact();
+function _setDevLock(on){
+  _devUnlocked=on;
+  const lk=document.getElementById('devLock');
+  if(lk){ lk.innerHTML=on?'&#128275;':'&#128274;'; lk.title=on?'Dev mode ON — messages are padded for Slack (click to turn off)':'Developer'; }
 }
-function contactPH(k){ return k==='feature'?'What would you like to see?':k==='dev'?'What do you want?':'What happened?'; }
+async function devLockClick(){
+  if(!_devUnlocked){
+    const p=prompt('Developer password:'); if(p===null) return;
+    try{
+      const r=await fetch('/api/dev-unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'unlock',password:p})});
+      const j=await r.json();
+      if(j&&j.unlocked){ _setDevLock(true); } else { alert('Incorrect password.'); }
+    }catch(e){ alert('Could not reach the server.'); }
+  }else{
+    try{ await fetch('/api/dev-unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'lock'})}); }catch(e){}
+    _setDevLock(false);
+  }
+}
+function contactPH(k){ return k==='feature'?'What would you like to see?':'What happened?'; }
 let _contactKind='bug';
 function openContact(){ _contactKind='bug'; $('#contactMsg').value=''; $('#contactMsg').placeholder=contactPH('bug'); $('#contactEmail').value=''; $('#contactMsgOut').textContent='';
   document.querySelectorAll('#contactKind button').forEach(b=>b.classList.toggle('on',b.dataset.k==='bug'));
@@ -3282,14 +3293,14 @@ async function sendContact(){
   const message=($('#contactMsg').value||'').trim(); const out=$('#contactMsgOut');
   if(message.length<3){ out.style.color='#d4694a'; out.textContent='Please add a short description.'; return; }
   $('#contactSend').disabled=true; out.style.color='var(--on-surface-var)'; out.textContent='Sending…';
-  // Dev messages ride the bug-report channel but are padded with asterisks + blank lines to stand out in Slack.
-  let outKind=_contactKind, outMsg=message;
-  if(_contactKind==='dev'){
+  // In dev mode, pad the message with asterisks + blank lines so it stands out in Slack — for
+  // whichever channel the toggle selects (bug or feature); routing is unchanged.
+  let outMsg=message;
+  if(_devUnlocked){
     const bar='****************************************';
-    outKind='bug';
     outMsg='\n\n'+bar+'\n*****   DEV MESSAGE   *****\n'+bar+'\n\n'+message+'\n\n'+bar+'\n\n';
   }
-  try{ const r=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:outKind,message:outMsg,email:($('#contactEmail').value||'').trim()})});
+  try{ const r=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:_contactKind,message:outMsg,email:($('#contactEmail').value||'').trim()})});
     const j=await r.json();
     if(r.ok&&j.status==='ok'){ out.style.color='#2e9e6b'; out.textContent=j.message||'Thanks!'; setTimeout(closeContact,1100); }
     else { out.style.color='#d4694a'; out.textContent=(j&&j.message)||'Could not send.'; $('#contactSend').disabled=false; }
