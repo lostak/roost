@@ -52,4 +52,8 @@ assert.ok(html.includes('id="welHlabel"') && html.includes('id="welMoneyLab"'),
 assert.ok(!/id="devLock"/.test(html), 'no developer lock button in the header'); n++;
 assert.ok(/Developer mode[\s\S]*?run:devLockClick/.test(html), 'developer mode is a command-palette action'); n++;
 
+// Charts inset their plot area so the hover-only download button never covers a data point.
+assert.ok(/Chart\.defaults\.layout\.padding=\{[^}]*right:34/.test(html),
+  'charts reserve a right gutter so the download button never collides with the last point'); n++;
+
 console.log(`ui-wiring: ${n} checks passed`);

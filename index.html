@@ -1793,6 +1793,11 @@ let GRID='#e0e8e8', GRIDQ='rgba(0,0,0,.20)', GRIDBOUND='rgba(0,0,0,.30)';
 // The tooltip box is positioned at that nearest element, next to the cursor.
 if(window.Chart&&Chart.Tooltip){
   Chart.defaults.interaction={mode:'nearest',intersect:false,axis:'xy'};
+  // Inset the plot area so the hover-only "download PNG" button (top-right of every chart) sits
+  // in a gutter instead of on top of the data — hovering the most recent (right-most) point used
+  // to collide with the button and never reach the tooltip. 34px clears the 28px button.
+  Chart.defaults.layout=Chart.defaults.layout||{};
+  Chart.defaults.layout.padding={top:14,right:34};
   Chart.defaults.plugins.tooltip.position='nearest';
   Chart.defaults.plugins.tooltip.caretPadding=8;
   // Note an outlier right in the tooltip of the point you're hovering.
