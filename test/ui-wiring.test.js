@@ -48,4 +48,8 @@ assert.ok(html.includes('id="projMaturityNote"') && html.includes('id="retMaturi
 assert.ok(html.includes('id="welHlabel"') && html.includes('id="welMoneyLab"'),
   'home hero label + section label are dynamic (new vs established framing)'); n++;
 
+// Developer mode has no header button — it's reachable only via the command palette.
+assert.ok(!/id="devLock"/.test(html), 'no developer lock button in the header'); n++;
+assert.ok(/Developer mode[\s\S]*?run:devLockClick/.test(html), 'developer mode is a command-palette action'); n++;
+
 console.log(`ui-wiring: ${n} checks passed`);

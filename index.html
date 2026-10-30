@@ -563,7 +563,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <button type="button" class="holderbtn" id="holderBtn" onclick="toggleHolderMenu(event)" aria-haspopup="listbox" aria-expanded="false" title="Which book to show (personal, LLC, or both combined)"><span class="hlbl" id="holderBtnLabel">All books combined</span><span class="holdercar"></span></button>
     <div class="holdermenu" id="holderMenu" role="listbox"></div>
   </div>
-  <button class="btn ghost" id="devLock" onclick="devLockClick()" title="Developer" aria-label="Developer messaging" style="padding:7px 10px">&#128274;</button>
+  <!-- Developer mode has no header button: it's reachable only via the command palette (Cmd/Ctrl-K → "dev"). -->
   <div class="meta" id="meta"></div>
 </div>
 
@@ -4453,7 +4453,9 @@ function cmdkCommands(){
   const extra=[{type:'action',label:'Upload statements',ic:'&#8613;',run:openUpload},
     {type:'action',label:'Refresh data',ic:'&#8635;',run:()=>loadData(true)},
     {type:'action',label:'Toggle dark / light theme',ic:'&#9681;',run:toggleTheme},
-    {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'}];
+    {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'},
+    // Developer messaging mode — the only entry point (no header button). Search "dev".
+    {type:'action',label:(_devUnlocked?'Developer mode — turn OFF':'Developer mode — enter password'),ic:'&#128274;',run:devLockClick}];
   const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({
     type:'client',label:c.client,ic:'&#9787;&#65038;',sub:'client',run:()=>{gotoView('clients');if(typeof openClient==='function')openClient(c.client);}}));
   const carriers=((DATA&&DATA.retention&&DATA.retention.by_carrier)||[]).map(c=>({
