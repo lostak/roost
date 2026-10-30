@@ -358,6 +358,10 @@ body.dark[data-accent="amber"]{--accent:#e0912f;--accent-2:#e86a9a;--accent-3:#d
 .kpi-jump{cursor:pointer;position:relative}
 .kpi-jump::after{content:'\2193';position:absolute;top:10px;right:12px;font-size:12px;color:var(--on-surface-var);opacity:.55}
 .kpi-jump:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--glass-brd))}
+/* kpi-go: like kpi-jump but navigates to another view (right arrow, not down) */
+.kpi-go{cursor:pointer;position:relative}
+.kpi-go::after{content:'\2192';position:absolute;top:10px;right:12px;font-size:12px;color:var(--on-surface-var);opacity:.55}
+.kpi-go:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--glass-brd))}
 @keyframes jumpflash{0%{box-shadow:0 0 0 2px var(--accent),var(--glow)}100%{box-shadow:var(--glow)}}
 .jump-flash{animation:jumpflash 1.25s ease-out}
 /* back-to-top (mobile) */
@@ -717,7 +721,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="wel-hero">
           <span class="wel-verdict"><span class="dot"></span> <span id="welVerdict">Your book at a glance</span></span>
           <p class="wel-hlabel">Your book of business is worth</p>
-          <div class="wel-num"><span id="welNum">&mdash;</span> <span class="rng" id="welRange"></span></div>
+          <div class="wel-num" onclick="gotoView('value')" role="button" tabindex="0" title="See how your book value is calculated" style="cursor:pointer"><span id="welNum">&mdash;</span> <span class="rng" id="welRange"></span></div>
           <p class="wel-sub" id="welSub"></p>
           <p class="wel-story" id="welStory"></p>
           <button class="wel-cta" onclick="gotoView('overview')">Open the full dashboard &rarr;</button>
@@ -725,8 +729,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="wel-sectlab">Money on the table</div>
         <div class="hubgrid" id="welMoney" style="margin-top:0"></div>
         <div class="wel-sectlab" id="welTripLab">The finish line</div>
-        <div class="wel-trip" id="welTrip">
-          <div class="row"><h3>&#9992;&#65038; ASB 2027 convention trip</h3></div>
+        <div class="wel-trip" id="welTrip" onclick="gotoView('convention')" role="button" tabindex="0" title="Open the Convention tab" style="cursor:pointer">
+          <div class="row"><h3>&#9992;&#65038; ASB 2027 convention trip</h3><span class="hc-arrow" style="margin-left:auto">&rarr;</span></div>
           <div class="chk" id="welTripChips"></div>
           <p class="hint" id="welTripNote" style="margin:12px 2px 0"></p>
         </div>
@@ -1909,6 +1913,7 @@ document.querySelectorAll('#nav a').forEach(a=>{
   openGroup(a.closest('.navgroup'));   // null for the standalone Overview -> collapses all
   markActiveGroup();
   document.body.classList.remove('nav-open');   // close the mobile drawer after choosing a view
+  window.scrollTo(0,0);   // land at the top of the newly shown view (the app bar sits above it)
 };});
 document.querySelectorAll('#nav .navgroup-header').forEach(h=>{ h.setAttribute('tabindex','0'); h.setAttribute('role','button');
   h.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } }); h.onclick=(e)=>{
@@ -3329,21 +3334,31 @@ function renderWelcome(){
       (conv.apps!=null?`<span class="chip ${appsOk?'ok':''}">${appsOk?'✓ ':''}Apps ${conv.apps}/${conv.apps_needed}</span>`:'')
       +(conv.nonma_share!=null?`<span class="chip ${nonmaOk?'ok':''}">${nonmaOk?'✓ ':''}Non-MA ${Math.round(conv.nonma_share*100)}%</span>`:'')
       +`<span class="chip">${conv.days_left} days left</span>`);
-    set('welTripNote', conv.level!=null?'' : 'Set your contract level on the <b>Convention</b> tab to track your production target.');
+    set('welTripNote', conv.level!=null
+      ? 'Open the <b>Convention</b> tab for the full picture &rarr;'
+      : 'Set your contract level on the <b>Convention</b> tab to track your production target &rarr;');
     if(tripCard)tripCard.style.display=''; if(tripLab)tripLab.style.display='';
   } else { if(tripCard)tripCard.style.display='none'; if(tripLab)tripLab.style.display='none'; }
   // the numbers
   set('welKpis', [
-    ['Net paid · '+(Y.year||''), money(Y.net), 'actual, this year'],
-    ['New business', money(Y.advances), 'up-front'],
-    ['Residual run-rate', (V.residual_annual!=null?money(V.residual_annual)+'/yr':'—'), 'recurring'],
-    ['Persistency', (persPct!=null?persPct+'%':'—'), persLow?'needs attention':'in-force rate']
-  ].map(k=>`<div class="card kpi"><div class="label">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join(''));
+    ['Net paid · '+(Y.year||''), money(Y.net), 'actual, this year', 'overview'],
+    ['New business', money(Y.advances), 'up-front', 'newbusiness'],
+    ['Residual run-rate', (V.residual_annual!=null?money(V.residual_annual)+'/yr':'—'), 'recurring', 'residuals'],
+    ['Persistency', (persPct!=null?persPct+'%':'—'), persLow?'needs attention':'in-force rate', 'retention']
+  ].map(k=>`<div class="card kpi kpi-go" onclick="gotoView('${k[3]}')" role="button" tabindex="0" title="Open ${esc(k[0])}"><div class="label">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join(''));
 }
 function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
-// Scroll a summary KPI's detail section into view with a brief highlight.
-function scrollToSection(id){const el=document.getElementById(id);if(!el)return;el.scrollIntoView({behavior:'smooth',block:'start'});el.classList.remove('jump-flash');void el.offsetWidth;el.classList.add('jump-flash');setTimeout(()=>el.classList.remove('jump-flash'),1300);}
-window.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.classList&&e.target.classList.contains('kpi-jump')){e.preventDefault();e.target.click();}});
+// Height of the sticky app bar, so in-page scrolls land below it instead of under it.
+function headerOffset(){const bar=document.querySelector('.appbar');return (bar?bar.offsetHeight:61)+14;}
+// Scroll a summary KPI's detail section into view with a brief highlight. scrollIntoView can't
+// account for the sticky header, so compute the target and subtract the header height.
+function scrollToSection(id){const el=document.getElementById(id);if(!el)return;
+  const top=el.getBoundingClientRect().top+window.scrollY-headerOffset();
+  window.scrollTo({top:Math.max(0,top),behavior:'smooth'});
+  el.classList.remove('jump-flash');void el.offsetWidth;el.classList.add('jump-flash');setTimeout(()=>el.classList.remove('jump-flash'),1300);}
+// Enter/Space activates any element we've marked as a button/link affordance on the home page
+// and KPI strips (nav links have their own handler).
+window.addEventListener('keydown',e=>{const t=e.target;if((e.key==='Enter'||e.key===' ')&&t&&t.matches&&t.matches('.kpi-jump,.kpi-go,.hubcard,.wel-trip,.wel-num')){e.preventDefault();t.click();}});
 window.addEventListener('scroll',()=>{const b=document.getElementById('toTop');if(b)b.classList.toggle('show',window.scrollY>400);},{passive:true});
 
 // ================= GUIDED TOUR =================

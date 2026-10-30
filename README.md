@@ -239,8 +239,14 @@ is updated, so it is always safe to delete.
 
 ## The dashboard, view by view
 
+Everything on the **Home** page is reactive: the book-value hero, the convention trip card, the
+summary KPIs, and the "money on the table" cards all click through to the relevant view. In-page
+KPI jumps scroll the target into view *below* the sticky header (not hidden under it), and
+switching views lands at the top of the new one.
+
 | View | What it shows |
 |---|---|
+| **Home** | A narrated landing: your book value, what's "money on the table," convention-trip progress, and headline numbers — each clickable to the detail view. |
 | **Overview** | Headline KPIs (latest YTD total, all-years residual, new business, pending pipeline) and an income-over-time chart with a YTD running total. |
 | **New Business** | Up-front advance commissions over time and by carrier. |
 | **Residual Income** | Recurring renewal income — the book that keeps paying without new sales. |
@@ -300,8 +306,20 @@ keyword there and restart to pull it out of the "Other" bucket.
 - **Config over code.** Everything you'd want to tune lives in `config.json`.
 
 > **Maintainers:** when you add a feature or a view, update this README's
-> **Features** / dashboard sections *and* the in-app guided tour (`TOUR_STEPS` in
-> `index.html`) in the same change, so both stay in sync with what the app does.
+> **Features** / dashboard sections, the in-app guided tour (`TOUR_STEPS` in
+> `index.html`), *and* the tests — in the **same** change — so docs, tour, and
+> checks never drift from what the app does.
+
+## Testing
+
+```bash
+npm test
+```
+
+Zero-dependency suites: `parser` and `corpus` (statement parsing against fixtures),
+`aggregate` (roll-up math), and `ui-wiring` — static checks over `index.html` that every
+click target resolves to a real view/element, in-page scrolling is header-aware, and the
+home page's hero, trip card, and KPIs navigate.
 
 ## License
 
