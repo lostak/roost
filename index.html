@@ -720,13 +720,13 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <section class="view active" id="view-welcome">
         <div class="wel-hero">
           <span class="wel-verdict"><span class="dot"></span> <span id="welVerdict">Your book at a glance</span></span>
-          <p class="wel-hlabel">Your book of business is worth</p>
+          <p class="wel-hlabel" id="welHlabel">Your book of business is worth</p>
           <div class="wel-num" onclick="gotoView('value')" role="button" tabindex="0" title="See how your book value is calculated" style="cursor:pointer"><span id="welNum">&mdash;</span> <span class="rng" id="welRange"></span></div>
           <p class="wel-sub" id="welSub"></p>
           <p class="wel-story" id="welStory"></p>
           <button class="wel-cta" onclick="gotoView('overview')">Open the full dashboard &rarr;</button>
         </div>
-        <div class="wel-sectlab">Money on the table</div>
+        <div class="wel-sectlab" id="welMoneyLab">Money on the table</div>
         <div class="hubgrid" id="welMoney" style="margin-top:0"></div>
         <div class="wel-sectlab" id="welTripLab">The finish line</div>
         <div class="wel-trip" id="welTrip" onclick="gotoView('convention')" role="button" tabindex="0" title="Open the Convention tab" style="cursor:pointer">
@@ -1305,6 +1305,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <section class="view" id="view-retention">
         <h2 class="section">Retention &amp; chargebacks</h2>
         <div class="banner">Where you're <b>losing</b> money. A policy that lapses stops paying residual, and one that lapses early claws back commission you already banked. Persistency is the share of your residual-eligible policies still paying; the at-risk list flags Medicare Advantage inside the ~90-day rapid-disenrollment window, where a drop reverses the whole initial.</div>
+        <div class="banner" id="retMaturityNote" style="display:none"></div>
         <div class="kpis" id="retKpis"></div>
         <div class="grid2">
           <div class="card chart-card">
@@ -1389,6 +1390,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <section class="view" id="view-projections">
         <h2 class="section">Projections &amp; insights</h2>
         <div class="caveat"><b>Estimates, not guarantees.</b> These forward numbers compound your current book using the assumptions below — retained members renew as residual, new applications convert into next year's residual, and switches drop the old residual but earn a new initial. Starting points come from your own history; drag the sliders to test scenarios. Not financial advice.</div>
+        <div class="caveat" id="projMaturityNote" style="display:none"></div>
         <div class="kpis" id="projKpis"></div>
         <div class="card" style="margin-bottom:24px">
           <div class="controls" style="margin-bottom:10px">
@@ -2073,6 +2075,7 @@ function render(){
   renderKpis();
   renderHubs();
   renderWelcome();
+  applyMaturityNotes();
   if(DATA&&DATA.dev_unlocked&&!_devUnlocked)_setDevLock(true);   // restore persisted dev mode
   renderOverviewTrend();
   renderLifetime();
@@ -3290,43 +3293,85 @@ function renderHubs(){
     el.style.display=anyReal?'':'none';
   });
 }
-// Welcome / home: narrates the book in plain English from the same data the dashboard uses.
+// Welcome / home: narrates the book in plain English, adapting to how much history the account
+// has (DATA.maturity.tier). A brand-new agent sees what they've actually earned + their tax
+// set-aside + convention pace and "start here" actions — not a $0 book value or empty retention.
 function renderWelcome(){
   if(!DATA) return;
   const V=DATA.value||{}, bv=V.book_value||{}, R=((DATA.retention||{}).totals)||{};
   const Y=(DATA.years||[]).slice(-1)[0]||{};
   const conv=DATA.convention||{}, growth=DATA.growth||{}, audit=DATA.audit||{};
+  const mat=DATA.maturity||{tier:'established',statements:(DATA.statement_count||0),months_span:0};
+  const isNew=mat.tier==='new', isBuilding=mat.tier==='building';
   const money=v=>(v==null||isNaN(v))?'—':fmt0(v);
   const set=(id,html)=>{const el=document.getElementById(id); if(el)el.innerHTML=html;};
-  // hero number = mid book value, with the low–high range
-  set('welNum', bv.mid!=null?money(bv.mid):'—');
-  set('welRange', (bv.low!=null&&bv.high!=null)?('range '+money(bv.low)+'–'+money(bv.high)):'');
-  const moRes=V.monthly_residual, stepUp=V.ma_step_up_monthly, newMA=V.new_ma_this_year;
-  set('welSub', moRes!=null
-    ? `That's <b>${money(moRes)}/mo</b> in residual that keeps paying whether or not you write another policy`
-      + ((stepUp>0&&newMA>0)?`, and it's climbing about <b>${money(stepUp)}/mo</b> as this year's ${newMA} new MA plans step up.` : '.')
-    : '');
-  // verdict + story
+  const lifeNet=(DATA.years||[]).reduce((s,y)=>s+(y.net||0),0);
   const pers=R.persistency, persPct=pers!=null?Math.round(pers*100):null, persLow=pers!=null&&pers<0.6;
-  set('welVerdict', (bv.mid>0?"You're building a real, sellable asset":"Here's where your book stands"));
-  const story=[];
-  if(Y.net!=null) story.push(`You've been paid <b>${money(Y.net)}</b> so far in ${Y.year}.`);
-  if(persPct!=null) story.push(persLow
-    ? `The one thing to watch: retention is at <b>${persPct}%</b> — lifting it compounds faster than your next few sales.`
-    : `Retention is holding at <b>${persPct}%</b>.`);
-  if(conv.days_left>0&&conv.apps!=null) story.push(`And you've got <b>${conv.apps}</b> apps toward the convention trip with ${conv.days_left} days left.`);
-  set('welStory', story.join(' '));
-  // money on the table — real opportunities + flagged items
-  const cards=[];
-  if((audit.underpaid||[]).length){ const n=audit.underpaid.length;
-    const sum=audit.underpaid.reduce((a,u)=>a+Math.abs(Number(u.shortfall)||0),0);
-    cards.push({t:`${n} residual${n>1?'s':''} below the usual norm`+(sum>0.5?` · ~${money(sum)} short`:''), d:'A carrier may have underpaid — worth a check against the statement.', view:'audit', ic:'$'}); }
-  (growth.suggestions||[]).slice(0,3).forEach(s=>cards.push({t:s.title||'Opportunity', d:(s.body||'').replace(/<[^>]*>/g,'').slice(0,118), view:'grow', ic:'+'}));
-  if(R.at_risk_count>0) cards.push({t:`${R.at_risk_count} at lapse risk · ${money(Math.abs(R.at_risk_dollars||0))} residual`, d:"Haven't paid in a couple of cycles — save them before a chargeback hits.", view:'retention', ic:'!'});
-  set('welMoney', cards.length
-    ? cards.map(c=>`<div class="hubcard" onclick="gotoView('${c.view}')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">${c.ic}</span><span class="hc-t">${esc(c.t)}</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">${esc(c.d)}</div></div>`).join('')
-    : '<p class="hint">Nothing flagged right now — your book looks clean.</p>');
-  // trip
+  const card=c=>`<div class="hubcard" onclick="gotoView('${c.view}')" role="button" tabindex="0"><div class="hc-top"><span class="hc-ic">${c.ic}</span><span class="hc-t">${esc(c.t)}</span><span class="hc-arrow">&rarr;</span></div><div class="hc-d">${esc(c.d)}</div></div>`;
+  const kpi=k=>`<div class="card kpi kpi-go" onclick="gotoView('${k[3]}')" role="button" tabindex="0" title="Open ${esc(k[0])}"><div class="label">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`;
+
+  if(isNew){
+    // Lead with what you've actually earned + what to do about it — book value isn't meaningful yet.
+    const taxSet=Math.round(Math.max(0,lifeNet)*0.25);
+    set('welVerdict','Your first statements');
+    set('welHlabel',"You've been paid, all-time");
+    set('welNum', money(lifeNet));
+    set('welRange','');
+    set('welSub', lifeNet>0
+      ? `Set aside around <b>${money(taxSet)}</b> for taxes on that. Your <b>book value</b> and <b>residual run-rate</b> appear here once your renewals start to stack up — usually a few months in.`
+      : `Add a few statements and your earnings, tax set-aside, and book value will take shape here.`);
+    const story=[];
+    if(Y.advances>0) story.push(`That's <b>${money(Y.advances)}</b> of new business written so far.`);
+    story.push(`You're <b>${mat.statements}</b> statement${mat.statements===1?'':'s'} in${mat.months_span?` over ${mat.months_span} month${mat.months_span===1?'':'s'}`:''} — early days, but the picture fills in fast.`);
+    if(conv.days_left>0&&conv.apps!=null) story.push(`And you've already got <b>${conv.apps}</b> apps toward the convention trip, with ${conv.days_left} days left.`);
+    set('welStory', story.join(' '));
+    set('welMoneyLab','Start here');
+    set('welMoney', [
+      {t:'Estimate your taxes', d:'See what to set aside on your 1099 income before quarterly payments sneak up.', view:'taxes', ic:'$'},
+      {t:'Set your first goal', d:'Pick a net-paid target and watch your pace toward it.', view:'goals', ic:'&#9678;'},
+      {t:'Track your expenses', d:'Leads, E&O, CRM — see your true net after the cost to write.', view:'expenses', ic:'&#9662;'},
+    ].map(card).join(''));
+    set('welKpis', [
+      ['Paid so far', money(lifeNet), 'all-time', 'overview'],
+      ['New business', money(Y.advances), 'up-front', 'newbusiness'],
+      ['Set aside for taxes', money(taxSet), '~25% rule of thumb', 'taxes'],
+      ['Statements filed', String(mat.statements), (mat.months_span?('over '+mat.months_span+' mo'):'and counting'), 'audit'],
+    ].map(kpi).join(''));
+  } else {
+    // building + established: the full narrative (building adds a "still firming up" note).
+    set('welHlabel','Your book of business is worth');
+    set('welVerdict', isBuilding?'Your book is taking shape':(bv.mid>0?"You're building a real, sellable asset":"Here's where your book stands"));
+    set('welNum', bv.mid!=null?money(bv.mid):'—');
+    set('welRange', (bv.low!=null&&bv.high!=null)?((isBuilding?'early estimate · ':'range ')+money(bv.low)+'–'+money(bv.high)):'');
+    const moRes=V.monthly_residual, stepUp=V.ma_step_up_monthly, newMA=V.new_ma_this_year;
+    set('welSub', moRes!=null
+      ? `That's <b>${money(moRes)}/mo</b> in residual that keeps paying whether or not you write another policy`
+        + ((stepUp>0&&newMA>0)?`, and it's climbing about <b>${money(stepUp)}/mo</b> as this year's ${newMA} new MA plans step up.` : '.')
+      : '');
+    const story=[];
+    if(Y.net!=null) story.push(`You've been paid <b>${money(Y.net)}</b> so far in ${Y.year}.`);
+    if(persPct!=null) story.push(persLow
+      ? `The one thing to watch: retention is at <b>${persPct}%</b> — lifting it compounds faster than your next few sales.`
+      : `Retention is holding at <b>${persPct}%</b>.`);
+    if(conv.days_left>0&&conv.apps!=null) story.push(`And you've got <b>${conv.apps}</b> apps toward the convention trip with ${conv.days_left} days left.`);
+    if(isBuilding) story.push(`You're still building history, so retention and projections will firm up over the next few months.`);
+    set('welStory', story.join(' '));
+    set('welMoneyLab','Money on the table');
+    const cards=[];
+    if((audit.underpaid||[]).length){ const n=audit.underpaid.length;
+      const sum=audit.underpaid.reduce((a,u)=>a+Math.abs(Number(u.shortfall)||0),0);
+      cards.push({t:`${n} residual${n>1?'s':''} below the usual norm`+(sum>0.5?` · ~${money(sum)} short`:''), d:'A carrier may have underpaid — worth a check against the statement.', view:'audit', ic:'$'}); }
+    (growth.suggestions||[]).slice(0,3).forEach(s=>cards.push({t:s.title||'Opportunity', d:(s.body||'').replace(/<[^>]*>/g,'').slice(0,118), view:'grow', ic:'+'}));
+    if(R.at_risk_count>0) cards.push({t:`${R.at_risk_count} at lapse risk · ${money(Math.abs(R.at_risk_dollars||0))} residual`, d:"Haven't paid in a couple of cycles — save them before a chargeback hits.", view:'retention', ic:'!'});
+    set('welMoney', cards.length ? cards.map(card).join('') : '<p class="hint">Nothing flagged right now — your book looks clean.</p>');
+    set('welKpis', [
+      ['Net paid · '+(Y.year||''), money(Y.net), 'actual, this year', 'overview'],
+      ['New business', money(Y.advances), 'up-front', 'newbusiness'],
+      ['Residual run-rate', (V.residual_annual!=null?money(V.residual_annual)+'/yr':'—'), isBuilding?'early, recurring':'recurring', 'residuals'],
+      ['Persistency', (persPct!=null?persPct+'%':'—'), persLow?'needs attention':(isBuilding?'preliminary':'in-force rate'), 'retention']
+    ].map(kpi).join(''));
+  }
+  // The convention trip card works at every stage of a book, so it's shared.
   const tripCard=document.getElementById('welTrip'), tripLab=document.getElementById('welTripLab');
   if(conv.days_left!=null&&conv.window){
     const appsOk=conv.apps!=null&&conv.apps_needed!=null&&conv.apps>=conv.apps_needed, nonmaOk=!!conv.nonma_rule_met;
@@ -3339,13 +3384,21 @@ function renderWelcome(){
       : 'Set your contract level on the <b>Convention</b> tab to track your production target &rarr;');
     if(tripCard)tripCard.style.display=''; if(tripLab)tripLab.style.display='';
   } else { if(tripCard)tripCard.style.display='none'; if(tripLab)tripLab.style.display='none'; }
-  // the numbers
-  set('welKpis', [
-    ['Net paid · '+(Y.year||''), money(Y.net), 'actual, this year', 'overview'],
-    ['New business', money(Y.advances), 'up-front', 'newbusiness'],
-    ['Residual run-rate', (V.residual_annual!=null?money(V.residual_annual)+'/yr':'—'), 'recurring', 'residuals'],
-    ['Persistency', (persPct!=null?persPct+'%':'—'), persLow?'needs attention':'in-force rate', 'retention']
-  ].map(k=>`<div class="card kpi kpi-go" onclick="gotoView('${k[3]}')" role="button" tabindex="0" title="Open ${esc(k[0])}"><div class="label">${k[0]}</div><div class="val">${k[1]}</div><div class="sub">${k[2]}</div></div>`).join(''));
+}
+function applyMaturityNotes(){
+  if(!DATA) return;
+  const mat=DATA.maturity||{}, tier=mat.tier||"established", n=mat.statements||0;
+  const show=(id,html)=>{const el=document.getElementById(id); if(!el)return; if(html){el.innerHTML=html; el.style.display="";} else el.style.display="none";};
+  show("projMaturityNote", tier==="new"
+    ? `<b>Early days.</b> With ${n} statement${n===1?"":"s"} of history, these projections are directional at best — they sharpen as your book grows.`
+    : tier==="building"
+    ? `<b>Still firming up.</b> These rest on only a few months of history, so read them as a rough trajectory, not a forecast.`
+    : "");
+  show("retMaturityNote", tier==="new"
+    ? `<b>Too early to read.</b> Persistency needs full renewal cycles to mean anything; with ${n} statement${n===1?"":"s"} it fills in over your first year.`
+    : tier==="building"
+    ? `<b>Preliminary.</b> Retention stabilizes once your policies have been through a full renewal cycle.`
+    : "");
 }
 function gotoView(v){const a=document.querySelector(`#nav a[data-view="${v}"]`); if(a)a.click();}
 // Height of the sticky app bar, so in-page scrolls land below it instead of under it.

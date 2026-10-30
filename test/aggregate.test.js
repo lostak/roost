@@ -88,4 +88,18 @@ eq(st.bonuses.total, 0, 'trips: bonus income excludes the trip');
 eq(st.chargebacks.total, 0, 'trips: the offsetting reversal is NOT counted as a chargeback');
 eq((st.years.find(y => y.year === 2026) || {}).net, 300, 'trips: net is cash only (300) — the trip nets to zero');
 
+// ---- book maturity --------------------------------------------------------
+// The original 6-statement set spans ~2 months, so it's a "new" book.
+ok(s.maturity, 'maturity: present on the summary');
+eq(s.maturity.tier, 'new', 'maturity: a 2-month, few-statement book is "new"');
+const matBig = [];
+for (let m = 0; m < 14; m++) { const y = 2025 + (m >= 12 ? 1 : 0), mm = (m % 12) + 1;
+  matBig.push(mk(`${y}-${String(mm).padStart(2, '0')}-10`, [item('commission', 'P1', 'X, Y', 'HUMANA MEDADVANTAGE', 'Humana', 20)])); }
+const sMatBig = buildSummary(matBig, {});
+eq(sMatBig.maturity.tier, 'established', 'maturity: a 14-month, 14-statement book is "established"');
+ok(sMatBig.maturity.months_span >= 12, 'maturity: months_span is computed in calendar months');
+const matMid = [];
+for (let m = 1; m <= 6; m++) matMid.push(mk(`2026-${String(m).padStart(2, '0')}-10`, [item('commission', 'P1', 'X, Y', 'HUMANA MEDADVANTAGE', 'Humana', 20)]));
+eq(buildSummary(matMid, {}).maturity.tier, 'building', 'maturity: a 6-month book is "building"');
+
 console.log('aggregate: ' + n + ' checks passed');

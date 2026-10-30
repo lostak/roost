@@ -246,7 +246,7 @@ switching views lands at the top of the new one.
 
 | View | What it shows |
 |---|---|
-| **Home** | A narrated landing: your book value, what's "money on the table," convention-trip progress, and headline numbers — each clickable to the detail view. |
+| **Home** | A narrated landing: your book value, what's "money on the table," convention-trip progress, and headline numbers — each clickable to the detail view. Adapts to how much history you have: a new agent sees earnings, a tax set-aside, convention pace, and "start here" actions instead of a $0 book value; Projections and Retention carry a caveat until there's enough history to trust. |
 | **Overview** | Headline KPIs (latest YTD total, all-years residual, new business, pending pipeline) and an income-over-time chart with a YTD running total. |
 | **New Business** | Up-front advance commissions over time and by carrier. |
 | **Residual Income** | Recurring renewal income — the book that keeps paying without new sales. |

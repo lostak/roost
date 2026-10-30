@@ -1704,9 +1704,28 @@ function buildSummary(allRecords, config) {
   const health = { score, grade, components: comps, concentration: { top_carrier: topCarrier, top_share: round2(topShare) },
     top_lever: lever ? lever.key : null };
 
+  // Book maturity: how much history this account actually has, so the UI can adapt rather than
+  // show a two-month-old agent a $0 "book value" or an overconfident projection. Span is in
+  // inclusive calendar months between the first and last statement; tiers:
+  //   new        — < 3 months of history OR < 5 statements (residual/retention not yet meaningful)
+  //   building   — in between (show most things, hedge the year-dependent ones)
+  //   established— >= 12 months AND >= 10 statements (full narrative)
+  const _matDates = records.map(r => r.date).filter(Boolean).sort();
+  const _matFirst = _matDates[0] || null, _matLast = _matDates[_matDates.length - 1] || null;
+  let _matMonths = 0;
+  if (_matFirst && _matLast) {
+    const a = new Date(_matFirst), b = new Date(_matLast);
+    _matMonths = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+  }
+  const _matN = records.length;
+  const maturity = {
+    statements: _matN, months_span: _matMonths, first_date: _matFirst, last_date: _matLast,
+    tier: (_matMonths >= 12 && _matN >= 10) ? 'established' : (_matMonths < 3 || _matN < 5) ? 'new' : 'building',
+  };
   return {
     generated: new Date().toISOString().slice(0, 19),
     all_years: allYears,
+    maturity,
     holders_available: holdersAvailable,
     holder_view: holderView,
     chargebacks, review, forecast, growth, health, rewrites,

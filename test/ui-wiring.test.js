@@ -40,4 +40,12 @@ assert.ok(/id="welTrip"[^>]*onclick="gotoView\('convention'\)"/.test(html),
   'home convention trip card navigates to the Convention tab'); n++;
 assert.ok(/kpi-go[^]*?gotoView/.test(html), 'home summary KPIs are navigable (kpi-go + gotoView)'); n++;
 
+// The home + thin-history views adapt to how much history the account has.
+assert.ok(/DATA\.maturity/.test(html) && /function applyMaturityNotes\(/.test(html),
+  'home and views branch on DATA.maturity'); n++;
+assert.ok(html.includes('id="projMaturityNote"') && html.includes('id="retMaturityNote"'),
+  'projections + retention have maturity-caveat elements'); n++;
+assert.ok(html.includes('id="welHlabel"') && html.includes('id="welMoneyLab"'),
+  'home hero label + section label are dynamic (new vs established framing)'); n++;
+
 console.log(`ui-wiring: ${n} checks passed`);
