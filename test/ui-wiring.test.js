@@ -56,4 +56,10 @@ assert.ok(/Developer mode[\s\S]*?run:devLockClick/.test(html), 'developer mode i
 assert.ok(/Chart\.defaults\.layout\.padding=\{[^}]*right:34/.test(html),
   'charts reserve a right gutter so the download button never collides with the last point'); n++;
 
+// Dev bug reports carry the exact commit the reporter's server is running on.
+const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+assert.ok(/GIT_VERSION/.test(server) && /rev-parse/.test(server), 'server computes its running git commit'); n++;
+assert.ok(/if \(o\.dev\) message \+=/.test(server), 'dev reports are stamped with the running commit server-side'); n++;
+assert.ok(/dev:_devUnlocked/.test(html), 'client flags dev submissions so the server can stamp the commit'); n++;
+
 console.log(`ui-wiring: ${n} checks passed`);

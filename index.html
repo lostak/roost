@@ -3493,7 +3493,7 @@ async function sendContact(){
   }
   const from=($('#contactEmail').value||'').trim();
   try{ localStorage.setItem('roost.contactFrom', from); }catch(e){}   // remember who you are for next time
-  try{ const r=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:_contactKind,message:outMsg,email:from})});
+  try{ const r=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:_contactKind,message:outMsg,email:from,dev:_devUnlocked})});
     const j=await r.json();
     if(r.ok&&j.status==='ok'){ out.style.color='#2e9e6b'; out.textContent=j.message||'Thanks!'; setTimeout(closeContact,1100); }
     else { out.style.color='#d4694a'; out.textContent=(j&&j.message)||'Could not send.'; $('#contactSend').disabled=false; }

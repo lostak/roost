@@ -12,6 +12,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const { extractText, extractPages } = require('./pdftext.js');
 const { buildXlsx } = require('./xlsxlite.js');
@@ -542,6 +543,30 @@ function postJson(urlStr, obj) {
   rq.on('error', () => {}); rq.write(payload); rq.end();
 }
 
+// The git commit this server process is running on — computed once at startup, so a dev bug
+// report carries the EXACT version the reporter was on (even if they pull/edit afterward). Uses
+// git when available; falls back to reading .git/HEAD directly; "unknown" if not a checkout.
+const GIT_VERSION = (function computeVersion() {
+  const run = c => execSync(c, { cwd: HERE, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  try {
+    const sha = run('git rev-parse --short HEAD');
+    const branch = run('git rev-parse --abbrev-ref HEAD');
+    let dirty = '';
+    try { if (run('git status --porcelain')) dirty = ' +local-edits'; } catch {}
+    return { commit: sha, branch, line: `${sha} (${branch})${dirty}` };
+  } catch {}
+  try {
+    const head = fs.readFileSync(path.join(HERE, '.git', 'HEAD'), 'utf8').trim();
+    const m = head.match(/^ref:\s*(.+)$/);
+    if (!m) return { commit: head.slice(0, 7), branch: 'detached', line: `${head.slice(0, 7)} (detached)` };
+    const ref = m[1], branch = ref.replace('refs/heads/', '');
+    let sha = '';
+    try { sha = fs.readFileSync(path.join(HERE, '.git', ref), 'utf8').trim(); } catch {}
+    if (!sha) { try { const line = fs.readFileSync(path.join(HERE, '.git', 'packed-refs'), 'utf8').split('\n').find(l => l.endsWith(' ' + ref)); if (line) sha = line.split(' ')[0]; } catch {} }
+    return { commit: sha.slice(0, 7) || 'unknown', branch, line: `${sha.slice(0, 7) || 'unknown'} (${branch})` };
+  } catch { return { commit: 'unknown', branch: '', line: 'unknown' }; }
+})();
+
 function forwardContact(entry) {
   // 1) If this install set its OWN webhook, post straight there (toggle picks the channel).
   const direct = (entry.kind === 'feature'
@@ -575,9 +600,12 @@ function handleContact(req, res) {
     try {
       const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
       const kind = (o.kind === 'feature') ? 'feature' : 'bug';
-      const message = String(o.message || '').slice(0, 5000).trim();
+      let message = String(o.message || '').slice(0, 5000).trim();
       if (message.length < 3) return sendJson(res, 400, { status: 'error', message: 'Please include a short description.' });
-      const entry = { at: new Date().toISOString(), kind, message, from_email: String(o.email || '').slice(0, 200).trim() };
+      // Dev reports carry the exact commit this server is running on, so whoever picks up the
+      // report knows the precise code state the bug was seen on. (Authoritative: read server-side.)
+      if (o.dev) message += `\n\nRunning: ${GIT_VERSION.line}`;
+      const entry = { at: new Date().toISOString(), kind, message, from_email: String(o.email || '').slice(0, 200).trim(), version: GIT_VERSION.line };
       try { fs.appendFileSync(path.join(HERE, 'feedback.jsonl'), JSON.stringify(entry) + '\n'); } catch {}
       forwardContact(entry);
       return sendJson(res, 200, { status: 'ok', message: 'Thanks — your ' + (kind === 'feature' ? 'request' : 'report') + ' was saved.' });
