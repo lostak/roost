@@ -62,4 +62,7 @@ assert.ok(/GIT_VERSION/.test(server) && /rev-parse/.test(server), 'server comput
 assert.ok(/if \(o\.dev\) message \+=/.test(server), 'dev reports are stamped with the running commit server-side'); n++;
 assert.ok(/dev:_devUnlocked/.test(html), 'client flags dev submissions so the server can stamp the commit'); n++;
 
+// The Book & Clients overview tile does not show the (confusing) households sub-count.
+assert.ok(!/\+' households'/.test(html), 'Clients hub tile has no households sub-count'); n++;
+
 console.log(`ui-wiring: ${n} checks passed`);

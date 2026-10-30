@@ -3286,7 +3286,7 @@ function renderHubs(){
   const strips={
     production:[['New business',m(Y.advances),'this year'],['Residual',m(Y.residual),'this year'],['Bonuses',m(Y.bonus),'this year'],['Chargebacks',m(Y.chargebacks),'this year']],
     outlook:[['Annual residual',m(V.residual_annual),'run-rate'],['Monthly residual',m(V.monthly_residual),'in-force'],['In-force policies',n(V.inforce_policies),'paying residual']],
-    book:[['Clients',n(C.count),(C.household_count!=null?C.household_count+' households':'')],['Active policies',n(R.active),(R.policies!=null?'of '+R.policies:'')],['Persistency',pct(R.persistency),'in-force rate'],['Avg net / client',m(C.avg_net),'lifetime']],
+    book:[['Clients',n(C.count),''],['Active policies',n(R.active),(R.policies!=null?'of '+R.policies:'')],['Persistency',pct(R.persistency),'in-force rate'],['Avg net / client',m(C.avg_net),'lifetime']],
     money:[['Net income',m(Y.net),'this year'],['Gross',m(Y.gross),'before chargebacks']],
     records:[['Policies',n(R.policies),'all-time'],['Active',n(R.active),'paying'],['Lapsed',n(R.lapsed),'no longer paying']]
   };
