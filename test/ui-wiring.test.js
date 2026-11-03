@@ -65,4 +65,7 @@ assert.ok(/dev:_devUnlocked/.test(html), 'client flags dev submissions so the se
 // The Book & Clients overview tile does not show the (confusing) households sub-count.
 assert.ok(!/\+' households'/.test(html), 'Clients hub tile has no households sub-count'); n++;
 
+// Income-over-time chart: hovering a period shows all series (new business, residual, net) together.
+assert.ok(/opts\.interaction=\{mode:'index'/.test(html), 'overview income chart uses an index (all-series) tooltip'); n++;
+
 console.log(`ui-wiring: ${n} checks passed`);

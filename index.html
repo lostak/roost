@@ -2189,6 +2189,8 @@ function renderOverviewTrend(){
       backgroundColor:COLORS.net,tension:.3,fill:false,pointRadius:3,money:true});
   }
   const opts=timeAxis(buckets,{money:true});
+  // Hovering a period shows ALL series for that time (new business + residual + net paid) in one box.
+  opts.interaction={mode:'index',intersect:false};
   if(ytdMode){opts.scales.yNet={position:'right',grid:{display:false},
     ticks:{callback:v=>'$'+Number(v).toLocaleString()},title:{display:true,text:'Net paid (YTD)'}};}
   charts.year=new Chart($('#overviewChart'),{type:t==='bar'?'bar':'line',data:{labels,datasets},options:opts});
