@@ -12,6 +12,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { execSync } = require('child_process');
 
 const { extractText, extractPages } = require('./pdftext.js');
@@ -109,6 +110,56 @@ let CACHE = {};
 try { CACHE = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch { CACHE = {}; }
 function saveCache() { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(CACHE)); } catch {} }
 
+// ---- Roost Mobile sync file ----
+// When config.json sets "mobile_sync_dir" (e.g. a Google Drive for desktop folder), every scan
+// writes roost-sync.json.gz there. Roost Mobile's "Sync from laptop" button reads it through the
+// Google Drive connector. It holds only the extracted statement numbers and the settings the
+// calculations use: never PDFs, file paths, ai_key or statements_dir.
+const MOBILE_SYNC_FILE = 'roost-sync.json.gz';
+const MOBILE_CFG_KEYS = ['carrier_map', 'ma_reclass', 'downline_include', 'downline_exclude', 'downline_parents', 'goals', 'expenses', 'profile', 'dismissed_gaps'];
+const MOBILE_REC_KEYS = ['file', 'holder', 'date', 'year', 'pending', 'paid', 'no_pay_reason', 'pay_period_net', 'advances_total', 'residual_total',
+  'chargebacks_total', 'pending_total', 'ytd_advances', 'ytd_commission', 'ytd_chargebacks', 'ytd_total', 'items', 'no_text'];
+let lastMobileSig = null;
+function mobileRecId(r) {
+  return [r.date || 'nodate', r.holder || '', r.pending ? 'P' : 'S', Math.round((r.pay_period_net || 0) * 100)].join('_');
+}
+function writeMobileSync(records) {
+  const cfg = loadConfig();
+  if (!cfg.mobile_sync_dir) return;
+  try {
+    const dir = path.resolve(HERE, cfg.mobile_sync_dir);
+    if (!fs.existsSync(dir)) { console.warn('  Mobile sync: folder not found -', dir); return; }
+    const seen = new Set(), recs = [];
+    for (const r of records) {
+      const id = mobileRecId(r);
+      if (seen.has(id)) continue;          // the same statement filed twice
+      seen.add(id);
+      const o = {};
+      for (const k of MOBILE_REC_KEYS) if (r[k] !== undefined) o[k] = r[k];
+      o.items = (o.items || []).map(it => ({ section: it.section, policy: it.policy, client: it.client, product: it.product,
+        carrier: it.carrier, premium: it.premium, comm_pct: it.comm_pct, payable: it.payable, agents: it.agents || [] }));
+      recs.push(o);
+    }
+    const config = {};
+    for (const k of MOBILE_CFG_KEYS) if (cfg[k] !== undefined) config[k] = cfg[k];
+    const body = JSON.stringify({ records: recs, config });
+    const target = path.join(dir, MOBILE_SYNC_FILE);
+    if (lastMobileSig === null) {             // first run: compare with what's already there
+      try {
+        const prev = JSON.parse(zlib.gunzipSync(fs.readFileSync(target)).toString('utf8'));
+        lastMobileSig = JSON.stringify({ records: prev.records, config: prev.config });
+      } catch { lastMobileSig = ''; }
+    }
+    if (body === lastMobileSig) return;      // unchanged: don't churn the cloud copy
+    const out = JSON.stringify({ v: 1, made: new Date().toISOString(), source: 'Roost', records: recs, config });
+    // Overwrite in place (no temp-file rename): Google Drive keeps it the same file, which the
+    // Drive connector can still see. A rename would make Drive treat it as a new, unseen file.
+    fs.writeFileSync(target, zlib.gzipSync(out));
+    lastMobileSig = body;
+    console.log(`  Mobile sync: ${recs.length} statements -> ${target}`);
+  } catch (e) { console.warn('  Mobile sync failed:', e.message); }
+}
+
 function yearFolders() {
   const base = statementsDir();
   let names = [];
@@ -162,6 +213,7 @@ function loadStatements() {
     for (const s of skipped) console.warn(`   - ${s.file}  (${s.reason})`);
   }
   records.sort((a, b) => (a.date < b.date ? -1 : 1));
+  writeMobileSync(records);
   return records;
 }
 

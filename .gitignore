@@ -26,3 +26,7 @@ feedback.jsonl
 
 # local secrets (webhook URLs, keys) — never commit
 .env
+
+# Roost Mobile build output and downloaded build deps
+mobile/vendor/
+mobile/dist/

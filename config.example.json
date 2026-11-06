@@ -11,5 +11,6 @@
   "downline_exclude": [],
   "downline_parents": {},
   "_downline_parents": "Map each downline agent to their upline, e.g. { \"Jane Agent\": \"Your Name\" }. Names must match how they appear on the commission statements. Left empty in this template; your real mappings live only in your local config.json.",
+  "_mobile_sync_dir": "Optional. Set \"mobile_sync_dir\" to a cloud-synced folder (e.g. \"G:\\\\My Drive\\\\Roost Mobile\") and each scan writes roost-sync.json.gz there for Roost Mobile's Sync from laptop button. Statement numbers and calculation settings only: no PDFs, paths or API key.",
   "_note_saved_data": "Goals, expenses, tax inputs, and profile settings are written into config.json by the app as you use it. They are intentionally NOT in this template and are never committed."
 }

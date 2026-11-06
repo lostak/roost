@@ -165,6 +165,7 @@ falling back to the built-in defaults.
 | `statements_dir` | `"../Statements"` | Folder holding the year subfolders (`2024/`, `2025/`, …), relative to the `roost/` app folder. Falls back to the parent folder if it has no year folders. |
 | `ma_reclass.mult` | `3.5` | Medicare Advantage new-business detection. A residual-section line is treated as new business when its payable is at least this multiple of the policy's typical recurring payment. |
 | `ma_reclass.floor_min` | `80` | Floor (in dollars) below which residual lines are never reclassified, guarding small recurring amounts. |
+| `mobile_sync_dir` | unset | Optional. A folder (e.g. Google Drive for desktop's `G:\My Drive\Roost Mobile`) where each scan writes `roost-sync.json.gz` for Roost Mobile's **Sync from laptop** button. Holds only extracted statement numbers and calculation settings — no PDFs, paths or API key. Unset = nothing is written. |
 
 ### Contact / feedback
 
