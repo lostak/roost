@@ -603,7 +603,12 @@ function postJson(urlStr, obj) {
 // report carries the EXACT version the reporter was on (even if they pull/edit afterward). Uses
 // git when available; falls back to reading .git/HEAD directly; "unknown" if not a checkout.
 const GIT_VERSION = (function computeVersion() {
-  const run = c => execSync(c, { cwd: HERE, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  // The Windows app runs from an installed copy, not a checkout: report its version and build commit.
+  if (process.env.ROOST_APP_VERSION) {
+    const commit = (process.env.ROOST_APP_COMMIT || 'unknown').slice(0, 7);
+    return { commit, branch: 'windows-app', line: `Windows app v${process.env.ROOST_APP_VERSION} (${commit})` };
+  }
+  const run = c => execSync(c, { cwd: APP_DIR, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
   try {
     const sha = run('git rev-parse --short HEAD');
     const branch = run('git rev-parse --abbrev-ref HEAD');
@@ -612,13 +617,13 @@ const GIT_VERSION = (function computeVersion() {
     return { commit: sha, branch, line: `${sha} (${branch})${dirty}` };
   } catch {}
   try {
-    const head = fs.readFileSync(path.join(HERE, '.git', 'HEAD'), 'utf8').trim();
+    const head = fs.readFileSync(path.join(APP_DIR, '.git', 'HEAD'), 'utf8').trim();
     const m = head.match(/^ref:\s*(.+)$/);
     if (!m) return { commit: head.slice(0, 7), branch: 'detached', line: `${head.slice(0, 7)} (detached)` };
     const ref = m[1], branch = ref.replace('refs/heads/', '');
     let sha = '';
-    try { sha = fs.readFileSync(path.join(HERE, '.git', ref), 'utf8').trim(); } catch {}
-    if (!sha) { try { const line = fs.readFileSync(path.join(HERE, '.git', 'packed-refs'), 'utf8').split('\n').find(l => l.endsWith(' ' + ref)); if (line) sha = line.split(' ')[0]; } catch {} }
+    try { sha = fs.readFileSync(path.join(APP_DIR, '.git', ref), 'utf8').trim(); } catch {}
+    if (!sha) { try { const line = fs.readFileSync(path.join(APP_DIR, '.git', 'packed-refs'), 'utf8').split('\n').find(l => l.endsWith(' ' + ref)); if (line) sha = line.split(' ')[0]; } catch {} }
     return { commit: sha.slice(0, 7) || 'unknown', branch, line: `${sha.slice(0, 7) || 'unknown'} (${branch})` };
   } catch { return { commit: 'unknown', branch: '', line: 'unknown' }; }
 })();

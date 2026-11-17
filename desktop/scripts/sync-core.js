@@ -14,4 +14,8 @@ for (const f of FILES) {
   if (!fs.existsSync(src)) { console.error("missing " + f); process.exit(1); }
   fs.copyFileSync(src, path.join(out, f));
 }
-console.log(`synced ${FILES.length} files into desktop/core`);
+// Record which commit this build came from, so bug reports from the app name the exact code.
+let commit = process.env.GITHUB_SHA || "";
+if (!commit) { try { commit = require("node:child_process").execSync("git rev-parse HEAD", { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch {} }
+fs.writeFileSync(path.join(out, "build-info.json"), JSON.stringify({ commit: commit || "unknown" }));
+console.log(`synced ${FILES.length} files into desktop/core (${(commit || "unknown").slice(0, 7)})`);

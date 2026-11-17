@@ -73,6 +73,7 @@ function freePort(start) {
     tryPort(start);
   });
 }
+function buildCommit() { try { return JSON.parse(fs.readFileSync(path.join(CORE, "build-info.json"), "utf8")).commit || ""; } catch { return ""; } }
 async function startServer() {
   // Same port as Start-Roost.bat when it's free, so saved page settings carry over between restarts.
   port = await freePort(5000);
@@ -80,7 +81,8 @@ async function startServer() {
   const log = fs.createWriteStream(logPath(), { flags: "w" });
   const child = utilityProcess.fork(path.join(CORE, "server.js"), [], {
     serviceName: "Roost server", stdio: "pipe", cwd: dataDir,
-    env: { ...process.env, ROOST_HOME: dataDir, PORT: String(port), ROOST_HOST: "127.0.0.1" },
+    env: { ...process.env, ROOST_HOME: dataDir, PORT: String(port), ROOST_HOST: "127.0.0.1",
+      ROOST_APP_VERSION: app.getVersion(), ROOST_APP_COMMIT: buildCommit() },
   });
   server = child;
   child.stdout?.on("data", (b) => log.write(b));

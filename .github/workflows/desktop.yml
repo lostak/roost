@@ -3,7 +3,7 @@ name: desktop
 # release. Installed copies check that release every 30 minutes and update themselves.
 on:
   push:
-    branches: [main, feature/desktop-app]
+    branches: [main]
     paths: ['*.js', 'index.html', 'roost-logo.svg', 'desktop/**', '.github/workflows/desktop.yml']
   workflow_dispatch:
 concurrency: { group: desktop, cancel-in-progress: true }
@@ -14,8 +14,8 @@ jobs:
     timeout-minutes: 30
     defaults: { run: { shell: bash } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22 }
       - run: npm test   # parser / aggregate / UI checks must pass before anything ships
       - working-directory: desktop

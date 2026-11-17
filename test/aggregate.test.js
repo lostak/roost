@@ -115,4 +115,38 @@ eq(buildSummary(matMid, {}).maturity.tier, 'building', 'maturity: a 6-month book
     'planner: unwritten Med Supp falls back to a flagged default with the 125% rate');
 }
 
+// Convention credit (2027 ASB rules as reconciled against the ASB dashboard):
+// credit date = first payment, no lag; as-earned-only policies count; splits give you your listed
+// share; downline production counts toward combined only; annuity trails never count.
+{
+  const L = (section, policy, client, product, payable, premium, agents) =>
+    ({ section, policy, client, product, carrier: 'Test', premium: premium || 0, comm_pct: 0, payable, agents: agents || [] });
+  const DL = [{ name: 'DOWN LINE', level: 100 }];
+  const months = ['2025-12-03', '2026-01-07', '2026-01-28', '2026-02-04', '2026-03-04', '2026-04-01', '2026-05-06', '2026-06-03'];
+  const cv = months.map(d => {
+    const its = [L('commission', 'OLDH', 'OLD, HOSP', 'CLI HOSP INDM', 4, 60)];          // existing book, pays monthly
+    if (d === '2026-01-28') its.push(L('advances', 'JANADV', 'JAN, ADV', 'FINAL EXP', 300, 20));        // paid before Feb 1
+    if (d === '2026-02-04') its.push(L('advances', 'FEBADV', 'FEB, ADV', 'FINAL EXP', 300, 20));        // 20*12*2.5 = 600
+    if (d >= '2026-03-04') its.push(L('commission', 'NEWH', 'NEW, HOSP', 'CLI HOSP INDM', 15, 50));      // as-earned new: 1500
+    if (d === '2026-03-04') {
+      its.push(L('commission', 'ANNTRAIL', 'TRAIL, ANN', 'ATHENE PERF ELITE 10', 40, 250000));          // trail: never counts
+      its.push(L('advances', 'PEER', 'PEER, SPLIT', 'FINAL EXP', 150, 40, [{ name: 'PEER AGENT', level: 50 }]));  // 1200 * 50% = 600
+      its.push(L('advances', 'DSOLO', 'DL, SOLO', 'FINAL EXP', 50, 40, DL));                            // downline only: 1200
+      its.push(L('advances', 'DSPLIT', 'DL, SPLIT', 'FINAL EXP', 150, 40, [{ name: 'DOWN LINE', level: 50 }])); // 600 me / 600 DL
+    }
+    return mk(d, its);
+  });
+  const c = buildSummary(cv, {}).convention;
+  eq(c.pay_lag_days, 0, 'convention: no issue->payment lag by default');
+  eq(Math.round(c.personal_points), 600 + 1500 + 600 + 600, 'convention: personal = Feb advance + as-earned new + your split shares');
+  eq(Math.round(c.downline_points), 1200 + 600, 'convention: downline = solo downline policy + their split share (peer share counts nowhere)');
+  eq(Math.round(c.combined_points), Math.round(c.personal_points + c.downline_points), 'convention: combined = personal + downline');
+  ok(!c.policies.some(p => p.policy === 'ANNTRAIL' || p.policy === 'OLDH' || p.policy === 'JANADV'),
+    'convention: annuity trails, the existing book and pre-window payments are not credited');
+  // Short history: a policy already on the books first "appears" at the earliest statement; it must not count.
+  const short = buildSummary(cv.filter(r => r.date >= '2026-02-04'), {}).convention;
+  ok(!short.policies.some(p => p.policy === 'OLDH'), 'convention: existing as-earned book is not new business on a short history');
+  ok(!short.policies.some(p => p.policy === 'NEWH'), 'convention: as-earned policy within 45 days of the earliest statement is ambiguous and skipped');
+}
+
 console.log('aggregate: ' + n + ' checks passed');
