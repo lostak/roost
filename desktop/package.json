@@ -1,0 +1,52 @@
+{
+  "name": "roost-desktop",
+  "productName": "Roost",
+  "version": "2.1.0",
+  "description": "Roost for Windows: the Roost commission dashboard as its own app.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "sync-core": "node scripts/sync-core.js",
+    "start": "node scripts/sync-core.js && electron .",
+    "dist": "node scripts/sync-core.js && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.lostak.roost.desktop",
+    "productName": "Roost",
+    "files": [
+      "main.js",
+      "core/**",
+      "renderer/**",
+      "build/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Roost",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Roost-Setup.exe"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/lostak/roost/releases/download/desktop"
+      }
+    ],
+    "asarUnpack": [
+      "core/**"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}

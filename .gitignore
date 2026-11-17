@@ -26,3 +26,7 @@ feedback.jsonl
 
 # local secrets (webhook URLs, keys) — never commit
 .env
+
+# Windows app build output (desktop/core is copied from the repo root at build time)
+desktop/core/
+desktop/dist/

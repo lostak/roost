@@ -31,7 +31,11 @@ function parsePdfBuffer(buf, fname){
 const ai = require('./ai.js');
 const { writeClientFolders } = require('./clients.js');
 
-const HERE = __dirname;
+// APP_DIR holds the code and index.html. HERE is the data folder (config.json, .parse_cache.json, .env);
+// they're the same folder when run with Start-Roost.bat. The Windows app sets ROOST_HOME to the user's
+// Roost folder, since its own code lives inside the installed app.
+const APP_DIR = __dirname;
+const HERE = process.env.ROOST_HOME ? path.resolve(process.env.ROOST_HOME) : APP_DIR;
 // Load KEY=VALUE pairs from a local, gitignored .env file (if present) so secrets like
 // CONTACT_WEBHOOK_* stay out of source and off GitHub. Never overrides a variable that's
 // already set in the real environment, so host-provided values win.
@@ -735,7 +739,7 @@ const server = http.createServer((req, res) => {
   try {
     const url = req.url.split('?')[0];
     if (url === '/' || url === '/index.html') {
-      return send(res, 200, 'text/html; charset=utf-8', fs.readFileSync(path.join(HERE, 'index.html')));
+      return send(res, 200, 'text/html; charset=utf-8', fs.readFileSync(path.join(APP_DIR, 'index.html')));
     }
     if (url === '/api/upload' && req.method === 'POST') {
       return handleUpload(req, res);
@@ -831,7 +835,8 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+// ROOST_HOST=127.0.0.1 (set by the Windows app) keeps the server off the local network.
+server.listen(PORT, process.env.ROOST_HOST || undefined, () => {
   console.log('Roost running at  http://127.0.0.1:' + PORT);
   console.log('Scanning year folders under:', statementsDir());
   // Parse statements once at startup so the cache is warm and the per-client
