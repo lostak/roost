@@ -1231,6 +1231,12 @@ function buildSummary(allRecords, config) {
   // commission line (many hospital/supplemental and MA plans never pay an advance). Premium,
   // product and split come from its first advance when it has one, since as-earned lines often
   // carry no premium.
+  // Guard: a policy already on the books before your earliest statement also first "appears"
+  // as a commission line, so as-earned policies only count when they first pay at least 45
+  // days after your earliest statement (anything older would have shown up by then). Annuity
+  // commission lines are trails on old contracts, never new business.
+  const histStart = records.reduce((m, r) => (r.date && (!m || r.date < m) ? r.date : m), null);
+  const asEarnedFrom = histStart ? shiftDate(histStart, 45) : null;
   const convFirst = {};
   for (const r of records) for (const it of (r.items || [])) {
     if (!it.policy || !(it.section === 'advances' || (it.section === 'commission' && it.payable > 0))) continue;
@@ -1306,6 +1312,7 @@ function buildSummary(allRecords, config) {
   for (const [policy, d] of Object.entries(convFirst)) {
     if (d.date < PAY_START || d.date > PAY_END) continue;   // payment date shifted to match the issue window
     const fam = productFamily(d.product);
+    if (!d.fromAdv && (fam === 'Annuity' || !asEarnedFrom || d.date < asEarnedFrom)) continue; // see guard above
     if (!CONV_ELIGIBLE.has(fam)) continue;              // Part D, unclassified -> not eligible
     const cp = convPointsFor(fam, d.premium, d.carrier, d.product);
     const ags = d.agents || [];
@@ -1359,6 +1366,7 @@ function buildSummary(allRecords, config) {
   for (const [policy, d] of Object.entries(convFirst)) {
     const fam = productFamily(d.product);
     if (!CONV_ELIGIBLE.has(fam)) continue;
+    if (!d.fromAdv && (fam === 'Annuity' || !asEarnedFrom || d.date < asEarnedFrom)) continue;
     const ags = d.agents || [];
     if (ags.some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)))) continue;   // downline wrote it
     const share = Math.max(0, Math.min(100, 100 - ags.reduce((s, a) => s + (selfSet.has(normName(a.name)) ? 0 : (a.level || 0)), 0))) / 100;
