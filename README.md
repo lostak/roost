@@ -4,10 +4,18 @@
 
 Roost turns a folder of weekly commission-statement PDFs into an interactive
 dashboard: earnings over time, new business vs. recurring residual, carrier and
-policy breakdowns, downline overrides, retention analytics, and forward
-projections. It runs entirely on your own machine as a small Node server — no
-accounts, no cloud, no `npm install`, and your statements never leave your
-computer.
+policy breakdowns, downline overrides, convention-trip progress, retention
+analytics, and forward projections. It runs entirely on your own machine as a
+small Node server — no accounts, no `npm install`, and your statement PDFs never
+leave your computer.
+
+Three ways to use it, all running the same code and showing the same numbers:
+
+| | What it is | Get it |
+|---|---|---|
+| **Windows app** | Roost in its own window, with a tray icon, Start-with-Windows and automatic updates. No Node install. | [`Roost-Setup.exe`](https://github.com/lostak/roost/releases/tag/desktop) |
+| **Android app** | Roost on your phone, synced from your computer through a cloud folder. No Claude or Google sign-in needed. | [`Roost.apk`](https://github.com/lostak/roost/releases/tag/android) |
+| **Local server** | `Start-Roost.bat` / `node server.js`, viewed in your browser. For development. | this repo |
 
 <!-- Add a screenshot here once you have one, e.g.:
 ![Roost overview](docs/screenshot.png)
@@ -22,15 +30,20 @@ computer.
 - [Screenshots](#screenshots)
 - [Quick start](#quick-start)
 - [Adding statements](#adding-statements)
+- [Roost on your phone](#roost-on-your-phone)
 - [Configuration](#configuration)
+- [Convention points](#convention-points)
 - [Folder layout](#folder-layout)
 - [How it works](#how-it-works)
 - [The dashboard, view by view](#the-dashboard-view-by-view)
 - [Excel export](#excel-export)
+- [Releases & updates](#releases--updates)
 - [Privacy & security](#privacy--security)
 - [Troubleshooting](#troubleshooting)
 - [Design principles](#design-principles)
+- [Testing](#testing)
 - [License](#license)
+- [Setup from scratch](#setup-from-scratch)
 
 ---
 
@@ -98,6 +111,12 @@ your machine.
   is still issued but nothing is paid. Roost recognizes these, shows them on the
   Review page with the reason, and does **not** flag their week as a missing
   statement.
+- **Convention tracker** — personal and combined (personal + downline) points toward the ASB
+  incentive trip, scored by the official rules and checked against ASB's own dashboard, with your
+  level's targets, the 25-app and 50%-non-MA rules, per-policy credit, and a "what will it take"
+  planner. See [Convention points](#convention-points).
+- **Windows and Android apps** — the same dashboard as a self-updating Windows app and an Android
+  app that syncs from your computer. See [Roost on your phone](#roost-on-your-phone).
 - **Projections & insights** — annualized run-rates, retention/persistence
   estimates, book-growth, carrier concentration risk, chargeback drag, AEP
   seasonality, and quarter-over-quarter momentum, surfaced as plain-language
@@ -114,21 +133,32 @@ your machine.
 
 ## Quick start
 
-**Windows app (no Node needed):** download **`Roost-Setup.exe`** from the
-[Roost for Windows release](https://github.com/lostak/roost/releases/tag/desktop) and run it
-(SmartScreen: **More info → Run anyway**). Roost opens in its own window, gets a Start menu entry and
-desktop shortcut, and updates itself. On first launch it finds your Roost folder or asks where it is.
-See [`desktop/README.md`](desktop/README.md).
+### Windows app (recommended)
 
-**Android app:** download **`Roost.apk`** from the
-[Roost for Android release](https://github.com/lostak/roost/releases/tag/android). It reads your
-statements from the computer through a cloud folder (Google Drive, OneDrive or Dropbox), no Claude needed.
-See [`android/README.md`](android/README.md).
+1. Download **`Roost-Setup.exe`** from the
+   [Roost for Windows release](https://github.com/lostak/roost/releases/tag/desktop) and run it
+   (SmartScreen: **More info → Run anyway**, since the installer isn't code-signed).
+2. On first launch Roost finds your Roost folder (the one with `config.json` and
+   `.parse_cache.json`, e.g. `OneDrive\Desktop\HRG\Commissions\roost`) or asks where it is.
+   New to Roost? Choose **Start fresh** and it creates `Documents\Roost`.
+3. Right-click its taskbar icon → **Pin to taskbar**. The tray icon's menu has Start with Windows,
+   the Statements folder, phone sync setup, and the server log.
+
+It updates itself (see [Releases & updates](#releases--updates)). More in
+[`desktop/README.md`](desktop/README.md).
+
+### Android app
+
+Download **`Roost.apk`** on your phone from the
+[Roost for Android release](https://github.com/lostak/roost/releases/tag/android) and install it,
+then follow [Roost on your phone](#roost-on-your-phone).
+
+### Local server (development)
 
 **Requirements:** [Node.js](https://nodejs.org/) LTS (any recent version). That's
 it — Roost uses only Node's built-in modules.
 
-**Windows (easiest):** double-click **`Start-Roost.bat`**. It starts the server
+**Windows:** double-click **`Start-Roost.bat`**. It starts the server
 and opens the dashboard in your browser.
 
 **Any platform (terminal):**
@@ -159,6 +189,25 @@ Two ways to add a weekly statement:
   named or filed correctly, use **Review → Organize files** to re-file everything
   by the date inside each PDF.
 
+## Roost on your phone
+
+The Android app runs Roost's own dashboard and math on the phone. It gets your statements from your
+computer through a file in a cloud-synced folder, with no Claude account and no Google sign-in setup.
+
+1. **On the computer:** in the Windows app's tray menu choose **Set up phone sync…** and pick a folder
+   in Google Drive for desktop, OneDrive or Dropbox (or set `mobile_sync_dir` in `config.json`). After
+   every scan Roost writes `roost-sync.json.gz` there: the statement numbers and the settings the math
+   uses, never PDFs, file paths or API keys.
+2. **On the phone:** install the same cloud app, open Roost, tap **⇅ → Sync from laptop**, and pick
+   `roost-sync.json.gz` in that folder. You pick it once; after that Roost syncs every time it opens.
+
+Statements live in the app's private storage on the phone. PDFs uploaded on the phone are parsed there
+and only their numbers are kept; they don't flow back to the computer. The AI summary/ask isn't
+available on the phone (anomaly flags still work). Details in [`android/README.md`](android/README.md).
+
+`mobile/` also builds **Roost Mobile**, the same page as a Claude artifact that syncs through Claude's
+Google Drive connector (see [`mobile/README.md`](mobile/README.md)).
+
 ## Configuration
 
 All user settings live in **`config.json`** (edit it, then restart the server).
@@ -176,7 +225,16 @@ falling back to the built-in defaults.
 | `statements_dir` | `"../Statements"` | Folder holding the year subfolders (`2024/`, `2025/`, …), relative to the `roost/` app folder. Falls back to the parent folder if it has no year folders. |
 | `ma_reclass.mult` | `3.5` | Medicare Advantage new-business detection. A residual-section line is treated as new business when its payable is at least this multiple of the policy's typical recurring payment. |
 | `ma_reclass.floor_min` | `80` | Floor (in dollars) below which residual lines are never reclassified, guarding small recurring amounts. |
-| `mobile_sync_dir` | unset | Optional. A folder (e.g. Google Drive for desktop's `G:\My Drive\Roost Mobile`) where each scan writes `roost-sync.json.gz` for Roost Mobile's **Sync from laptop** button. Holds only extracted statement numbers and calculation settings — no PDFs, paths or API key. Unset = nothing is written. |
+| `mobile_sync_dir` | unset | Optional. A cloud-synced folder (e.g. `G:\My Drive\Roost Mobile`) where each scan writes `roost-sync.json.gz` for the Android app and Roost Mobile. Holds only extracted statement numbers and calculation settings — no PDFs, paths or API key. Unset = nothing is written. The Windows app sets it from **Set up phone sync…** in the tray. |
+| `profile.convention_level` | unset | Your ASB contract level (1–10), which sets the convention targets. Set it on the Convention page. |
+| `profile.self_names` | `[]` | Names/LLCs you're paid under, so they count as you rather than a split partner. Set on the Convention page. |
+| `profile.convention_pay_lag_days` | `0` | Shifts the convention window by this many days. Leave at 0 to match ASB's dashboard (credit on first payment). |
+| `profile.convention_include` / `convention_exclude` | `[]` | Policy numbers you force-count or force-exclude for the convention (e.g. a replacement Roost missed). |
+
+**Environment variables** (optional, or in a local `.env`): `PORT` (default 5000), `ROOST_HOST`
+(set to `127.0.0.1` to keep the server off your network; the Windows app does this), and `ROOST_HOME`
+(data folder for `config.json` / `.parse_cache.json`, if it differs from the code folder; the Windows
+app sets this to your Roost folder).
 
 ### Contact / feedback
 
@@ -191,6 +249,37 @@ Slack URL lives inside Make. If you'd rather keep feedback on your own side, cop
 Incoming Webhook directly via `CONTACT_WEBHOOK_BUG` / `CONTACT_WEBHOOK_FEATURE`
 (or a single `CONTACT_WEBHOOK` for both). Either way, submissions are also saved
 locally to `feedback.jsonl`.
+
+## Convention points
+
+The Convention page scores your production by the
+**2027 American Senior Benefits Incentive Trip official rules** (qualification period
+Feb 1, 2026 – Jan 31, 2027), as reconciled against ASB's own dashboard:
+
+| Line of business | Credit |
+|---|---|
+| Medicare Advantage | 2,000 points per issued policy |
+| Med Supp | 125% of annualized premium; AARP/UHC Med Supp a flat 1,500 |
+| Annuities, single-premium life/LTC | 15% of premium |
+| Life (lifetime or limited pay), LTC, hospital/supplemental, dental/vision | 250% of annualized premium |
+| Part D, under-65 medical | Not counted |
+
+How Roost applies them to your statements:
+
+- **Credit date = first payment.** ASB credits a policy once it's issued *and* paid, so a policy
+  counts when it first pays on a statement inside the window, whether that's an advance or an
+  as-earned commission line.
+- **Personal vs. combined.** Personal is your listed share of each policy (100% minus every other
+  writing agent's listed cut). Combined adds your **downline's** share. A policy your downline wrote
+  alone counts toward combined only; a split partner who isn't your downline counts toward neither.
+- **Replacements don't count.** A new policy in the same line for the same client counts as a
+  replacement only when the earlier policy stopped paying around then; buying a second policy isn't a
+  replacement. Force-count or force-exclude any policy on the Convention page.
+- **Short histories.** If your statements only go back a few months, older business can look new the
+  first time it pays. Roost ignores as-earned policies that first pay within 45 days of your earliest
+  statement, and never counts annuity trail commissions as new business. Results are most accurate
+  with a year or more of statements.
+- The page also tracks the 25-issued-app minimum and the 50%-from-non-MA rule.
 
 ## Folder layout
 
@@ -210,6 +299,18 @@ Commissions/
 Only four-digit year folders under `statements_dir` are scanned; everything else
 is ignored.
 
+Inside the repository:
+
+```
+roost/
+  server.js  parser.js  pdftext.js  aggregate.js  clients.js  ai.js  xlsxlite.js  index.html
+  test/                 zero-dependency test suites (npm test)
+  desktop/              the Windows app (Electron wrapper around server.js)
+  android/              the Android app (WebView around the Roost Mobile build)
+  mobile/               builds Roost Mobile: index.html + modules bundled to run in a browser
+  .github/workflows/    builds and publishes the Windows and Android releases
+```
+
 ## How it works
 
 Roost is a single small Node process with a five-stage pipeline. Every piece is
@@ -228,7 +329,10 @@ PDF  ──▶  pdftext.js  ──▶  parser.js  ──▶  aggregate.js  ─�
 | `aggregate.js` | Rolls parsed records into the dashboard payload: yearly and monthly rollups, per-statement series, carrier and per-policy tables, downline overrides, cumulative-by-year curves, residual run-rate, projections, and plain-language insights. Also reclassifies Medicare Advantage initial payments out of residual. |
 | `xlsxlite.js` | A minimal OOXML `.xlsx` writer — builds the workbook, styles, and a ZIP container by hand for the Excel export. |
 | `server.js` | The HTTP server. Scans the statement folders, caches parses by file mtime, and serves the dashboard, the JSON API, the Excel export, and the upload endpoint. |
-| `index.html` | The entire front end — a Material-Design single-page dashboard rendered with Chart.js (loaded from a CDN). |
+| `index.html` | The entire front end — a Material-Design single-page dashboard rendered with Chart.js (loaded from a CDN; bundled in the Android app). |
+| `desktop/` | Windows app. Runs `server.js` in a background process against your Roost folder (`ROOST_HOME`), bound to `127.0.0.1`, and shows the dashboard in its own window. Adds the tray menu, phone-sync setup and self-updates. |
+| `mobile/` | Bundles `index.html` and the modules with a small runtime that answers the page's `/api/*` calls in the browser (Roost Mobile). |
+| `android/` | Android app around the `mobile/` build. `web/android-shim.js` stores data on the phone, reads the sync file through the Android file picker, and saves exports to Downloads. |
 | `config.example.json` | Tracked template. Copy to `config.json` on first run (see [Configuration](#configuration)). |
 | `config.json` | Your local settings — gitignored (holds personal data). |
 
@@ -268,6 +372,7 @@ switching views lands at the top of the new one.
 | **Downline** | Override production from agents on your roster, over time and by carrier. |
 | **Projections** | Annualized run-rates plus interactive sliders for retention, growth, conversion, renewals, and chargebacks to model future income. |
 | **Policies** | Searchable per-policy residual tracker with year-by-year payment history. |
+| **Convention** | Personal and combined points toward the ASB incentive trip against your level's targets, the app-count and non-MA rules, points by product line, every credited policy (with force-include/exclude), and a "what will it take" planner. |
 
 ## Excel export
 
@@ -276,13 +381,33 @@ Clicking **Export Excel** builds a workbook with these sheets: **Yearly**,
 **Downline Agents**, and **Downline Detail** — currency-formatted, with frozen
 header rows.
 
+## Releases & updates
+
+Every push to `main` builds and publishes both apps with GitHub Actions; the tests run first, and a
+failing test stops the release.
+
+| Workflow | Builds when | Publishes | How installed copies update |
+|---|---|---|---|
+| `.github/workflows/desktop.yml` | Roost's code, `index.html` or `desktop/` changes | `Roost-Setup.exe` + update feed to the [`desktop`](https://github.com/lostak/roost/releases/tag/desktop) release | Checks every 30 minutes, downloads in the background, installs on restart (a notification offers to restart now) |
+| `.github/workflows/android.yml` | Roost's code, `index.html`, `mobile/` or `android/` changes | `Roost.apk` + `version.json` to the [`android`](https://github.com/lostak/roost/releases/tag/android) release | Offers the new APK in a popup when the app opens; tap **Download**, then install |
+
+Updates only download from these public releases, so users never need GitHub after the first
+install. If this repo is made private, the update feeds stop working and need a public home.
+
 ## Privacy & security
 
-- **Everything is local.** Roost runs on `127.0.0.1` and only ever reads files
-  from your own folders. No statement, client name, or commission figure is sent
-  anywhere.
-- **No external code at runtime**, except the Chart.js library the dashboard
-  loads from a CDN to draw charts. The server itself has zero dependencies.
+- **Your data stays on your devices.** Roost reads files only from your own folders. No statement,
+  client name, or commission figure is sent anywhere, except the optional phone sync file below.
+- **Network exposure.** The Windows app's server listens only on `127.0.0.1`. `Start-Roost.bat` /
+  `node server.js` listens on all network interfaces unless you set `ROOST_HOST=127.0.0.1` (e.g. in
+  `.env`), which keeps other computers on your network out.
+- **Phone sync.** If you set `mobile_sync_dir`, `roost-sync.json.gz` (statement numbers, client
+  names, and settings; no PDFs, paths or API key) is written to that folder and synced by your cloud
+  provider. On the phone it's stored in Roost's private app storage.
+- **Android signing key.** `android/roost.keystore` is committed so GitHub Actions can sign builds
+  that install over each other. Only install Roost from the release page.
+- **No external code at runtime**, except the Chart.js library the browser dashboard loads from a
+  CDN (the Android app bundles it). The server itself has zero dependencies.
 - **The upload endpoint** accepts only local requests, validates that each upload
   is a real PDF, derives the destination filename itself (so uploads can't be
   used to write outside the statements folders), and caps file size.
@@ -303,6 +428,19 @@ Statements are dated from the pay-period date printed inside the PDF, so the fil
 be named anything (a date in the filename is only used as a fallback). If a file can't
 be dated or parsed it's skipped and listed in the server console on load — check it's an
 actual commission statement.
+
+**The Windows app won't start or shows an error.**
+Right-click the tray icon → **Server log** for the background server's output. If it can't find your
+data, use **Change Roost folder…**. Don't run `Start-Roost.bat` at the same time.
+
+**The phone says it can't read the sync file, or it's out of date.**
+Check that `roost-sync.json.gz` exists in your sync folder on the computer and that the cloud app has
+finished uploading it. If the phone shows an error, tap **Sync from laptop** again and re-pick the file.
+
+**Convention points don't match ASB's dashboard.**
+ASB counts everything paid through today; Roost counts the statements it has. Add the latest
+statements first. Then check your contract level and self names on the Convention page, and
+force-include/exclude any policy Roost classified differently.
 
 **A carrier shows up as "Other."**
 Carrier detection is a keyword list in `parser.js` (`CARRIERS`). Add the carrier's
@@ -329,9 +467,11 @@ npm test
 ```
 
 Zero-dependency suites: `parser` and `corpus` (statement parsing against fixtures),
-`aggregate` (roll-up math), and `ui-wiring` — static checks over `index.html` that every
-click target resolves to a real view/element, in-page scrolling is header-aware, and the
-home page's hero, trip card, and KPIs navigate.
+`aggregate` (roll-up math, including the convention rules: first-payment window, as-earned
+credit, split shares, downline-only-in-combined, and existing business on short histories),
+and `ui-wiring` — static checks over `index.html` that every click target resolves to a real
+view/element, in-page scrolling is header-aware, and the home page's hero, trip card, and KPIs
+navigate. Both release workflows run `npm test` before building.
 
 ## License
 
@@ -339,6 +479,10 @@ Personal project — add a license of your choice (e.g. [MIT](https://choosealic
 before sharing publicly.
 
 ## Setup from scratch
+
+**Just using Roost?** Install the [Windows app](#windows-app-recommended) and point it at (or let it
+create) your Roost folder; put your statement PDFs in the `Statements` folder next to it, or upload
+them in the app. No Git or Node needed. The steps below are for running from source.
 
 - Install Git
   - Go to [this](https://git-scm.com/install/) link to download Git
