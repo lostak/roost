@@ -1570,7 +1570,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <div class="controls" style="gap:14px;flex-wrap:wrap;margin-top:6px">
             <span class="lbl-inline">My contract level</span>
             <select id="convLevel" class="sel"></select>
-            <span class="lbl-inline">Issue&rarr;payment lag (days)</span>
+            <span class="lbl-inline">Payment-date offset (days)</span>
             <input id="convLag" type="number" class="sel" style="width:80px" min="0" max="180" onchange="saveConventionLag()">
             <span class="hint" id="convLevelMsg" style="align-self:center"></span>
           </div>
@@ -3841,8 +3841,8 @@ function renderConvention(){
   sel.innerHTML='<option value="">Select your level…</option>'+(V.levels||[]).map(l=>`<option value="${l.level}"${l.level===lv?' selected':''}>Level ${l.level}</option>`).join('');
   sel.onchange=saveConventionLevel;
   const lagEl=$('#convLag');
-  if(lagEl&&document.activeElement!==lagEl) lagEl.value=(local.convention_pay_lag_days!=null?local.convention_pay_lag_days:(V.pay_lag_days!=null?V.pay_lag_days:30));
-  if(V.pay_window)$('#convLagNote').innerHTML=`Counting policies first paid <b>${V.pay_window.start}</b> to <b>${V.pay_window.end}</b> (issue window ${V.window.start}&ndash;${V.window.end} shifted by the lag, since commissions pay after issue). Set the lag to your carriers' typical issue-to-payment delay.`;
+  if(lagEl&&document.activeElement!==lagEl) lagEl.value=(local.convention_pay_lag_days!=null?local.convention_pay_lag_days:(V.pay_lag_days!=null?V.pay_lag_days:0));
+  if(V.pay_window)$('#convLagNote').innerHTML=`Counting policies first paid <b>${V.pay_window.start}</b> to <b>${V.pay_window.end}</b> &mdash; ASB credits a policy once it's issued <b>and paid</b>, so the window runs on each policy's first payment. Leave this at 0 to match the ASB dashboard.`;
   // self-identity checkboxes
   const norm=x=>(x||'').toUpperCase().replace(/[^A-Z]/g,'');
   const selfNames=(local.self_names!=null?local.self_names:(V.self_names||[]));

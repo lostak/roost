@@ -8,6 +8,12 @@ const num = x => (x == null ? 0 : Number(x));
 // of business (they behave very differently: upfront vs. trail, chargeback risk, etc.).
 function productFamily(product) {
   const p = (product || '').toUpperCase();
+  // Checked first: GTL Advantage Plus lists states (".../KY/MA/ND/...") that would otherwise read as MA,
+  // and these products' names don't carry the usual family keywords.
+  if (/GTL\s?ADV\s?PLUS/.test(p)) return 'Hospital / Supplemental';
+  if (/D\/V\s?SHIELD/.test(p)) return 'Dental / Vision';
+  if (/ATHENE|PERF\s?(ANNE?\s?)?ELITE|ACCUMULA|SAFE\s?INCOME|ANICO\s?SMAR/.test(p)) return 'Annuity';
+  if (/PATHSETTER|PERM\s?PRO|AIG\s?SAT\b|\bNWL\b/.test(p)) return 'Life / Final Expense';
   if (/MED\s?ADV|MEDADVANTAGE|\bMAPD\b|\bMA\b/.test(p)) return 'Medicare Advantage';
   if (/MED\s?SUPP|MEDSUPP|MEDIGAP|SUPPLEMENT|SUPP\b/.test(p)) return 'Med Supp';
   if (/\bPDP\b|PART\s?D|PRESCRIPTION|\bRX\b/.test(p)) return 'Part D (PDP)';
@@ -1214,21 +1220,26 @@ function buildSummary(allRecords, config) {
   const CONV_START = '2026-02-01', CONV_END = '2027-01-31';
   const CONV_ELIGIBLE = new Set(['Medicare Advantage', 'Med Supp', 'Annuity',
     'Life / Final Expense', 'Hospital / Supplemental', 'Dental / Vision']);
-  // The window is by ISSUE date, but statements only carry payment dates, and commission is
-  // paid a few weeks AFTER issue. So we shift the payment-date filter forward by a lag: a
-  // policy issued Feb 1 pays ~a month later, one issued Jan 31 next year pays ~a month after
-  // that. Shifting both boundaries drops early-Feb payments (prior-window issues) and captures
-  // in-window issues paid just after Jan 31. Lag is configurable (profile.convention_pay_lag_days).
+  // ASB credits a policy when it's issued AND paid through one check, so the window applies to
+  // the date the policy first pays on a statement (no lag). profile.convention_pay_lag_days can
+  // still shift it if ASB ever changes how it dates credit.
   const CONV_LAG = (config.profile && Number(config.profile.convention_pay_lag_days) >= 0)
-    ? Number(config.profile.convention_pay_lag_days) : 30;
+    ? Number(config.profile.convention_pay_lag_days) : 0;
   const shiftDate = (iso, days) => new Date(Date.parse(iso + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10);
   const PAY_START = shiftDate(CONV_START, CONV_LAG), PAY_END = shiftDate(CONV_END, CONV_LAG);
+  // A policy's credit date is its first payment, whether that's an advance or an as-earned
+  // commission line (many hospital/supplemental and MA plans never pay an advance). Premium,
+  // product and split come from its first advance when it has one, since as-earned lines often
+  // carry no premium.
   const convFirst = {};
   for (const r of records) for (const it of (r.items || [])) {
-    if (it.section === 'advances' && it.policy) {
-      const cur = convFirst[it.policy];
-      if (!cur || r.date < cur.date) convFirst[it.policy] = { date: r.date, premium: it.premium, product: it.product, carrier: it.carrier, client: it.client, agents: it.agents };
-    }
+    if (!it.policy || !(it.section === 'advances' || (it.section === 'commission' && it.payable > 0))) continue;
+    const cur = convFirst[it.policy];
+    const info = { premium: it.premium, product: it.product, carrier: it.carrier, client: it.client, agents: it.agents };
+    if (!cur) { convFirst[it.policy] = { date: r.date, fromAdv: it.section === 'advances', ...info }; continue; }
+    if (r.date < cur.date) cur.date = r.date;
+    if (it.section === 'advances' && !cur.fromAdv) Object.assign(cur, info, { fromAdv: true });
+    else if (!cur.fromAdv && !num(cur.premium) && num(it.premium)) cur.premium = it.premium;
   }
   const convPointsFor = (fam, premium, carrier, product) => {
     const pm = num(premium);
@@ -1283,10 +1294,11 @@ function buildSummary(allRecords, config) {
     if (!it.policy) continue;
     const h = (polHist[it.policy] ||= { client: normClient(it.client), family: productFamily(it.product), first: r.date });
     if (r.date < h.first) h.first = r.date;
+    if (!h.last || r.date > h.last) h.last = r.date;
     if (!h.client && it.client) h.client = normClient(it.client);
   }
   const cfIndex = {};
-  for (const [pol, h] of Object.entries(polHist)) { if (!h.client) continue; (cfIndex[h.client + '|' + h.family] ||= []).push({ policy: pol, first: h.first }); }
+  for (const [pol, h] of Object.entries(polHist)) { if (!h.client) continue; (cfIndex[h.client + '|' + h.family] ||= []).push({ policy: pol, first: h.first, last: h.last }); }
   const effExcludedSet = new Set();
   const convPols = [], convFamMap = {};
   const convPSeries = {}, convCSeries = {};       // personal series, combined (personal + downline) series
@@ -1301,13 +1313,14 @@ function buildSummary(allRecords, config) {
     // A policy a DOWNLINE agent wrote is override income (their production, not yours) — it
     // counts toward downline/combined, NOT personal. Peer splits (co-agents who aren't your
     // downline) still count your share as personal.
-    const hasDownline = ags.some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
-    const selfShare = hasDownline ? 0 : Math.max(0, Math.min(100, 100 - otherListed)) / 100;   // your cut, if you wrote it
+    // Your share = 100 minus everyone else's listed cut. A split with a downline agent still gives
+    // you your half; a policy your downline wrote outright (listed at 100) leaves you 0.
+    const selfShare = Math.max(0, Math.min(100, 100 - otherListed)) / 100;
     const dlShare = ags.reduce((s, a) => s + ((isDL[normName(a.name)] && !selfSet.has(normName(a.name))) ? (a.level || 0) : 0), 0) / 100;
     const pPts = cp.pts * selfShare, dPts = cp.pts * dlShare;
     // auto-detect replacement: earlier policy, same client + family
     const autoReplacement = (cfIndex[normClient(d.client) + '|' + fam] || [])
-      .some(x => x.policy !== policy && x.first < d.date);
+      .some(x => x.policy !== policy && x.first < d.date && x.last <= shiftDate(d.date, 60));
     // effective exclusion: force-excluded, or auto-replacement unless you force-counted it
     const excluded = convExclude.has(String(policy)) || (autoReplacement && !convInclude.has(String(policy)));
     if (excluded) effExcludedSet.add(String(policy));
@@ -1350,7 +1363,7 @@ function buildSummary(allRecords, config) {
     if (ags.some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)))) continue;   // downline wrote it
     const share = Math.max(0, Math.min(100, 100 - ags.reduce((s, a) => s + (selfSet.has(normName(a.name)) ? 0 : (a.level || 0)), 0))) / 100;
     if (share <= 0) continue;
-    const autoRepl = (cfIndex[normClient(d.client) + '|' + fam] || []).some(x => x.policy !== policy && x.first < d.date);
+    const autoRepl = (cfIndex[normClient(d.client) + '|' + fam] || []).some(x => x.policy !== policy && x.first < d.date && x.last <= shiftDate(d.date, 60));
     if (convExclude.has(String(policy)) || (autoRepl && !convInclude.has(String(policy)))) continue;
     const pts = convPointsFor(fam, d.premium, d.carrier, d.product).pts * share;
     if (!(pts > 0)) continue;
@@ -1374,8 +1387,8 @@ function buildSummary(allRecords, config) {
     for (const it of (r.items || [])) {
       if (it.section !== 'advances' || !it.policy || !CONV_ELIGIBLE.has(productFamily(it.product))) continue;
       if (effExcludedSet.has(String(it.policy))) continue;
-      const hasDownline = (it.agents || []).some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)));
-      if (!hasDownline) convFyc += it.payable;
+      const other = (it.agents || []).reduce((s, a) => s + (selfSet.has(normName(a.name)) ? 0 : (a.level || 0)), 0);
+      if (other < 100) convFyc += it.payable;
     }
   }
   const convNonMA = round2(convPts - convMA);
