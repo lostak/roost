@@ -102,4 +102,17 @@ const matMid = [];
 for (let m = 1; m <= 6; m++) matMid.push(mk(`2026-${String(m).padStart(2, '0')}-10`, [item('commission', 'P1', 'X, Y', 'HUMANA MEDADVANTAGE', 'Humana', 20)]));
 eq(buildSummary(matMid, {}).maturity.tier, 'building', 'maturity: a 6-month book is "building"');
 
+// Convention planner baselines: per-line average points/app from YOUR history (all dates),
+// replacements excluded; unwritten lines fall back to a flagged assumption.
+{
+  const sp = buildSummary(recs, { profile: { self_names: ['JANE AGENT'] } });
+  const av = Object.fromEntries((sp.convention.avg_by_family || []).map(f => [f.family, f]));
+  eq(av['Annuity'].avg_points, 150, 'planner: annuity avg = 15% of the one non-replacement annuity');
+  eq(av['Annuity'].sample, 1, 'planner: the P1->P2 rewrite is excluded as a replacement');
+  eq(av['Annuity'].avg_premium, 1000, 'planner: annuity avg premium is total premium');
+  eq(av['Medicare Advantage'].avg_points, 2000, 'planner: MA is flat 2,000');
+  ok(av['Med Supp'].default === true && av['Med Supp'].avg_points > 0 && av['Med Supp'].rate === 1.25,
+    'planner: unwritten Med Supp falls back to a flagged default with the 125% rate');
+}
+
 console.log('aggregate: ' + n + ' checks passed');

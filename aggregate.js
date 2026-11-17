@@ -1326,6 +1326,47 @@ function buildSummary(allRecords, config) {
       points: round2(pPts), ma: cp.ma, excluded, auto_replacement: autoReplacement });
   }
   convPols.sort((a, b) => b.points - a.points);
+  // ---- per-product baseline for the "what will it take" sliders ----
+  // Your average convention points per app in each line, from EVERY policy you personally
+  // wrote (all history, not just the window — more data, steadier average), under the same
+  // rules: your share only, replacements/exclusions out, downline-written business out.
+  // Lines you've never written fall back to a rule-based assumption (flagged default:true).
+  // Also the average ANNUALIZED premium per app (annuity: total premium) so the planner can
+  // work in premium dollars and translate back to an app count.
+  // rate = points per $1 of annualized premium (MA is flat per policy, so it has none).
+  const CONV_DEFAULT_AVG = {
+    'Medicare Advantage': { pts: 2000, prem: 0, note: 'flat 2,000 / policy' },
+    'Med Supp': { pts: 2250, prem: 1800, note: 'assumes ~$150/mo at 125%' },
+    'Annuity': { pts: 7500, prem: 50000, note: 'assumes ~$50k premium at 15%' },
+    'Life / Final Expense': { pts: 1500, prem: 600, note: 'assumes ~$50/mo at 250%' },
+    'Hospital / Supplemental': { pts: 1200, prem: 480, note: 'assumes ~$40/mo at 250%' },
+    'Dental / Vision': { pts: 1050, prem: 420, note: 'assumes ~$35/mo at 250%' },
+  };
+  const avgAcc = {};
+  for (const [policy, d] of Object.entries(convFirst)) {
+    const fam = productFamily(d.product);
+    if (!CONV_ELIGIBLE.has(fam)) continue;
+    const ags = d.agents || [];
+    if (ags.some(a => isDL[normName(a.name)] && !selfSet.has(normName(a.name)))) continue;   // downline wrote it
+    const share = Math.max(0, Math.min(100, 100 - ags.reduce((s, a) => s + (selfSet.has(normName(a.name)) ? 0 : (a.level || 0)), 0))) / 100;
+    if (share <= 0) continue;
+    const autoRepl = (cfIndex[normClient(d.client) + '|' + fam] || []).some(x => x.policy !== policy && x.first < d.date);
+    if (convExclude.has(String(policy)) || (autoRepl && !convInclude.has(String(policy)))) continue;
+    const pts = convPointsFor(fam, d.premium, d.carrier, d.product).pts * share;
+    if (!(pts > 0)) continue;
+    const a = (avgAcc[fam] ||= { n: 0, pts: 0, prem: 0 });
+    a.n++; a.pts += pts;
+    a.prem += (fam === 'Annuity' ? num(d.premium) : num(d.premium) * 12) * share;
+  }
+  const CONV_RATE = { 'Medicare Advantage': null, 'Med Supp': 1.25, 'Annuity': 0.15,
+    'Life / Final Expense': 2.5, 'Hospital / Supplemental': 2.5, 'Dental / Vision': 2.5 };
+  const convAvgByFamily = [...CONV_ELIGIBLE].map(fam => {
+    const a = avgAcc[fam], dflt = CONV_DEFAULT_AVG[fam];
+    const base = { family: fam, ma: fam === 'Medicare Advantage', rate: CONV_RATE[fam] };
+    return a && a.n
+      ? { ...base, avg_points: round2(a.pts / a.n), avg_premium: round2(a.prem / a.n), sample: a.n, default: false }
+      : { ...base, avg_points: dflt.pts, avg_premium: dflt.prem, sample: 0, default: true, note: dflt.note };
+  });
   // first-year commission (dollars) actually paid to YOU on eligible business in the window —
   // excludes overrides on policies your downline wrote (that's not your first-year commission).
   for (const r of records) {
@@ -1376,6 +1417,7 @@ function buildSummary(allRecords, config) {
     nonma_share: convPts ? round2(convNonMA / convPts) : null,
     nonma_rule_met: convNonMA >= convPts * 0.5,
     by_family: Object.values(convFamMap).map(f => ({ ...f, points: round2(f.points) })).sort((a, b) => b.points - a.points),
+    avg_by_family: convAvgByFamily,
     policies: convPols.slice(0, 500),
     persistency: (retention && retention.totals) ? retention.totals.persistency : null,
     elapsed_frac: round2(convElapsed / winDays), days_left: Math.max(0, winDays - convElapsed),
