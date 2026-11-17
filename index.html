@@ -352,7 +352,8 @@ body.dark[data-accent="amber"]{--accent:#e0912f;--accent-2:#e86a9a;--accent-3:#d
 .phonepop .ppopt:hover{background:color-mix(in srgb,var(--primary) 10%,transparent)}
 .phonepop .ppopt b{display:block;font-size:13px;margin-bottom:2px}
 .phonepop .ppopt span{font-size:12px;color:var(--on-surface-var);line-height:1.35}
-.phonepop .ppcur{font-size:12px;color:var(--on-surface-var);margin:2px 2px 10px;line-height:1.4;word-break:break-all}
+.phonepop .ppcur{font-size:12px;color:var(--on-surface-var);margin:2px 2px 10px;line-height:1.4}
+.phonepop .pppath{word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
 .phonepop .ppcur.on{color:var(--on-surface)}
 .phonepop .ppoff{background:none;border:0;padding:0;color:var(--primary);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 .palettepop .pptitle{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-var);margin:0 2px 10px}
@@ -563,7 +564,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
   <div id="phoneSyncWrap" style="position:relative;display:inline-flex">
-    <button class="btn tonal" id="phoneSyncBtn" onclick="togglePhoneSync(event)" title="Get your statements onto the Roost phone app" aria-label="Phone sync"><span>&#8645;</span> Phone file</button>
+    <button class="btn tonal" id="phoneSyncBtn" onclick="togglePhoneSync(event)" title="Phone sync: set where Roost auto-saves your phone file, or save a one-time copy" aria-label="Phone sync"><span>&#8645;</span> Phone sync</button>
     <div class="palettepop phonepop" id="phoneSyncPop"></div>
   </div>
   <button class="btn ghost" onclick="startTour()" title="Take the tour" aria-label="Take the tour">&#63;</button>
@@ -3489,9 +3490,9 @@ function _setDevLock(on){
   if(lk){ lk.innerHTML=on?'&#128275;':'&#128274;'; lk.title=on?'Dev mode ON — messages are padded for Slack (click to turn off)':'Developer'; }
 }
 // Phone sync. Two ways to get roost-sync.json.gz (numbers + settings, never PDFs) to the phone:
-//  - Keep it up to date in a folder: sets config.json mobile_sync_dir; every scan rewrites the file
+//  - Set auto-save location: sets config.json mobile_sync_dir; every scan rewrites the file
 //    there. Point it at Google Drive / OneDrive / Dropbox and the phone always has the latest.
-//  - Save a copy now: a one-time file to send to the phone yourself.
+//  - Save a one-time copy: a one-time file to send to the phone yourself.
 let _phoneDir=null;
 function _esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 async function togglePhoneSync(e){
@@ -3505,25 +3506,25 @@ function renderPhoneSync(msg){
   const p=document.getElementById('phoneSyncPop'); if(!p) return;
   const d=_phoneDir||{dir:''};
   let cur;
-  if(!d.dir) cur='<div class="ppcur">Not keeping a sync file up to date yet.</div>';
-  else if(d.folder_found===false) cur='<div class="ppcur">Sync folder not found: '+_esc(d.dir)+'</div>';
-  else cur='<div class="ppcur on">Kept up to date in <b>'+_esc(d.dir)+'</b>'+(d.saved?'<br>Last written '+_esc(new Date(d.saved).toLocaleString())+'.':'')
-    +' <button class="ppoff" onclick="setPhoneSyncDir(\'\')">Turn off</button></div>';
+  if(!d.dir) cur='<div class="ppcur"><b>Auto-save is off.</b> Set a location below and Roost will save your phone file there automatically from now on.</div>';
+  else if(d.folder_found===false) cur='<div class="ppcur"><b>Auto-save location not found:</b> <span class="pppath">'+_esc(d.dir)+'</span>. Set a new location below.</div>';
+  else cur='<div class="ppcur on"><b>Auto-saving to:</b> <span class="pppath">'+_esc(d.dir)+'</span><br>Roost updates roost-sync.json.gz here every time it loads your statements.'+(d.saved?' Last saved '+_esc(new Date(d.saved).toLocaleString())+'.':'')
+    +' <button class="ppoff" onclick="setPhoneSyncDir(\'\')">Turn off auto-save</button></div>';
   p.innerHTML='<div class="pptitle">Phone sync</div>'+cur+(msg?'<div class="ppcur on">'+msg+'</div>':'')
-    +'<button class="ppopt" onclick="choosePhoneSyncDir()"><b>'+(d.dir?'Change the sync folder&hellip;':'Keep it up to date in a folder&hellip;')+'</b>'
-    +'<span>Roost rewrites roost-sync.json.gz there after every scan. Pick a Google Drive, OneDrive or Dropbox folder and your phone always has the latest.</span></button>'
-    +'<button class="ppopt" onclick="savePhoneSync()"><b>Save a copy now&hellip;</b>'
-    +'<span>A one-time file. Send it to your phone yourself (email, USB). Save a new one after new statements.</span></button>';
+    +'<button class="ppopt" onclick="choosePhoneSyncDir()"><b>'+(d.dir?'Change auto-save location&hellip;':'Set auto-save location&hellip;')+'</b>'
+    +'<span>Pick a folder once. Roost saves roost-sync.json.gz there now and keeps it updated after every new statement &mdash; you never save it by hand. Use a Google Drive, OneDrive or Dropbox folder and your phone always has the latest.</span></button>'
+    +'<button class="ppopt" onclick="savePhoneSync()"><b>Save a one-time copy&hellip;</b>'
+    +'<span>Just this once &mdash; it won&rsquo;t update. Send it to your phone yourself (email, USB) and save a new one after new statements.</span></button>';
 }
 document.addEventListener('click',e=>{ const p=document.getElementById('phoneSyncPop'); if(p&&p.classList.contains('open')&&!e.target.closest('#phoneSyncWrap')) p.classList.remove('open'); });
 async function choosePhoneSyncDir(){
   let dir;
   const cur=(_phoneDir&&_phoneDir.dir)||'';
   if(window.roostDesktop&&window.roostDesktop.pickFolder){
-    dir=await window.roostDesktop.pickFolder('Choose a folder for your phone sync file', cur);
+    dir=await window.roostDesktop.pickFolder('Choose where Roost auto-saves your phone sync file', cur);
     if(!dir) return;
   }else{
-    dir=prompt('Paste the full path of the folder to keep roost-sync.json.gz in\n(for example your Google Drive, OneDrive or Dropbox folder):', cur);
+    dir=prompt('Auto-save location: paste the full path of the folder where Roost should keep roost-sync.json.gz updated\n(for example your Google Drive, OneDrive or Dropbox folder):', cur);
     if(dir===null) return;
     dir=dir.trim(); if(!dir) return;
   }
@@ -3535,10 +3536,10 @@ async function setPhoneSyncDir(dir){
     const o=await r.json();
     if(!r.ok||o.status!=='ok'){ renderPhoneSync('<span style="color:var(--error,#c62828)">'+_esc(o.message||'Couldn’t set the folder.')+'</span>'); return; }
     _phoneDir=o;
-    renderPhoneSync(dir?'&#10003; Saved. On your phone: Sync from laptop &rarr; pick roost-sync.json.gz in that folder (once).':'Phone sync folder turned off. The file already there is left alone.');
+    renderPhoneSync(dir?'&#10003; Auto-save is on. Roost saved roost-sync.json.gz there and will keep it updated from now on. On your phone: Sync from laptop &rarr; pick that file (only the first time).':'Auto-save turned off. The file already there is left alone and won&rsquo;t update.');
   }catch(e){ renderPhoneSync(_esc('Couldn’t set the folder: '+((e&&e.message)||e))); }
 }
-// "Save a copy now": opens a real Save As dialog where the browser has one (Chrome/Edge and the
+// "Save a one-time copy": opens a real Save As dialog where the browser has one (Chrome/Edge and the
 // Windows app); otherwise it's a normal download.
 async function savePhoneSync(){
   const p=document.getElementById('phoneSyncPop');
@@ -4694,8 +4695,8 @@ function cmdkCommands(){
     {type:'action',label:'Refresh data',ic:'&#8635;',run:()=>loadData(true)},
     {type:'action',label:'Toggle dark / light theme',ic:'&#9681;',run:toggleTheme},
     {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'},
-    {type:'action',label:'Save phone sync file (roost-sync.json.gz)',ic:'&#8645;',run:()=>savePhoneSync()},
-    {type:'action',label:'Phone sync folder (keep roost-sync.json.gz up to date)',ic:'&#8645;',run:()=>choosePhoneSyncDir()},
+    {type:'action',label:'Phone sync: save a one-time copy',ic:'&#8645;',run:()=>savePhoneSync()},
+    {type:'action',label:'Phone sync: set auto-save location',ic:'&#8645;',run:()=>choosePhoneSyncDir()},
     // Developer messaging mode — the only entry point (no header button). Search "dev".
     {type:'action',label:(_devUnlocked?'Developer mode — turn OFF':'Developer mode — enter password'),ic:'&#128274;',run:devLockClick}];
   const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({

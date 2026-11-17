@@ -15,11 +15,11 @@ Roost's own dashboard on your phone, with no Claude account or Google sign-in ne
 Roost on the computer (the Windows app or Start-Roost.bat) writes `roost-sync.json.gz` after every scan
 into `mobile_sync_dir`, a cloud-synced folder. The file holds the statement numbers and settings, never the
 PDFs.
-1. On the computer: in the Windows app's tray menu choose **Set up phone sync…** and pick a Google Drive,
+1. On the computer: in the Windows app's tray menu choose **Set phone sync auto-save location…** and pick a Google Drive,
    OneDrive or Dropbox folder. (Or set `"mobile_sync_dir"` in `config.json`.)
 2. On the phone: open Roost, tap the sync button (⇅) → **Sync from laptop**, and pick `roost-sync.json.gz`
    in that folder. You pick it once; after that Roost syncs every time you open it.
-   On the computer, **⇅ Phone file** in Roost's top bar can also set that folder, or save a one-time
+   On the computer, **⇅ Phone sync** in Roost's top bar can also set that folder, or save a one-time
    copy of `roost-sync.json.gz` to send to the phone yourself (email, USB, Drive in a browser).
 PDFs uploaded on the phone are parsed on the phone and only their numbers are kept. They don't flow back
 to the computer.

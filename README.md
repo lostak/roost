@@ -194,18 +194,18 @@ Two ways to add a weekly statement:
 The Android app runs Roost's own dashboard and math on the phone. It gets your statements from your
 computer through a file in a cloud-synced folder, with no Claude account and no Google sign-in setup.
 
-1. **On the computer:** in the Windows app's tray menu choose **Set up phone sync…** and pick a folder
+1. **On the computer:** in the Windows app's tray menu choose **Set phone sync auto-save location…** and pick a folder
    in Google Drive for desktop, OneDrive or Dropbox (or set `mobile_sync_dir` in `config.json`). After
    every scan Roost writes `roost-sync.json.gz` there: the statement numbers and the settings the math
    uses, never PDFs, file paths or API keys.
 2. **On the phone:** install the same cloud app, open Roost, tap **⇅ → Sync from laptop**, and pick
    `roost-sync.json.gz` in that folder. You pick it once; after that Roost syncs every time it opens.
 
-**Phone file button.** **⇅ Phone file** in Roost's top bar offers both ways:
-- **Keep it up to date in a folder…** sets the same sync folder as the tray menu. Roost rewrites
+**Phone sync button.** **⇅ Phone sync** in Roost's top bar offers both ways:
+- **Set auto-save location…** sets the same sync folder as the tray menu. Roost rewrites
   `roost-sync.json.gz` there after every scan. A cloud folder keeps the phone current; a local
   folder keeps the file current, and you send it to the phone yourself.
-- **Save a copy now…** saves a one-time `roost-sync.json.gz` anywhere. Send it to the phone (email,
+- **Save a one-time copy…** saves a one-time `roost-sync.json.gz` anywhere. Send it to the phone (email,
   USB, Drive in a browser) and pick it from **Sync from laptop**. Save a new one after new statements.
 
 Statements live in the app's private storage on the phone. PDFs uploaded on the phone are parsed there
@@ -232,7 +232,7 @@ falling back to the built-in defaults.
 | `statements_dir` | `"../Statements"` | Folder holding the year subfolders (`2024/`, `2025/`, …), relative to the `roost/` app folder. Falls back to the parent folder if it has no year folders. |
 | `ma_reclass.mult` | `3.5` | Medicare Advantage new-business detection. A residual-section line is treated as new business when its payable is at least this multiple of the policy's typical recurring payment. |
 | `ma_reclass.floor_min` | `80` | Floor (in dollars) below which residual lines are never reclassified, guarding small recurring amounts. |
-| `mobile_sync_dir` | unset | Optional. A cloud-synced folder (e.g. `G:\My Drive\Roost Mobile`) where each scan writes `roost-sync.json.gz` for the Android app and Roost Mobile. Holds only extracted statement numbers and calculation settings — no PDFs, paths or API key. Unset = nothing is written. The Windows app sets it from **Set up phone sync…** in the tray. |
+| `mobile_sync_dir` | unset | Optional. A cloud-synced folder (e.g. `G:\My Drive\Roost Mobile`) where each scan writes `roost-sync.json.gz` for the Android app and Roost Mobile. Holds only extracted statement numbers and calculation settings — no PDFs, paths or API key. Unset = nothing is written. The Windows app sets it from **Set phone sync auto-save location…** in the tray. |
 | `profile.convention_level` | unset | Your ASB contract level (1–10), which sets the convention targets. Set it on the Convention page. |
 | `profile.self_names` | `[]` | Names/LLCs you're paid under, so they count as you rather than a split partner. Set on the Convention page. |
 | `profile.convention_pay_lag_days` | `0` | Shifts the convention window by this many days. Leave at 0 to match ASB's dashboard (credit on first payment). |

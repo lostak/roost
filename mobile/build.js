@@ -98,8 +98,8 @@ rep("{type:'action',label:'Upload statements',ic:'&#8613;',run:openUpload}",
 rep("run:()=>location.href='/api/export'", "run:()=>RM.exportXlsx()", 'palette export');
 // The phone file is made on the laptop; the phone is what reads it.
 rep('<div id="phoneSyncWrap" style="position:relative;display:inline-flex">', '<div id="phoneSyncWrap" style="display:none">', 'appbar phone sync');
-rep("    {type:'action',label:'Save phone sync file (roost-sync.json.gz)',ic:'&#8645;',run:()=>savePhoneSync()},\n", '', 'palette phone file');
-rep("    {type:'action',label:'Phone sync folder (keep roost-sync.json.gz up to date)',ic:'&#8645;',run:()=>choosePhoneSyncDir()},\n", '', 'palette phone folder');
+rep("    {type:'action',label:'Phone sync: save a one-time copy',ic:'&#8645;',run:()=>savePhoneSync()},\n", '', 'palette phone file');
+rep("    {type:'action',label:'Phone sync: set auto-save location',ic:'&#8645;',run:()=>choosePhoneSyncDir()},\n", '', 'palette phone folder');
 
 // Wording that only fits the laptop.
 rep('each PDF is read and filed into the right year automatically',

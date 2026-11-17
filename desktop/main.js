@@ -168,12 +168,12 @@ async function changeFolder() {
 function readConfig() { try { return JSON.parse(fs.readFileSync(path.join(dataDir, "config.json"), "utf8")); } catch { return {}; } }
 function phoneSyncLabel() {
   const d = dataDir && readConfig().mobile_sync_dir;
-  return d ? `Phone sync folder: ${path.resolve(dataDir, d)}…` : "Set up phone sync…";
+  return d ? `Phone sync auto-saves to: ${path.resolve(dataDir, d)}…` : "Set phone sync auto-save location…";
 }
 async function choosePhoneSync() {
   const cur = readConfig().mobile_sync_dir;
   const pick = await dialog.showOpenDialog(win, {
-    title: "Choose a Google Drive, OneDrive or Dropbox folder for your phone",
+    title: "Choose where Roost auto-saves your phone sync file (Google Drive, OneDrive or Dropbox)",
     message: "Roost saves your statement numbers and settings here (never the PDFs) for Roost on Android.",
     properties: ["openDirectory", "createDirectory"], defaultPath: cur ? path.resolve(dataDir, cur) : os.homedir(),
   });
@@ -188,7 +188,7 @@ async function choosePhoneSync() {
     detail: `Roost will keep roost-sync.json.gz up to date in:\n${pick.filePaths[0]}\n\nOn your phone, open Roost, tap Sync and pick that file once.` });
 }
 
-// The page's "Keep it up to date in a folder…" asks for a folder here, then sets it through the server.
+// The page's "Set auto-save location…" asks for a folder here, then sets it through the server.
 ipcMain.handle("roost:pick-folder", async (e, o) => {
   if (!win || e.sender !== win.webContents || !(port && e.senderFrame && e.senderFrame.url.startsWith(origin()))) return null;
   const pick = await dialog.showOpenDialog(win, {
