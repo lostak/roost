@@ -162,6 +162,32 @@ async function changeFolder() {
   await restartServer();
 }
 
+// ---------- phone sync (Roost for Android) ----------
+// Roost writes roost-sync.json.gz into config.json's mobile_sync_dir after every scan. Point it at a
+// cloud-synced folder (Google Drive, OneDrive, Dropbox) and the Android app reads that file.
+function readConfig() { try { return JSON.parse(fs.readFileSync(path.join(dataDir, "config.json"), "utf8")); } catch { return {}; } }
+function phoneSyncLabel() {
+  const d = dataDir && readConfig().mobile_sync_dir;
+  return d ? `Phone sync folder: ${path.resolve(dataDir, d)}…` : "Set up phone sync…";
+}
+async function choosePhoneSync() {
+  const cur = readConfig().mobile_sync_dir;
+  const pick = await dialog.showOpenDialog(win, {
+    title: "Choose a Google Drive, OneDrive or Dropbox folder for your phone",
+    message: "Roost saves your statement numbers and settings here (never the PDFs) for Roost on Android.",
+    properties: ["openDirectory", "createDirectory"], defaultPath: cur ? path.resolve(dataDir, cur) : os.homedir(),
+  });
+  if (pick.canceled || !pick.filePaths[0]) return;
+  const file = path.join(dataDir, "config.json");
+  let raw = {}; try { raw = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
+  raw.mobile_sync_dir = pick.filePaths[0];
+  fs.writeFileSync(file, JSON.stringify(raw, null, 2));
+  refreshTrayMenu();
+  if (win && port) win.webContents.reload();   // a scan writes the file right away
+  dialog.showMessageBox(win, { type: "info", title: "Phone sync", message: "Phone sync is on.",
+    detail: `Roost will keep roost-sync.json.gz up to date in:\n${pick.filePaths[0]}\n\nOn your phone, open Roost, tap Sync and pick that file once.` });
+}
+
 // ---------- tray ----------
 function buildTray() {
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")));
@@ -180,6 +206,7 @@ function refreshTrayMenu() {
     { label: "Open Statements folder", enabled: !!statements, click: () => shell.openPath(fs.existsSync(statements) ? statements : path.join(dataDir, "..")) },
     { label: dataDir ? `Roost folder: ${dataDir}` : "Roost folder: not set", enabled: false },
     { label: "Change Roost folder…", click: changeFolder },
+    { label: phoneSyncLabel(), enabled: !!dataDir, click: choosePhoneSync },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked, args: ["--hidden"] }) },
     { type: "separator" },
     ...(updateReady ? [{ label: `Restart to update (v${updateReady})`, click: () => { quitting = true; require("electron-updater").autoUpdater.quitAndInstall(true, true); } }] : []),

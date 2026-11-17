@@ -20,8 +20,8 @@ Nothing moves. The app reads and writes the same files the .bat version does: `c
 The app's server only listens on `127.0.0.1`, so nothing is reachable from other computers on the network.
 
 ## Tray menu
-Open Roost, reload statements, open the Statements folder, see or change the Roost folder, Start with
-Windows, restart to update, the server log, and quit. Closing the window quits Roost.
+Open Roost, reload statements, open the Statements folder, see or change the Roost folder, set up phone sync
+(for Roost on Android: see `android/README.md`), Start with Windows, restart to update, the server log, and quit. Closing the window quits Roost.
 
 ## Updates
 Installed copies check the `desktop` release every 30 minutes, download only what changed, and install on

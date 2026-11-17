@@ -1,0 +1,44 @@
+name: android
+# Builds Roost for Android and publishes Roost.apk + version.json to the "android" release.
+# Installed apps check version.json on launch and offer the new APK.
+on:
+  push:
+    branches: [main]
+    paths: ['*.js', 'index.html', 'mobile/**', 'android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+concurrency: { group: android, cancel-in-progress: true }
+permissions: { contents: write }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: npm test   # parser / aggregate / UI checks must pass before anything ships
+      - name: Build the page (Roost Mobile + Android shim)
+        run: |
+          mkdir -p mobile/vendor && cd mobile/vendor
+          for p in pako@2.1.0 buffer@6.0.3 base64-js@1.5.1 ieee754@1.2.1 chart.js@4.4.1; do
+            npm pack -q "$p" >/dev/null && d="${p/@/-}" && mkdir -p "$d" && tar xzf "$d.tgz" -C "$d"
+          done
+          cd ../.. && node android/scripts/build-web.js
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.10.2' }
+      - working-directory: android
+        env: { ROOST_VERSION_CODE: '${{ github.run_number }}', ROOST_VERSION_NAME: '1.0.${{ github.run_number }}' }
+        run: gradle --no-daemon :app:assembleDebug
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Roost.apk
+          url="https://github.com/${{ github.repository }}/releases/download/android/Roost.apk"
+          printf '{"versionCode":%s,"versionName":"1.0.%s","apk":"%s"}\n' "${{ github.run_number }}" "${{ github.run_number }}" "$url" > version.json
+          notes="Version 1.0.${{ github.run_number }}, built $(TZ=America/Denver date '+%a %b %-d, %-I:%M %p') from ${GITHUB_SHA::7}. On your phone: tap Roost.apk, then Install (allow installs from your browser if asked). After that, Roost offers each new version when you open it."
+          if gh release view android >/dev/null 2>&1; then
+            gh release upload android Roost.apk version.json --clobber && gh release edit android --notes "$notes"
+          else
+            gh release create android Roost.apk version.json --target "$GITHUB_SHA" --title "Roost for Android" --notes "$notes" --latest=false
+          fi

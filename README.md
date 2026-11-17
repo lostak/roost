@@ -120,6 +120,11 @@ your machine.
 desktop shortcut, and updates itself. On first launch it finds your Roost folder or asks where it is.
 See [`desktop/README.md`](desktop/README.md).
 
+**Android app:** download **`Roost.apk`** from the
+[Roost for Android release](https://github.com/lostak/roost/releases/tag/android). It reads your
+statements from the computer through a cloud folder (Google Drive, OneDrive or Dropbox), no Claude needed.
+See [`android/README.md`](android/README.md).
+
 **Requirements:** [Node.js](https://nodejs.org/) LTS (any recent version). That's
 it — Roost uses only Node's built-in modules.
 
