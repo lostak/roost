@@ -1,7 +1,7 @@
 // Roost for Windows: runs the same Roost server (server.js) in the background and shows the dashboard in its
 // own window. No Node install, no console window, no browser tab. Data stays in your Roost folder on this PC;
 // the server only listens on 127.0.0.1.
-const { app, BrowserWindow, Tray, Menu, dialog, shell, utilityProcess, nativeImage, Notification } = require("electron");
+const { app, BrowserWindow, Tray, Menu, dialog, shell, utilityProcess, nativeImage, Notification, ipcMain } = require("electron");
 const fs = require("node:fs");
 const os = require("node:os");
 const net = require("node:net");
@@ -116,7 +116,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 380, minHeight: 560, show: false, title: "Roost", autoHideMenuBar: true, icon: ICON,
     backgroundColor: "#ffffff",
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, "preload.js") },
   });
   win.once("ready-to-show", () => { if (!process.argv.includes("--hidden")) win.show(); });
   if (process.platform === "win32") {
@@ -187,6 +187,18 @@ async function choosePhoneSync() {
   dialog.showMessageBox(win, { type: "info", title: "Phone sync", message: "Phone sync is on.",
     detail: `Roost will keep roost-sync.json.gz up to date in:\n${pick.filePaths[0]}\n\nOn your phone, open Roost, tap Sync and pick that file once.` });
 }
+
+// The page's "Keep it up to date in a folder…" asks for a folder here, then sets it through the server.
+ipcMain.handle("roost:pick-folder", async (e, o) => {
+  if (!win || e.sender !== win.webContents || !(port && e.senderFrame && e.senderFrame.url.startsWith(origin()))) return null;
+  const pick = await dialog.showOpenDialog(win, {
+    title: (o && o.title) || "Choose a folder",
+    properties: ["openDirectory", "createDirectory"],
+    defaultPath: (o && o.defaultPath && fs.existsSync(o.defaultPath)) ? o.defaultPath : os.homedir(),
+  });
+  setTimeout(refreshTrayMenu, 1500);   // the tray shows the folder once the page saves it
+  return pick.canceled ? null : (pick.filePaths[0] || null);
+});
 
 // ---------- tray ----------
 function buildTray() {

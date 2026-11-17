@@ -123,7 +123,7 @@ const MOBILE_SYNC_FILE = 'roost-sync.json.gz';
 const MOBILE_CFG_KEYS = ['carrier_map', 'ma_reclass', 'downline_include', 'downline_exclude', 'downline_parents', 'goals', 'expenses', 'profile', 'dismissed_gaps'];
 const MOBILE_REC_KEYS = ['file', 'holder', 'date', 'year', 'pending', 'paid', 'no_pay_reason', 'pay_period_net', 'advances_total', 'residual_total',
   'chargebacks_total', 'pending_total', 'ytd_advances', 'ytd_commission', 'ytd_chargebacks', 'ytd_total', 'items', 'no_text'];
-let lastMobileSig = null;
+let lastMobileSig = null, lastMobileDir = null;
 function mobileRecId(r) {
   return [r.date || 'nodate', r.holder || '', r.pending ? 'P' : 'S', Math.round((r.pay_period_net || 0) * 100)].join('_');
 }
@@ -157,6 +157,8 @@ function writeMobileSync(records) {
     const { recs, config } = buildMobileSync(records);
     const body = JSON.stringify({ records: recs, config });
     const target = path.join(dir, MOBILE_SYNC_FILE);
+    // A new folder, or the file was deleted: write it again even if nothing changed.
+    if (dir !== lastMobileDir || !fs.existsSync(target)) { lastMobileSig = null; lastMobileDir = dir; }
     if (lastMobileSig === null) {             // first run: compare with what's already there
       try {
         const prev = JSON.parse(zlib.gunzipSync(fs.readFileSync(target)).toString('utf8'));
@@ -914,6 +916,37 @@ const server = http.createServer((req, res) => {
     }
     // "Save phone sync file": the same roost-sync.json.gz a scan writes into mobile_sync_dir, as a
     // download, for people without a cloud-synced folder (save it anywhere the phone can reach).
+    // Phone sync folder (config.json "mobile_sync_dir"): GET shows it, POST {dir} sets it ("" turns it
+    // off) and writes roost-sync.json.gz there right away. Only this computer may change it.
+    if (url === '/api/mobile-sync-dir') {
+      const info = () => {
+        const d = loadConfig().mobile_sync_dir;
+        if (!d) return { dir: '' };
+        const dir = path.resolve(HERE, d), file = path.join(dir, MOBILE_SYNC_FILE);
+        let saved = null; try { saved = new Date(fs.statSync(file).mtimeMs).toISOString(); } catch {}
+        return { dir, file, folder_found: fs.existsSync(dir), saved };
+      };
+      if (req.method !== 'POST') return sendJson(res, 200, info());
+      const ra = req.socket.remoteAddress || '';
+      if (!/^(127\.|::1$|::ffff:127\.)/.test(ra)) return sendJson(res, 403, { status: 'error', message: 'Set the phone sync folder on the computer running Roost.' });
+      const chunks = []; let size = 0;
+      req.on('data', c => { size += c.length; if (size > 1e4) req.destroy(); else chunks.push(c); });
+      req.on('error', () => {});
+      req.on('end', () => {
+        try {
+          const o = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+          const dir = String(o.dir || '').trim().replace(/^"(.*)"$/, '$1');
+          if (dir && !path.isAbsolute(dir)) return sendJson(res, 400, { status: 'error', message: 'Use the full folder path, like C:\\Users\\you\\Google Drive\\Roost.' });
+          if (dir) { let st = null; try { st = fs.statSync(dir); } catch {} if (!st || !st.isDirectory()) return sendJson(res, 400, { status: 'error', message: 'That folder doesn\u2019t exist: ' + dir }); }
+          const raw = loadConfig();
+          if (dir) raw.mobile_sync_dir = dir; else delete raw.mobile_sync_dir;
+          fs.writeFileSync(CONFIG_FILE, JSON.stringify(raw, null, 2));
+          if (dir) loadStatements();          // scans, then writes roost-sync.json.gz into the folder
+          return sendJson(res, 200, { status: 'ok', ...info() });
+        } catch (e) { return sendJson(res, 400, { status: 'error', message: String((e && e.message) || e) }); }
+      });
+      return;
+    }
     if (url === '/api/mobile-sync') {
       const { recs, config } = buildMobileSync(loadStatements());
       if (!recs.length) return sendJson(res, 404, { status: 'error', message: 'No statements yet. Add your statement PDFs first.' });

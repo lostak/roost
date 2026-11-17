@@ -346,6 +346,15 @@ body.dark[data-accent="amber"]{--accent:#e0912f;--accent-2:#e86a9a;--accent-3:#d
 .palettepop{position:absolute;top:calc(100% + 8px);right:0;z-index:60;background:var(--glass);backdrop-filter:blur(18px);
   border:1px solid var(--glass-brd);border-radius:16px;box-shadow:var(--shadow-2);padding:14px;display:none;min-width:232px}
 .palettepop.open{display:block}
+.phonepop{width:300px}
+.phonepop .ppopt{display:block;width:100%;text-align:left;background:transparent;border:1px solid var(--outline-var);border-radius:12px;
+  padding:10px 12px;margin:0 0 8px;cursor:pointer;color:var(--on-surface);font:inherit}
+.phonepop .ppopt:hover{background:color-mix(in srgb,var(--primary) 10%,transparent)}
+.phonepop .ppopt b{display:block;font-size:13px;margin-bottom:2px}
+.phonepop .ppopt span{font-size:12px;color:var(--on-surface-var);line-height:1.35}
+.phonepop .ppcur{font-size:12px;color:var(--on-surface-var);margin:2px 2px 10px;line-height:1.4;word-break:break-all}
+.phonepop .ppcur.on{color:var(--on-surface)}
+.phonepop .ppoff{background:none;border:0;padding:0;color:var(--primary);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline}
 .palettepop .pptitle{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-var);margin:0 2px 10px}
 .palettepop .pprow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 12px}
 .palitem{display:flex;flex-direction:column;gap:6px;align-items:stretch;cursor:pointer}
@@ -553,7 +562,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
-  <button class="btn tonal" id="phoneSyncBtn" onclick="savePhoneSync()" title="Save roost-sync.json.gz for the Roost phone app (no PDFs, just the numbers and settings)"><span>&#8645;</span> Phone file</button>
+  <div id="phoneSyncWrap" style="position:relative;display:inline-flex">
+    <button class="btn tonal" id="phoneSyncBtn" onclick="togglePhoneSync(event)" title="Get your statements onto the Roost phone app" aria-label="Phone sync"><span>&#8645;</span> Phone file</button>
+    <div class="palettepop phonepop" id="phoneSyncPop"></div>
+  </div>
   <button class="btn ghost" onclick="startTour()" title="Take the tour" aria-label="Take the tour">&#63;</button>
   <div style="position:relative;display:inline-flex">
     <button class="btn ghost" onclick="togglePalette(event)" title="Color theme" aria-label="Color theme">&#9672;</button>
@@ -3476,27 +3488,76 @@ function _setDevLock(on){
   const lk=document.getElementById('devLock');
   if(lk){ lk.innerHTML=on?'&#128275;':'&#128274;'; lk.title=on?'Dev mode ON — messages are padded for Slack (click to turn off)':'Developer'; }
 }
-// Save roost-sync.json.gz for the Roost phone app — for people without a cloud-synced
-// mobile_sync_dir. Opens a real Save As dialog where the browser has one (Chrome/Edge and the
+// Phone sync. Two ways to get roost-sync.json.gz (numbers + settings, never PDFs) to the phone:
+//  - Keep it up to date in a folder: sets config.json mobile_sync_dir; every scan rewrites the file
+//    there. Point it at Google Drive / OneDrive / Dropbox and the phone always has the latest.
+//  - Save a copy now: a one-time file to send to the phone yourself.
+let _phoneDir=null;
+function _esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function togglePhoneSync(e){
+  if(e) e.stopPropagation();
+  const p=document.getElementById('phoneSyncPop'); if(!p) return;
+  if(p.classList.contains('open')){ p.classList.remove('open'); return; }
+  try{ _phoneDir=await (await fetch('/api/mobile-sync-dir',{cache:'no-store'})).json(); }catch(err){ _phoneDir={dir:''}; }
+  renderPhoneSync(); p.classList.add('open');
+}
+function renderPhoneSync(msg){
+  const p=document.getElementById('phoneSyncPop'); if(!p) return;
+  const d=_phoneDir||{dir:''};
+  let cur;
+  if(!d.dir) cur='<div class="ppcur">Not keeping a sync file up to date yet.</div>';
+  else if(d.folder_found===false) cur='<div class="ppcur">Sync folder not found: '+_esc(d.dir)+'</div>';
+  else cur='<div class="ppcur on">Kept up to date in <b>'+_esc(d.dir)+'</b>'+(d.saved?'<br>Last written '+_esc(new Date(d.saved).toLocaleString())+'.':'')
+    +' <button class="ppoff" onclick="setPhoneSyncDir(\'\')">Turn off</button></div>';
+  p.innerHTML='<div class="pptitle">Phone sync</div>'+cur+(msg?'<div class="ppcur on">'+msg+'</div>':'')
+    +'<button class="ppopt" onclick="choosePhoneSyncDir()"><b>'+(d.dir?'Change the sync folder&hellip;':'Keep it up to date in a folder&hellip;')+'</b>'
+    +'<span>Roost rewrites roost-sync.json.gz there after every scan. Pick a Google Drive, OneDrive or Dropbox folder and your phone always has the latest.</span></button>'
+    +'<button class="ppopt" onclick="savePhoneSync()"><b>Save a copy now&hellip;</b>'
+    +'<span>A one-time file. Send it to your phone yourself (email, USB). Save a new one after new statements.</span></button>';
+}
+document.addEventListener('click',e=>{ const p=document.getElementById('phoneSyncPop'); if(p&&p.classList.contains('open')&&!e.target.closest('#phoneSyncWrap')) p.classList.remove('open'); });
+async function choosePhoneSyncDir(){
+  let dir;
+  const cur=(_phoneDir&&_phoneDir.dir)||'';
+  if(window.roostDesktop&&window.roostDesktop.pickFolder){
+    dir=await window.roostDesktop.pickFolder('Choose a folder for your phone sync file', cur);
+    if(!dir) return;
+  }else{
+    dir=prompt('Paste the full path of the folder to keep roost-sync.json.gz in\n(for example your Google Drive, OneDrive or Dropbox folder):', cur);
+    if(dir===null) return;
+    dir=dir.trim(); if(!dir) return;
+  }
+  return setPhoneSyncDir(dir);
+}
+async function setPhoneSyncDir(dir){
+  try{
+    const r=await fetch('/api/mobile-sync-dir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dir})});
+    const o=await r.json();
+    if(!r.ok||o.status!=='ok'){ renderPhoneSync('<span style="color:var(--error,#c62828)">'+_esc(o.message||'Couldn’t set the folder.')+'</span>'); return; }
+    _phoneDir=o;
+    renderPhoneSync(dir?'&#10003; Saved. On your phone: Sync from laptop &rarr; pick roost-sync.json.gz in that folder (once).':'Phone sync folder turned off. The file already there is left alone.');
+  }catch(e){ renderPhoneSync(_esc('Couldn’t set the folder: '+((e&&e.message)||e))); }
+}
+// "Save a copy now": opens a real Save As dialog where the browser has one (Chrome/Edge and the
 // Windows app); otherwise it's a normal download.
 async function savePhoneSync(){
-  const btn=document.getElementById('phoneSyncBtn'), lbl=btn&&btn.innerHTML;
-  const flash=t=>{ if(!btn) return; btn.innerHTML=t; setTimeout(()=>{btn.innerHTML=lbl;},2500); };
+  const p=document.getElementById('phoneSyncPop');
+  const done=t=>{ if(p&&p.classList.contains('open')) renderPhoneSync(t); };
   try{
     const r=await fetch('/api/mobile-sync',{cache:'no-store'});
-    if(!r.ok){ let m='Couldn\u2019t make the phone file.'; try{ m=(await r.json()).message||m; }catch(e){} alert(m); return; }
+    if(!r.ok){ let m='Couldn’t make the phone file.'; try{ m=(await r.json()).message||m; }catch(e){} if(p&&p.classList.contains('open')) done(_esc(m)); else alert(m); return; }
     const blob=await r.blob();
     if(window.showSaveFilePicker){
       let h;
       try{ h=await window.showSaveFilePicker({suggestedName:'roost-sync.json.gz',
         types:[{description:'Roost phone sync file',accept:{'application/gzip':['.gz']}}]}); }
       catch(e){ if(e&&e.name==='AbortError') return; h=null; }
-      if(h){ const w=await h.createWritable(); await w.write(blob); await w.close(); flash('<span>&#10003;</span> Saved'); return; }
+      if(h){ const w=await h.createWritable(); await w.write(blob); await w.close(); done('&#10003; Saved roost-sync.json.gz. Send it to your phone, then Sync from laptop &rarr; pick it.'); return; }
     }
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='roost-sync.json.gz';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-    flash('<span>&#10003;</span> Saved');
-  }catch(e){ alert('Couldn\u2019t save the phone file: '+((e&&e.message)||e)); }
+    done('&#10003; Downloaded roost-sync.json.gz. Send it to your phone, then Sync from laptop &rarr; pick it.');
+  }catch(e){ alert('Couldn’t save the phone file: '+((e&&e.message)||e)); }
 }
 async function devLockClick(){
   if(!_devUnlocked){
@@ -4634,6 +4695,7 @@ function cmdkCommands(){
     {type:'action',label:'Toggle dark / light theme',ic:'&#9681;',run:toggleTheme},
     {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'},
     {type:'action',label:'Save phone sync file (roost-sync.json.gz)',ic:'&#8645;',run:()=>savePhoneSync()},
+    {type:'action',label:'Phone sync folder (keep roost-sync.json.gz up to date)',ic:'&#8645;',run:()=>choosePhoneSyncDir()},
     // Developer messaging mode — the only entry point (no header button). Search "dev".
     {type:'action',label:(_devUnlocked?'Developer mode — turn OFF':'Developer mode — enter password'),ic:'&#128274;',run:devLockClick}];
   const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({

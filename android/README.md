@@ -19,8 +19,8 @@ PDFs.
    OneDrive or Dropbox folder. (Or set `"mobile_sync_dir"` in `config.json`.)
 2. On the phone: open Roost, tap the sync button (⇅) → **Sync from laptop**, and pick `roost-sync.json.gz`
    in that folder. You pick it once; after that Roost syncs every time you open it.
-   No cloud folder? On the computer click **⇅ Phone file** in Roost's top bar to save
-   `roost-sync.json.gz` anywhere, get it onto the phone (email, USB, Drive in a browser) and pick it.
+   On the computer, **⇅ Phone file** in Roost's top bar can also set that folder, or save a one-time
+   copy of `roost-sync.json.gz` to send to the phone yourself (email, USB, Drive in a browser).
 PDFs uploaded on the phone are parsed on the phone and only their numbers are kept. They don't flow back
 to the computer.
 

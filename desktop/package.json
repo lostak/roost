@@ -15,6 +15,7 @@
     "productName": "Roost",
     "files": [
       "main.js",
+      "preload.js",
       "core/**",
       "renderer/**",
       "build/**"
