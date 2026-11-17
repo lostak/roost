@@ -114,6 +114,12 @@ your machine.
 
 ## Quick start
 
+**Windows app (no Node needed):** download **`Roost-Setup.exe`** from the
+[Roost for Windows release](https://github.com/lostak/roost/releases/tag/desktop) and run it
+(SmartScreen: **More info → Run anyway**). Roost opens in its own window, gets a Start menu entry and
+desktop shortcut, and updates itself. On first launch it finds your Roost folder or asks where it is.
+See [`desktop/README.md`](desktop/README.md).
+
 **Requirements:** [Node.js](https://nodejs.org/) LTS (any recent version). That's
 it — Roost uses only Node's built-in modules.
 

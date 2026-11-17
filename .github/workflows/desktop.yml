@@ -1,0 +1,38 @@
+name: desktop
+# Builds Roost for Windows and publishes the installer + update feed (latest.yml, blockmap) to the "desktop"
+# release. Installed copies check that release every 30 minutes and update themselves.
+on:
+  push:
+    branches: [main, feature/desktop-app]
+    paths: ['*.js', 'index.html', 'roost-logo.svg', 'desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+concurrency: { group: desktop, cancel-in-progress: true }
+permissions: { contents: write }
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm test   # parser / aggregate / UI checks must pass before anything ships
+      - working-directory: desktop
+        run: npm ci
+      # every build gets a higher version so installed copies see it as an update
+      - working-directory: desktop
+        run: npm version "2.1.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+      - working-directory: desktop
+        run: npm run dist -- --publish never
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+      - working-directory: desktop
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          f="dist/Roost-Setup.exe dist/Roost-Setup.exe.blockmap dist/latest.yml"
+          notes="Version 2.1.${{ github.run_number }} from ${{ github.ref_name }}, built $(TZ=America/Denver date '+%a %b %-d, %-I:%M %p'). First install: download Roost-Setup.exe and run it (SmartScreen: More info → Run anyway). After that, Roost updates itself."
+          if gh release view desktop >/dev/null 2>&1; then
+            gh release upload desktop $f --clobber && gh release edit desktop --notes "$notes"
+          else
+            gh release create desktop $f --target "${{ github.sha }}" --title "Roost for Windows" --notes "$notes" --latest=false
+          fi

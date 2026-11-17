@@ -1547,6 +1547,20 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <h3 style="margin-top:0">Qualification checklist</h3>
           <div id="convChecklist" style="font-size:14px;line-height:1.9"></div>
         </div>
+        <div class="card" id="convSimCard" style="margin-bottom:24px">
+          <div class="controls" style="margin-bottom:6px">
+            <h3 style="margin:0;flex:1">What will it take? <span class="hint" style="font-weight:400">&mdash; plan the rest of the window</span></h3>
+            <div class="seg" id="convSimMode">
+              <button data-m="apps" class="on">By apps</button>
+              <button data-m="premium">By premium</button>
+            </div>
+            <button class="btn tonal" onclick="convSimAutofill()" title="Fill the sliders with your usual product mix until every rule is met"><span>&#10024;</span> Fill to qualify</button>
+            <button class="btn tonal" onclick="convSimReset()"><span>&#8635;</span> Reset</button>
+          </div>
+          <p class="hint" id="convSimHint" style="margin:0 0 14px"></p>
+          <div id="convSimOut" style="margin-bottom:16px"></div>
+          <div class="sliders" id="convSimSliders"></div>
+        </div>
         <div class="card chart-card tablecard">
           <h3>By product family</h3>
           <table id="convFamTable"></table>
@@ -1556,7 +1570,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
           <div class="controls" style="gap:14px;flex-wrap:wrap;margin-top:6px">
             <span class="lbl-inline">My contract level</span>
             <select id="convLevel" class="sel"></select>
-            <span class="lbl-inline">Issue&rarr;payment lag (days)</span>
+            <span class="lbl-inline">Payment-date offset (days)</span>
             <input id="convLag" type="number" class="sel" style="width:80px" min="0" max="180" onchange="saveConventionLag()">
             <span class="hint" id="convLevelMsg" style="align-self:center"></span>
           </div>
@@ -3829,8 +3843,8 @@ function renderConvention(){
   sel.innerHTML='<option value="">Select your level…</option>'+(V.levels||[]).map(l=>`<option value="${l.level}"${l.level===lv?' selected':''}>Level ${l.level}</option>`).join('');
   sel.onchange=saveConventionLevel;
   const lagEl=$('#convLag');
-  if(lagEl&&document.activeElement!==lagEl) lagEl.value=(local.convention_pay_lag_days!=null?local.convention_pay_lag_days:(V.pay_lag_days!=null?V.pay_lag_days:30));
-  if(V.pay_window)$('#convLagNote').innerHTML=`Counting policies first paid <b>${V.pay_window.start}</b> to <b>${V.pay_window.end}</b> (issue window ${V.window.start}&ndash;${V.window.end} shifted by the lag, since commissions pay after issue). Set the lag to your carriers' typical issue-to-payment delay.`;
+  if(lagEl&&document.activeElement!==lagEl) lagEl.value=(local.convention_pay_lag_days!=null?local.convention_pay_lag_days:(V.pay_lag_days!=null?V.pay_lag_days:0));
+  if(V.pay_window)$('#convLagNote').innerHTML=`Counting policies first paid <b>${V.pay_window.start}</b> to <b>${V.pay_window.end}</b> &mdash; ASB credits a policy once it's issued <b>and paid</b>, so the window runs on each policy's first payment. Leave this at 0 to match the ASB dashboard.`;
   // self-identity checkboxes
   const norm=x=>(x||'').toUpperCase().replace(/[^A-Z]/g,'');
   const selfNames=(local.self_names!=null?local.self_names:(V.self_names||[]));
@@ -3899,6 +3913,7 @@ function renderConvention(){
   rows.push(`${dot} E&amp;O coverage in place and under contract at convention`);
   rows.push(`${dot} Excludes replacements of ASB-endorsed policies and policies on family members (not auto-detected here)`);
   $('#convChecklist').innerHTML=rows.map(r=>`<div>${r}</div>`).join('');
+  renderConvSim();
   // trips & incentives earned (imputed 1099 value — carved out of income + chargebacks, shown here)
   (function(){
     const tr=DATA.trips||{items:[],total:0}; const card=$('#convTripsCard'); if(!card)return;
@@ -3955,6 +3970,140 @@ function renderConvention(){
       <td><span class="chip">${esc(p.carrier)}</span></td><td>${esc((p.product||'').slice(0,24))}</td><td>${esc(p.family)}</td>
       <td>${fmt(p.premium)}</td><td>${fmt(p.annualized)}</td><td><b>${p.excluded?'&mdash;':num0(p.points)}</b></td>
       <td style="text-align:center;white-space:nowrap">${p.auto_replacement?'<span class="hint" title="Same client already had an earlier policy in this family" style="color:var(--gold)">repl&nbsp;</span>':''}<input type="checkbox" class="convExcl" data-policy="${encodeURIComponent(p.policy||'')}" data-auto="${p.auto_replacement?1:0}"${p.excluded?' checked':''} title="Exclude (1035 replacement, family member, or ineligible)"></td></tr>`).join('')+'</tbody>';
+}
+
+// ---- convention "what will it take" planner ----
+// Sliders per eligible line, in one of two modes: additional APPS (points = apps x your avg
+// points/app) or additional ANNUALIZED PREMIUM (points = premium x the line's rate; app count
+// estimated from your avg case size). MA is flat per policy, so it's always counted in apps.
+// State is in-memory only — it's a what-if, nothing is saved.
+const convSim={mode:'apps',apps:{},prem:{},avgPts:{},avgPrem:{}};
+const CONV_SIM_MAXAPPS={'Medicare Advantage':100,'Med Supp':100,'Annuity':30};
+function convSimFams(){
+  const V=DATA.convention||{};
+  return (V.avg_by_family||[]).map(f=>{
+    const avgPts=convSim.avgPts[f.family]!=null?convSim.avgPts[f.family]:f.avg_points;
+    const avgPrem=convSim.avgPrem[f.family]!=null?convSim.avgPrem[f.family]:f.avg_premium;
+    // effective points per $ of annualized premium: your history's blend (captures flat AARP
+    // Med Supp credit etc.) when you have it, else the rule rate
+    const effRate=f.ma?null:((f.sample>0&&f.avg_premium>0)?f.avg_points/f.avg_premium:f.rate);
+    const premMode=convSim.mode==='premium'&&!f.ma;
+    let apps,pts,prem;
+    if(premMode){prem=convSim.prem[f.family]||0; pts=prem*effRate; apps=prem>0?Math.max(1,Math.round(prem/(avgPrem||1))):0;}
+    else{apps=convSim.apps[f.family]||0; pts=apps*avgPts; prem=apps*(avgPrem||0);}
+    return {...f,avgPts,avgPrem,effRate,premMode,apps,pts,prem,maxApps:CONV_SIM_MAXAPPS[f.family]||60};
+  });
+}
+function convSimTotals(fams){
+  const V=DATA.convention||{};
+  const pPts=V.personal_points!=null?V.personal_points:V.points;
+  const addPts=fams.reduce((s,f)=>s+f.pts,0), addMA=fams.filter(f=>f.ma).reduce((s,f)=>s+f.pts,0);
+  const addApps=fams.reduce((s,f)=>s+f.apps,0);
+  const projP=pPts+addPts, projMA=(V.points_ma||0)+addMA;
+  const projC=(V.combined_points!=null?V.combined_points:pPts)+addPts;
+  const local=loadLocalProfile();
+  const lv=(local.convention_level!=null)?local.convention_level:V.level;
+  const lt=(V.levels||[]).find(l=>l.level===lv);
+  const usePersonal=lt&&lt.personal;
+  const target=lt?(usePersonal?lt.personal:lt.downline):null;
+  const projT=usePersonal?projP:projC;
+  return {pPts,addPts,addApps,projP,projMA,projC,projT,target,usePersonal,lv,lt,
+    projApps:(V.apps||0)+addApps,nonma:projP?(projP-projMA)/projP:0};
+}
+function renderConvSim(){
+  const V=DATA.convention; const box=$('#convSimSliders'); if(!V||!box)return;
+  if(!V.avg_by_family){$('#convSimOut').innerHTML='<p class="hint">Restart Roost so the server picks up the latest update, then the planner will load your per-product averages.</p>';box.innerHTML='';return;}
+  document.querySelectorAll('#convSimMode button').forEach(b=>{b.classList.toggle('on',b.dataset.m===convSim.mode);b.onclick=()=>convSimSetMode(b.dataset.m);});
+  $('#convSimHint').innerHTML=convSim.mode==='apps'
+    ?'Drag each line to the number of <b>additional</b> apps you expect to write before the window closes. Points per app start at <b>your own average</b> for that line (your share, under the convention rules) &mdash; edit any of them to test a different case size.'
+    :'Drag each line to the <b>additional annualized premium</b> you expect to write (annuities: total premium). Points follow the convention rate for that line &mdash; blended from your history where you have it, so flat-credit AARP/UHC Med Supp is reflected. Apps are estimated from your average case size, which you can edit. Medicare Advantage is flat per policy, so it stays in apps.';
+  const fams=convSimFams(), n0=x=>Math.round(x).toLocaleString();
+  box.innerHTML=fams.map((f,i)=>{
+    const basis=f.default?`<span title="${esc(f.note||'')}">assumed &mdash; no history yet</span>`:`your avg of ${f.sample} app${f.sample===1?'':'s'}`;
+    if(f.premMode){
+      const max=Math.max(1000,Math.ceil((f.avgPrem||1000)*f.maxApps/1000)*1000), step=Math.max(50,Math.round(max/200/50)*50);
+      return `<div class="sl"><label>${esc(f.family)} <b id="convSimV${i}"></b></label>
+        <input type="range" min="0" max="${max}" step="${step}" value="${f.prem}" data-i="${i}" class="convSimR">
+        <div class="sub">${(f.effRate*100).toFixed(0)} pts per $100 &middot; avg case $<input type="number" class="convSimAvg" data-i="${i}" value="${Math.round(f.avgPrem)}" min="1" style="width:78px;font:inherit;padding:1px 4px"> ${f.family==='Annuity'?'premium':'annualized'} (${basis})</div></div>`;
+    }
+    return `<div class="sl"><label><span>${esc(f.family)}${f.ma?' <span class="hint">(MA)</span>':''}</span> <b id="convSimV${i}"></b></label>
+      <input type="range" min="0" max="${f.maxApps}" step="1" value="${f.apps}" data-i="${i}" class="convSimR">
+      <div class="sub"><input type="number" class="convSimAvg" data-i="${i}" value="${Math.round(f.avgPts)}" min="0" style="width:70px;font:inherit;padding:1px 4px"${f.ma?' disabled title="MA is a flat 2,000 per policy"':''}> pts / app (${f.ma?'flat 2,000':basis})</div></div>`;
+  }).join('');
+  box.querySelectorAll('.convSimR').forEach(el=>el.oninput=()=>{
+    const f=fams[+el.dataset.i];
+    if(f.premMode)convSim.prem[f.family]=+el.value; else convSim.apps[f.family]=+el.value;
+    convSimUpdate();
+  });
+  box.querySelectorAll('.convSimAvg').forEach(el=>el.onchange=()=>{
+    const f=fams[+el.dataset.i], v=Math.max(0,Number(el.value)||0);
+    if(f.premMode)convSim.avgPrem[f.family]=Math.max(1,v); else convSim.avgPts[f.family]=v;
+    renderConvSim();
+  });
+  convSimUpdate();
+}
+function convSimUpdate(){
+  const V=DATA.convention; if(!V)return;
+  const fams=convSimFams(), T=convSimTotals(fams), n0=x=>Math.round(x).toLocaleString();
+  fams.forEach((f,i)=>{const el=$('#convSimV'+i); if(!el)return;
+    el.textContent=f.premMode
+      ?(f.prem?`${fmt0(f.prem)} · ~${f.apps} app${f.apps===1?'':'s'} · +${n0(f.pts)} pts`:'$0')
+      :(f.apps?`+${f.apps} app${f.apps===1?'':'s'} · +${n0(f.pts)} pts${f.prem?' · ~'+fmt0(f.prem):''}`:'0');});
+  const GREEN='#2e7d5b', ok='<span style="color:'+GREEN+';font-weight:700">&#10003;</span>', no='<span class="neg" style="font-weight:700">&#10007;</span>';
+  const appsOk=T.projApps>=(V.apps_needed||25), nonmaOk=T.nonma>=0.5||T.projP===0, ptsOk=T.target?T.projT>=T.target:null;
+  const weeks=Math.max(1,(V.days_left||0)/7);
+  const curT=T.usePersonal?T.pPts:(T.projC-T.addPts);
+  let bar='';
+  if(T.target){
+    const c=Math.min(1,curT/T.target), a=Math.max(0,Math.min(1,T.projT/T.target)-c);
+    bar=`<div style="display:flex;justify-content:space-between;flex-wrap:wrap;margin-bottom:2px"><b>${T.usePersonal?'Personal':'Combined'} target &mdash; Level ${T.lv}</b>
+      <span>${n0(T.projT)} / ${n0(T.target)} pts ${ptsOk?ok:''}</span></div>
+      <div style="height:14px;border-radius:8px;background:var(--surface-3);overflow:hidden;display:flex">
+        <div style="width:${c*100}%;background:${COLORS.resid}"></div><div style="width:${a*100}%;background:${hexA(COLORS.resid,.45)};transition:width .2s"></div></div>
+      <div class="hint" style="margin-top:3px">${ptsOk?'This plan clears the points target.':n0(T.target-T.projT)+' points still short.'} Solid = earned so far, light = this plan.</div>`;
+  }else{
+    bar=`<p class="hint" style="margin:0">Pick your contract level in <b>Settings</b> below to plan against a points target. With this plan: <b>${n0(T.projP)}</b> personal points.</p>`;
+  }
+  const premTot=fams.reduce((s,f)=>s+(f.ma?0:f.prem),0);
+  $('#convSimOut').innerHTML=bar+`<div style="display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:12px;font-size:14px">
+    <span>${appsOk?ok:no} Apps <b>${T.projApps}</b> / ${V.apps_needed||25}</span>
+    <span>${nonmaOk?ok:no} Non-MA <b>${Math.round(T.nonma*100)}%</b> <span class="hint">(need 50%)</span></span>
+    <span>Plan: <b>+${T.addApps}</b> apps &middot; <b>+${n0(T.addPts)}</b> pts${premTot?' &middot; ~'+fmt0(premTot)+' non-MA premium':''}</span>
+    ${V.days_left>0&&T.addApps?`<span class="hint">&asymp; ${(T.addApps/weeks).toFixed(1)} apps/week over the ${V.days_left} days left</span>`:''}</div>`;
+}
+function convSimSetMode(m){
+  if(m===convSim.mode)return;
+  // carry the current plan across so switching modes doesn't lose it
+  const fams=convSimFams();
+  fams.forEach(f=>{ if(f.ma)return;
+    if(m==='premium')convSim.prem[f.family]=Math.round(f.apps*(f.avgPrem||0));
+    else convSim.apps[f.family]=f.apps; });
+  convSim.mode=m; renderConvSim();
+}
+function convSimReset(){convSim.apps={};convSim.prem={};convSim.avgPts={};convSim.avgPrem={};renderConvSim();}
+function convSimAutofill(){
+  const V=DATA.convention; if(!V||!V.avg_by_family)return;
+  // add apps one at a time in your usual mix (by how many of each you've written) until the
+  // points target, the 25-app minimum and the 50% non-MA rule are all met
+  convSim.apps={}; convSim.prem={};
+  const prevMode=convSim.mode; convSim.mode='apps';
+  let fams=convSimFams();
+  let w={}; fams.forEach(f=>{w[f.family]=f.sample||0;});
+  if(!Object.values(w).some(x=>x>0)){w['Medicare Advantage']=1;w['Med Supp']=1;}
+  const pick=list=>{let best=null,bv=Infinity;for(const f of list){if(!(w[f.family]>0)||!(f.avgPts>0))continue;
+    const v=((convSim.apps[f.family]||0)+1)/w[f.family]; if(v<bv){bv=v;best=f;}} return best;};
+  for(let i=0;i<500;i++){
+    fams=convSimFams(); const T=convSimTotals(fams);
+    const ptsOk=!T.target||T.projT>=T.target, appsOk=T.projApps>=(V.apps_needed||25), nonmaOk=T.nonma>=0.5;
+    if(ptsOk&&appsOk&&nonmaOk)break;
+    let f=nonmaOk?pick(fams):pick(fams.filter(x=>!x.ma));
+    if(!f&&!nonmaOk)f=fams.find(x=>x.family==='Med Supp');
+    if(!f)break;
+    convSim.apps[f.family]=(convSim.apps[f.family]||0)+1;
+  }
+  convSim.mode=prevMode;
+  if(prevMode==='premium'){convSim.mode='apps';convSimSetMode('premium');return;}
+  renderConvSim();
 }
 
 // ================= AUDIT & RECONCILIATION =================

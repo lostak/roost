@@ -30,3 +30,7 @@ feedback.jsonl
 # Roost Mobile build output and downloaded build deps
 mobile/vendor/
 mobile/dist/
+
+# Windows app build output (desktop/core is copied from the repo root at build time)
+desktop/core/
+desktop/dist/
