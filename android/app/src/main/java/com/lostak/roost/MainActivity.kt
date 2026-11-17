@@ -23,6 +23,8 @@ import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
 import java.io.File
@@ -67,7 +69,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         web = WebView(this)
-        setContentView(web)
+        val frame = android.widget.FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.WHITE); addView(web) }
+        setContentView(frame)
+        // Android 15 draws apps edge to edge (under the status and navigation bars). Pad the page so
+        // nothing sits under them, and lift it above the keyboard when it's open.
+        ViewCompat.setOnApplyWindowInsetsListener(frame) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
         web.settings.apply {
             javaScriptEnabled = true
