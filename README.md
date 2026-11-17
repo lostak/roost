@@ -201,6 +201,11 @@ computer through a file in a cloud-synced folder, with no Claude account and no 
 2. **On the phone:** install the same cloud app, open Roost, tap **⇅ → Sync from laptop**, and pick
    `roost-sync.json.gz` in that folder. You pick it once; after that Roost syncs every time it opens.
 
+**No cloud folder?** Click **⇅ Phone file** in Roost's top bar (or search "phone" with Ctrl+K). It
+saves `roost-sync.json.gz` wherever you choose. Get it onto the phone any way you like (email it to
+yourself, upload it to Drive in a browser, USB), then pick it from **Sync from laptop**. This is a
+one-time snapshot: after new statements, save it again and re-pick the new copy on the phone.
+
 Statements live in the app's private storage on the phone. PDFs uploaded on the phone are parsed there
 and only their numbers are kept; they don't flow back to the computer. The AI summary/ask isn't
 available on the phone (anomaly flags still work). Details in [`android/README.md`](android/README.md).

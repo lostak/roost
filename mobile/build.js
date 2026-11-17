@@ -96,6 +96,9 @@ rep('<button class="btn ghost" id="themeBtn" onclick="toggleTheme()"', '<button 
 rep("{type:'action',label:'Upload statements',ic:'&#8613;',run:openUpload}",
   "{type:'action',label:'Sync from laptop',ic:'&#8645;',run:()=>RM.syncNow()},{type:'action',label:'Sync, export & data settings',ic:'&#9881;',run:()=>RM.openSync()},{type:'action',label:'Upload statements',ic:'&#8613;',run:openUpload}", 'palette sync');
 rep("run:()=>location.href='/api/export'", "run:()=>RM.exportXlsx()", 'palette export');
+// The phone file is made on the laptop; the phone is what reads it.
+rep('  <button class="btn tonal" id="phoneSyncBtn" onclick="savePhoneSync()"', '  <button class="btn tonal" id="phoneSyncBtn" style="display:none" onclick="savePhoneSync()"', 'appbar phone file');
+rep("    {type:'action',label:'Save phone sync file (roost-sync.json.gz)',ic:'&#8645;',run:()=>savePhoneSync()},\n", '', 'palette phone file');
 
 // Wording that only fits the laptop.
 rep('each PDF is read and filed into the right year automatically',

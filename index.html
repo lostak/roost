@@ -553,6 +553,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <button class="btn" onclick="openUpload()"><span>&#8613;</span> Upload</button>
   <button class="btn tonal" onclick="loadData(true)"><span>&#8635;</span> Refresh</button>
   <a class="btn tonal" href="/api/export"><span>&#8681;</span> Export Excel</a>
+  <button class="btn tonal" id="phoneSyncBtn" onclick="savePhoneSync()" title="Save roost-sync.json.gz for the Roost phone app (no PDFs, just the numbers and settings)"><span>&#8645;</span> Phone file</button>
   <button class="btn ghost" onclick="startTour()" title="Take the tour" aria-label="Take the tour">&#63;</button>
   <div style="position:relative;display:inline-flex">
     <button class="btn ghost" onclick="togglePalette(event)" title="Color theme" aria-label="Color theme">&#9672;</button>
@@ -3475,6 +3476,28 @@ function _setDevLock(on){
   const lk=document.getElementById('devLock');
   if(lk){ lk.innerHTML=on?'&#128275;':'&#128274;'; lk.title=on?'Dev mode ON — messages are padded for Slack (click to turn off)':'Developer'; }
 }
+// Save roost-sync.json.gz for the Roost phone app — for people without a cloud-synced
+// mobile_sync_dir. Opens a real Save As dialog where the browser has one (Chrome/Edge and the
+// Windows app); otherwise it's a normal download.
+async function savePhoneSync(){
+  const btn=document.getElementById('phoneSyncBtn'), lbl=btn&&btn.innerHTML;
+  const flash=t=>{ if(!btn) return; btn.innerHTML=t; setTimeout(()=>{btn.innerHTML=lbl;},2500); };
+  try{
+    const r=await fetch('/api/mobile-sync',{cache:'no-store'});
+    if(!r.ok){ let m='Couldn\u2019t make the phone file.'; try{ m=(await r.json()).message||m; }catch(e){} alert(m); return; }
+    const blob=await r.blob();
+    if(window.showSaveFilePicker){
+      let h;
+      try{ h=await window.showSaveFilePicker({suggestedName:'roost-sync.json.gz',
+        types:[{description:'Roost phone sync file',accept:{'application/gzip':['.gz']}}]}); }
+      catch(e){ if(e&&e.name==='AbortError') return; h=null; }
+      if(h){ const w=await h.createWritable(); await w.write(blob); await w.close(); flash('<span>&#10003;</span> Saved'); return; }
+    }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='roost-sync.json.gz';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    flash('<span>&#10003;</span> Saved');
+  }catch(e){ alert('Couldn\u2019t save the phone file: '+((e&&e.message)||e)); }
+}
 async function devLockClick(){
   if(!_devUnlocked){
     const p=prompt('Developer password:'); if(p===null) return;
@@ -4610,6 +4633,7 @@ function cmdkCommands(){
     {type:'action',label:'Refresh data',ic:'&#8635;',run:()=>loadData(true)},
     {type:'action',label:'Toggle dark / light theme',ic:'&#9681;',run:toggleTheme},
     {type:'action',label:'Export to Excel',ic:'&#8681;',run:()=>location.href='/api/export'},
+    {type:'action',label:'Save phone sync file (roost-sync.json.gz)',ic:'&#8645;',run:()=>savePhoneSync()},
     // Developer messaging mode — the only entry point (no header button). Search "dev".
     {type:'action',label:(_devUnlocked?'Developer mode — turn OFF':'Developer mode — enter password'),ic:'&#128274;',run:devLockClick}];
   const clients=((DATA&&DATA.clients&&DATA.clients.list)||[]).slice(0,300).map(c=>({

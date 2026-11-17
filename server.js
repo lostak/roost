@@ -127,25 +127,34 @@ let lastMobileSig = null;
 function mobileRecId(r) {
   return [r.date || 'nodate', r.holder || '', r.pending ? 'P' : 'S', Math.round((r.pay_period_net || 0) * 100)].join('_');
 }
+// The sync payload: statement numbers + the settings the math uses (never PDFs, paths or keys).
+function buildMobileSync(records) {
+  const cfg = loadConfig();
+  const seen = new Set(), recs = [];
+  for (const r of records) {
+    const id = mobileRecId(r);
+    if (seen.has(id)) continue;          // the same statement filed twice
+    seen.add(id);
+    const o = {};
+    for (const k of MOBILE_REC_KEYS) if (r[k] !== undefined) o[k] = r[k];
+    o.items = (o.items || []).map(it => ({ section: it.section, policy: it.policy, client: it.client, product: it.product,
+      carrier: it.carrier, premium: it.premium, comm_pct: it.comm_pct, payable: it.payable, agents: it.agents || [] }));
+    recs.push(o);
+  }
+  const config = {};
+  for (const k of MOBILE_CFG_KEYS) if (cfg[k] !== undefined) config[k] = cfg[k];
+  return { recs, config };
+}
+function mobileSyncGzip(recs, config) {
+  return zlib.gzipSync(JSON.stringify({ v: 1, made: new Date().toISOString(), source: 'Roost', records: recs, config }));
+}
 function writeMobileSync(records) {
   const cfg = loadConfig();
   if (!cfg.mobile_sync_dir) return;
   try {
     const dir = path.resolve(HERE, cfg.mobile_sync_dir);
     if (!fs.existsSync(dir)) { console.warn('  Mobile sync: folder not found -', dir); return; }
-    const seen = new Set(), recs = [];
-    for (const r of records) {
-      const id = mobileRecId(r);
-      if (seen.has(id)) continue;          // the same statement filed twice
-      seen.add(id);
-      const o = {};
-      for (const k of MOBILE_REC_KEYS) if (r[k] !== undefined) o[k] = r[k];
-      o.items = (o.items || []).map(it => ({ section: it.section, policy: it.policy, client: it.client, product: it.product,
-        carrier: it.carrier, premium: it.premium, comm_pct: it.comm_pct, payable: it.payable, agents: it.agents || [] }));
-      recs.push(o);
-    }
-    const config = {};
-    for (const k of MOBILE_CFG_KEYS) if (cfg[k] !== undefined) config[k] = cfg[k];
+    const { recs, config } = buildMobileSync(records);
     const body = JSON.stringify({ records: recs, config });
     const target = path.join(dir, MOBILE_SYNC_FILE);
     if (lastMobileSig === null) {             // first run: compare with what's already there
@@ -155,10 +164,9 @@ function writeMobileSync(records) {
       } catch { lastMobileSig = ''; }
     }
     if (body === lastMobileSig) return;      // unchanged: don't churn the cloud copy
-    const out = JSON.stringify({ v: 1, made: new Date().toISOString(), source: 'Roost', records: recs, config });
     // Overwrite in place (no temp-file rename): Google Drive keeps it the same file, which the
     // Drive connector can still see. A rename would make Drive treat it as a new, unseen file.
-    fs.writeFileSync(target, zlib.gzipSync(out));
+    fs.writeFileSync(target, mobileSyncGzip(recs, config));
     lastMobileSig = body;
     console.log(`  Mobile sync: ${recs.length} statements -> ${target}`);
   } catch (e) { console.warn('  Mobile sync failed:', e.message); }
@@ -903,6 +911,18 @@ const server = http.createServer((req, res) => {
         } catch (e) { return sendJson(res, 200, { configured: ai.isConfigured(), error: String((e && e.message) || e), anomalies: [] }); }
       });
       return;
+    }
+    // "Save phone sync file": the same roost-sync.json.gz a scan writes into mobile_sync_dir, as a
+    // download, for people without a cloud-synced folder (save it anywhere the phone can reach).
+    if (url === '/api/mobile-sync') {
+      const { recs, config } = buildMobileSync(loadStatements());
+      if (!recs.length) return sendJson(res, 404, { status: 'error', message: 'No statements yet. Add your statement PDFs first.' });
+      res.writeHead(200, {
+        'Content-Type': 'application/gzip',
+        'Content-Disposition': `attachment; filename="${MOBILE_SYNC_FILE}"`,
+        'Cache-Control': 'no-store',
+      });
+      return res.end(mobileSyncGzip(recs, config));
     }
     if (url === '/api/export') {
       const records = loadStatements();
